@@ -1,75 +1,96 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import {
+  Box,
+  Button,
+  HStack,
+  Heading,
+  Input,
+  InputField,
+  ScrollView,
+  Text,
+  VStack,
+} from '@gluestack-ui/themed';
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+import { useState } from 'react';
+
+const fakePins = [
+  {
+    id: '1',
+    from: 'Berkeley – Unit 1',
+    to: 'SFO Terminal 2',
+    date: 'June 20',
+    time: '4:00–6:00 PM',
+    users: 2,
+  },
+  {
+    id: '2',
+    from: 'SFO Terminal 3',
+    to: 'Berkeley – I-House',
+    date: 'June 22',
+    time: '1:00–2:30 PM',
+    users: 1,
+  },
+];
 
 export default function HomeScreen() {
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredPins = fakePins.filter((pin) => {
+    const query = searchQuery.toLowerCase();
+    return (
+      pin.from.toLowerCase().includes(query) ||
+      pin.to.toLowerCase().includes(query)
+    );
+  });
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
+    <ScrollView px="$4" py="$6" bg="$backgroundLight">
+      <Heading size="xl" mb="$4" color="$textDark">
+        Upcoming Ride Groups
+      </Heading>
+
+      <Input mb="$6" size="md" variant="outline">
+        <InputField
+          placeholder="Search by location or destination..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
         />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      </Input>
+
+      <VStack space="lg">
+        {filteredPins.map((pin) => (
+          <Box
+            key={pin.id}
+            p="$4"
+            borderRadius="$lg"
+            borderWidth="$1"
+            borderColor="$coolGray300"
+            bg="$backgroundLight0"
+            shadow="$1"
+          >
+            <VStack space="xs">
+              <Text fontWeight="$bold" fontSize="$md">
+                {pin.from} → {pin.to}
+              </Text>
+              <Text color="$coolGray500">
+                {pin.date}, {pin.time}
+              </Text>
+              <Text color="$coolGray500">{pin.users} joined</Text>
+            </VStack>
+
+            <HStack justifyContent="flex-end" mt="$4">
+              <Button size="sm" action="primary" variant="solid">
+                Join
+              </Button>
+            </HStack>
+          </Box>
+        ))}
+
+        {filteredPins.length === 0 && (
+          <Text color="$coolGray500" textAlign="center" mt="$6">
+            No ride groups found.
+          </Text>
+        )}
+      </VStack>
+    </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
-});
