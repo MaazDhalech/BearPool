@@ -65,7 +65,6 @@ export default function HomeScreen() {
             borderWidth="$1"
             borderColor="$coolGray300"
             bg="$backgroundLight0"
-            shadow="$1"
           >
             <VStack space="xs">
               <Text fontWeight="$bold" fontSize="$md">
