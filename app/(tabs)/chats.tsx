@@ -1,12 +1,12 @@
 import {
-    Avatar,
-    Box,
-    HStack,
-    Heading,
-    Pressable,
-    ScrollView,
-    Text,
-    VStack
+  Avatar,
+  Box,
+  HStack,
+  Heading,
+  Pressable,
+  ScrollView,
+  Text,
+  VStack
 } from '@gluestack-ui/themed';
   
   const chatGroups = [
@@ -36,7 +36,7 @@ import {
   
           <VStack space="lg">
             {chatGroups.map((group) => (
-              <Pressable key={group.id} borderRadius="$lg" bg="$white" p="$4" shadow="$1">
+              <Pressable key={group.id} borderRadius="$lg" bg="$white" p="$4">
                 <VStack space="xs">
                   <HStack justifyContent="space-between" alignItems="center">
                     <Text fontWeight="$bold" fontSize="$md" color="$textDark">

@@ -1,12 +1,12 @@
 import {
-    Box,
-    Button,
-    Heading,
-    Input,
-    InputField,
-    ScrollView,
-    Text,
-    VStack,
+  Box,
+  Button,
+  Heading,
+  Input,
+  InputField,
+  ScrollView,
+  Text,
+  VStack,
 } from '@gluestack-ui/themed';
   
   export default function PostScreen() {
@@ -48,8 +48,8 @@ import {
   
             <Box>
               <Text mb="$1" color="white" fontWeight="$medium">Seats Available</Text>
-              <Input variant="rounded" size="md" keyboardType="numeric">
-                <InputField placeholder="e.g. 3" placeholderTextColor="white" color="white" />
+              <Input variant="rounded" size="md">
+                <InputField placeholder="e.g. 3" placeholderTextColor="white" color="white" keyboardType="numeric" />
               </Input>
             </Box>
   
