@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import "dotenv/config";
 
 export default {
   expo: {
@@ -25,19 +25,19 @@ export default {
       output: "static",
       favicon: "./assets/images/favicon.png",
     },
-  plugins: [
-    "expo-router",
-    [
-      "expo-splash-screen",
-      {
-        image: "./assets/images/splash-icon.png",
-        imageWidth: 200,
-        resizeMode: "contain",
-        backgroundColor: "#ffffff",
-      },
+    plugins: [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          image: "./assets/images/splash-icon.png",
+          imageWidth: 200,
+          resizeMode: "contain",
+          backgroundColor: "#ffffff",
+        },
+      ],
+      "expo-secure-store",
     ],
-    "expo-secure-store"
-  ],
     experiments: {
       typedRoutes: true,
     },
@@ -49,7 +49,8 @@ export default {
       firebaseMessagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
       firebaseAppId: process.env.FIREBASE_APP_ID,
       firebaseMeasurementId: process.env.FIREBASE_MEASUREMENT_ID,
-      expoPublicClerkPublishableKey: process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY,
+      expoPublicClerkPublishableKey:
+        process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY,
     },
   },
 };

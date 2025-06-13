@@ -42,30 +42,30 @@ export default function Login() {
   }
 
   const onSignInPress = async () => {
-  if (!isLoaded) return;
+    if (!isLoaded) return;
 
-  setLoading(true);
+    setLoading(true);
 
-  try {
-    const signInAttempt = await signIn.create({
-      identifier, // directly pass whatever user entered
-      password,
-    });
+    try {
+      const signInAttempt = await signIn.create({
+        identifier, // directly pass whatever user entered
+        password,
+      });
 
-    if (signInAttempt.status === "complete") {
-      await setActive({ session: signInAttempt.createdSessionId });
-      router.replace("/");
-    } else {
-      console.error(JSON.stringify(signInAttempt, null, 2));
-      Alert.alert("Sign In Error", "Unable to complete sign in.");
+      if (signInAttempt.status === "complete") {
+        await setActive({ session: signInAttempt.createdSessionId });
+        router.replace("/");
+      } else {
+        console.error(JSON.stringify(signInAttempt, null, 2));
+        Alert.alert("Sign In Error", "Unable to complete sign in.");
+      }
+    } catch (err) {
+      console.error(JSON.stringify(err, null, 2));
+      Alert.alert("Sign In Error", "Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    console.error(JSON.stringify(err, null, 2));
-    Alert.alert("Sign In Error", "Something went wrong. Please try again.");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   return (
     <View style={{ padding: 20 }}>
