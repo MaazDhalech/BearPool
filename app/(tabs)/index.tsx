@@ -8,31 +8,31 @@ import {
   ScrollView,
   Text,
   VStack,
-} from '@gluestack-ui/themed';
+} from "@gluestack-ui/themed";
 
-import { useState } from 'react';
+import { useState } from "react";
 
 const fakePins = [
   {
-    id: '1',
-    from: 'Berkeley – Unit 1',
-    to: 'SFO Terminal 2',
-    date: 'June 20',
-    time: '4:00–6:00 PM',
+    id: "1",
+    from: "Berkeley – Unit 1",
+    to: "SFO Terminal 2",
+    date: "June 20",
+    time: "4:00–6:00 PM",
     users: 2,
   },
   {
-    id: '2',
-    from: 'SFO Terminal 3',
-    to: 'Berkeley – I-House',
-    date: 'June 22',
-    time: '1:00–2:30 PM',
+    id: "2",
+    from: "SFO Terminal 3",
+    to: "Berkeley – I-House",
+    date: "June 22",
+    time: "1:00–2:30 PM",
     users: 1,
   },
 ];
 
 export default function HomeScreen() {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
 
   const filteredPins = fakePins.filter((pin) => {
     const query = searchQuery.toLowerCase();
@@ -65,7 +65,6 @@ export default function HomeScreen() {
             borderWidth="$1"
             borderColor="$coolGray300"
             bg="$backgroundLight0"
-            shadow="$1"
           >
             <VStack space="xs">
               <Text fontWeight="$bold" fontSize="$md">
