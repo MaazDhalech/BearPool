@@ -1,6 +1,5 @@
-// app/(tabs)/post.tsx
-
 import { db } from "@/services/firebaseConfig";
+import { useAuth } from "@clerk/clerk-expo";
 import {
   Box,
   Button,
@@ -17,11 +16,12 @@ import { Timestamp, addDoc, collection } from "firebase/firestore";
 import { useState } from "react";
 
 export default function PostScreen() {
+  const { userId } = useAuth();
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
-  const [seats, setSeats] = useState("1"); // ✅ initialized to "1"
+  const [seats, setSeats] = useState("1");
   const [notes, setNotes] = useState("");
 
   const toast = useToast();
@@ -42,6 +42,8 @@ export default function PostScreen() {
     }
 
     try {
+      if (!userId) throw new Error("User not authenticated");
+
       await addDoc(collection(db, "rides"), {
         from,
         to,
@@ -50,6 +52,12 @@ export default function PostScreen() {
         seats: Number(seats),
         notes,
         createdAt: Timestamp.now(),
+        hostId: userId,
+        memberIds: [userId], // ✅ Add creator as member
+        chatId: `ride_${Date.now()}_${userId}`,
+        rideFull: false,
+        isActive: true,
+        genderPref: "N",
       });
 
       toast.show({
@@ -67,9 +75,10 @@ export default function PostScreen() {
       setTo("");
       setDate("");
       setTime("");
-      setSeats("1"); // ✅ reset to "1"
+      setSeats("1");
       setNotes("");
     } catch (error) {
+      console.error("Error posting ride:", error);
       toast.show({
         placement: "top",
         duration: 3000,
@@ -91,7 +100,7 @@ export default function PostScreen() {
   return (
     <ScrollView bg="$backgroundLight">
       <Box flex={1} px="$5" py="$6">
-        <Heading size="xl" mb="$4" color="white">Post a Ride</Heading>
+      <Heading size="xl" mb="$4" mt="$6" color="white">Post a Ride</Heading>
 
         <VStack space="lg">
           {/* From */}
@@ -155,30 +164,21 @@ export default function PostScreen() {
             <Text mb="$1" color="white" fontWeight="$medium">
               How many people do you want in the car?
             </Text>
-
             <HStack alignItems="center" space="md">
               <Button
                 variant="outline"
                 action="secondary"
                 isDisabled={getSafeSeats() <= 1}
-                onPress={() =>
-                  setSeats(String(Math.max(1, getSafeSeats() - 1)))
-                }
+                onPress={() => setSeats(String(Math.max(1, getSafeSeats() - 1)))}
               >
                 <Text color="white">−</Text>
               </Button>
-
-              <Text color="white" fontSize="$lg" mx="$4">
-                {seats}
-              </Text>
-
+              <Text color="white" fontSize="$lg" mx="$4">{seats}</Text>
               <Button
                 variant="outline"
                 action="secondary"
                 isDisabled={getSafeSeats() >= 6}
-                onPress={() =>
-                  setSeats(String(Math.min(6, getSafeSeats() + 1)))
-                }
+                onPress={() => setSeats(String(Math.min(6, getSafeSeats() + 1)))}
               >
                 <Text color="white">+</Text>
               </Button>
@@ -199,7 +199,7 @@ export default function PostScreen() {
             </Input>
           </Box>
 
-          {/* Submit Button */}
+          {/* Submit */}
           <Button
             mt="$4"
             size="lg"
