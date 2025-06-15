@@ -303,7 +303,7 @@ export default function ProfileScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <Box flex={1} px="$4" py="$6" bg="#121212">
-          <Heading size="xl" mb="$6" color="white">
+          <Heading size="xl" mt = "$10" mb="$6" color="white">
             {isEditing ? "Edit Profile" : "Your Profile"}
           </Heading>
 
