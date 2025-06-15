@@ -10,9 +10,10 @@ import {
   Text,
   VStack,
 } from "@gluestack-ui/themed";
+import { useRouter } from "expo-router";
 import { Timestamp, collection, getDocs, orderBy, query } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { RefreshControl } from "react-native"; // 👈 NEW
+import { RefreshControl } from "react-native";
 
 // Define Ride type
 type Ride = {
@@ -45,9 +46,10 @@ const getRelativeTime = (timestamp: Timestamp) => {
 };
 
 export default function HomeScreen() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [rides, setRides] = useState<Ride[]>([]);
-  const [refreshing, setRefreshing] = useState(false); // 👈 NEW
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchRides = async () => {
     try {
@@ -100,7 +102,7 @@ export default function HomeScreen() {
       bg="$backgroundLight"
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-      } // 👈 NEW
+      }
     >
       <Heading size="xl" mb="$4" color="$textDark">
         Upcoming Ride Groups
@@ -144,11 +146,29 @@ export default function HomeScreen() {
               </Text>
             </VStack>
 
-            <HStack justifyContent="flex-end" mt="$4">
-              <Button size="sm" action="primary" variant="solid">
-                Join
+            <HStack space="md" justifyContent="flex-end" mt="$4">
+              <Button
+                size="sm"
+                action="primary"
+                variant="solid"
+                onPress={() => router.push(`/(tabs)/ride/${ride.id}`)}
+              >
+                <Text color="white">View Details</Text>
+              </Button>
+              <Button
+                size="sm"
+                action="secondary"
+                variant="outline"
+                borderColor="$primary500"
+                onPress={() => {
+                  // TODO: Implement join functionality (e.g., update Firestore or state)
+                  console.log(`Joining ride with ID: ${ride.id}`);
+                }}
+              >
+                <Text color="$primary500">Join Group</Text>
               </Button>
             </HStack>
+
           </Box>
         ))}
 
