@@ -164,7 +164,7 @@ export default function Signup() {
             <TextInput
               autoCapitalize="none"
               value={emailAddress}
-              placeholder="your@berkeley.edu"
+              placeholder="you@berkeley.edu"
               placeholderTextColor="#666"
               onChangeText={setEmailAddress}
               style={inputStyle}
