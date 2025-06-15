@@ -151,7 +151,8 @@ export default function HomeScreen() {
                 size="sm"
                 action="primary"
                 variant="solid"
-                onPress={() => router.push(`/(tabs)/ride/${ride.id}`)}
+                onPress={() => router.push({ pathname: "/(stack)/ride/[id]", params: { id: ride.id } })}
+
               >
                 <Text color="white">View Details</Text>
               </Button>
