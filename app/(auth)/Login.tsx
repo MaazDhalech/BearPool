@@ -68,53 +68,78 @@ export default function Login() {
   };
 
   return (
-    <View style={{ padding: 20 }}>
-      <Text style={{ color: "white", fontSize: 24, marginBottom: 20 }}>
-        Sign in
+    <View style={{ flex: 1, padding: 20, backgroundColor: "#121212", justifyContent: "center" }}>
+      <Text style={{ color: "#ffffff", fontSize: 28, fontWeight: "600", marginBottom: 30, textAlign: "center" }}>
+        Welcome Back
       </Text>
 
-      <TextInput
-        autoCapitalize="none"
-        value={identifier}
-        placeholder="Enter Berkeley email or username"
-        placeholderTextColor="#aaa"
-        onChangeText={setIdentifier}
-        style={{
-          backgroundColor: "#222",
-          color: "white",
-          padding: 12,
-          borderRadius: 6,
-          marginBottom: 12,
-        }}
-      />
-      <TextInput
-        value={password}
-        placeholder="Enter password"
-        placeholderTextColor="#aaa"
-        secureTextEntry={true}
-        onChangeText={setPassword}
-        style={{
-          backgroundColor: "#222",
-          color: "white",
-          padding: 12,
-          borderRadius: 6,
-          marginBottom: 20,
-        }}
-      />
+      <View style={{ marginBottom: 16 }}>
+        <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+          Email or Username
+        </Text>
+        <TextInput
+          autoCapitalize="none"
+          value={identifier}
+          placeholder="Enter Berkeley email or username"
+          placeholderTextColor="#666"
+          onChangeText={setIdentifier}
+          style={{
+            backgroundColor: "#1e1e1e",
+            color: "#ffffff",
+            padding: 14,
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: "#333",
+            fontSize: 16,
+          }}
+        />
+      </View>
+
+      <View style={{ marginBottom: 24 }}>
+        <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+          Password
+        </Text>
+        <TextInput
+          value={password}
+          placeholder="Enter password"
+          placeholderTextColor="#666"
+          secureTextEntry={true}
+          onChangeText={setPassword}
+          style={{
+            backgroundColor: "#1e1e1e",
+            color: "#ffffff",
+            padding: 14,
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: "#333",
+            fontSize: 16,
+          }}
+        />
+      </View>
 
       <TouchableOpacity
         onPress={onSignInPress}
-        activeOpacity={0.7}
+        activeOpacity={0.8}
         disabled={loading}
         style={{
-          backgroundColor: "#007AFF",
-          padding: 15,
-          borderRadius: 6,
+          backgroundColor: "#3a7bd5",
+          padding: 16,
+          borderRadius: 8,
           opacity: loading ? 0.7 : 1,
+          shadowColor: "#3a7bd5",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.3,
+          shadowRadius: 4,
+          elevation: 3,
         }}
       >
         <Text
-          style={{ color: "white", textAlign: "center", fontWeight: "bold" }}
+          style={{ 
+            color: "white", 
+            textAlign: "center", 
+            fontWeight: "600",
+            fontSize: 16,
+          }}
         >
           {loading ? "Signing in..." : "Continue"}
         </Text>
@@ -123,14 +148,16 @@ export default function Login() {
       <View
         style={{
           flexDirection: "row",
-          marginTop: 15,
+          marginTop: 24,
           justifyContent: "center",
           gap: 5,
         }}
       >
-        <Text style={{ color: "white" }}>Don't have an account?</Text>
-        <Link href="/(auth)/Signup" style={{ color: "#0af" }}>
-          <Text style={{ color: "#0af" }}>Sign up</Text>
+        <Text style={{ color: "#a0a0a0" }}>Don't have an account?</Text>
+        <Link href="/(auth)/Signup" asChild>
+          <TouchableOpacity>
+            <Text style={{ color: "#3a7bd5", fontWeight: "500" }}>Sign up</Text>
+          </TouchableOpacity>
         </Link>
       </View>
     </View>
