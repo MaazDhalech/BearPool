@@ -241,7 +241,6 @@ export default function HomeScreen() {
               <Text color="#a0a0a0">
                 {ride.seats} seat{ride.seats > 1 ? "s" : ""} available
               </Text>
-
               {ride.memberIds.length > 0 && (
                 <HStack space="sm" mt="$2" alignItems="center">
                   <Text color="#a0a0a0" mr="$2" fontSize="$sm">
