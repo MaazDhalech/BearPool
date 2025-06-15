@@ -6,10 +6,11 @@ import React from "react";
 import {
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import "react-native-get-random-values";
 import { v4 as uuidv4 } from "uuid";
@@ -46,7 +47,6 @@ export default function Signup() {
     if (!isLoaded) return;
     setError("");
 
-    // Password validation
     const passwordRegex =
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/;
     if (!passwordRegex.test(password)) {
@@ -117,156 +117,164 @@ export default function Signup() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      style={{
-        flex: 1,
-        justifyContent: "center",
-        padding: 20,
-        backgroundColor: "#121212",
-      }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={{ flex: 1, backgroundColor: "#121212" }}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}
     >
-      <Text
-        style={{
-          color: "#ffffff",
-          fontSize: 28,
-          fontWeight: "600",
-          marginBottom: 30,
-          textAlign: "center",
-        }}
-      >
-        Create Account
-      </Text>
-
-      {error ? (
-        <View
-          style={{
-            backgroundColor: "#2a0e0e",
-            padding: 14,
-            borderRadius: 8,
-            marginBottom: 16,
-            borderWidth: 1,
-            borderColor: "#4a1e1e",
-          }}
-        >
-          <Text style={{ color: "#ff7d7d", textAlign: "center" }}>{error}</Text>
-        </View>
-      ) : null}
-
-      <View style={{ marginBottom: 16 }}>
-        <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
-          Berkeley Email
-        </Text>
-        <TextInput
-          autoCapitalize="none"
-          value={emailAddress}
-          placeholder="your@berkeley.edu"
-          placeholderTextColor="#666"
-          onChangeText={setEmailAddress}
-          style={inputStyle}
-          keyboardType="email-address"
-        />
-      </View>
-
-      <View style={{ marginBottom: 16 }}>
-        <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
-          Username
-        </Text>
-        <TextInput
-          autoCapitalize="none"
-          value={username}
-          placeholder="Choose a username"
-          placeholderTextColor="#666"
-          onChangeText={setUsername}
-          style={inputStyle}
-        />
-      </View>
-
-      <View style={{ flexDirection: "row", gap: 16, marginBottom: 16 }}>
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
-            First Name
-          </Text>
-          <TextInput
-            autoCapitalize="words"
-            value={firstName}
-            placeholder="First"
-            placeholderTextColor="#666"
-            onChangeText={setFirstName}
-            style={inputStyle}
-          />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
-            Last Name
-          </Text>
-          <TextInput
-            autoCapitalize="words"
-            value={lastName}
-            placeholder="Last"
-            placeholderTextColor="#666"
-            onChangeText={setLastName}
-            style={inputStyle}
-          />
-        </View>
-      </View>
-
-      <View style={{ marginBottom: 24 }}>
-        <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
-          Password
-        </Text>
-        <TextInput
-          value={password}
-          placeholder="Create a password"
-          placeholderTextColor="#666"
-          secureTextEntry
-          onChangeText={setPassword}
-          style={inputStyle}
-        />
-      </View>
-
-      <TouchableOpacity
-        onPress={onSignUpPress}
-        disabled={!isFormValid()}
-        style={{
-          backgroundColor: "#3a7bd5",
-          padding: 16,
-          borderRadius: 8,
-          opacity: isFormValid() ? 1 : 0.5,
-          shadowColor: "#3a7bd5",
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.3,
-          shadowRadius: 4,
-          elevation: 3,
-        }}
-      >
-        <Text
-          style={{
-            color: "white",
-            textAlign: "center",
-            fontWeight: "600",
-            fontSize: 16,
-          }}
-        >
-          Continue
-        </Text>
-      </TouchableOpacity>
-
-      <View
-        style={{
-          flexDirection: "row",
-          marginTop: 24,
+      <ScrollView
+        contentContainerStyle={{
+          flexGrow: 1,
           justifyContent: "center",
-          gap: 5,
+          padding: 20
         }}
+        keyboardShouldPersistTaps="handled"
       >
-        <Text style={{ color: "#a0a0a0" }}>Already have an account?</Text>
-        <Link href="/(auth)/Login" asChild>
-          <TouchableOpacity>
-            <Text style={{ color: "#3a7bd5", fontWeight: "500" }}>Sign in</Text>
-          </TouchableOpacity>
-        </Link>
-      </View>
+        <View style={{ marginBottom: 20 }}>
+          <Text
+            style={{
+              color: "#ffffff",
+              fontSize: 28,
+              fontWeight: "600",
+              marginBottom: 30,
+              textAlign: "center",
+            }}
+          >
+            Create Account
+          </Text>
 
+          {error ? (
+            <View
+              style={{
+                backgroundColor: "#2a0e0e",
+                padding: 14,
+                borderRadius: 8,
+                marginBottom: 16,
+                borderWidth: 1,
+                borderColor: "#4a1e1e",
+              }}
+            >
+              <Text style={{ color: "#ff7d7d", textAlign: "center" }}>{error}</Text>
+            </View>
+          ) : null}
+
+          <View style={{ marginBottom: 16 }}>
+            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+              Berkeley Email
+            </Text>
+            <TextInput
+              autoCapitalize="none"
+              value={emailAddress}
+              placeholder="your@berkeley.edu"
+              placeholderTextColor="#666"
+              onChangeText={setEmailAddress}
+              style={inputStyle}
+              keyboardType="email-address"
+            />
+          </View>
+
+          <View style={{ marginBottom: 16 }}>
+            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+              Username
+            </Text>
+            <TextInput
+              autoCapitalize="none"
+              value={username}
+              placeholder="Choose a username"
+              placeholderTextColor="#666"
+              onChangeText={setUsername}
+              style={inputStyle}
+            />
+          </View>
+
+          <View style={{ flexDirection: "row", gap: 16, marginBottom: 16 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+                First Name
+              </Text>
+              <TextInput
+                autoCapitalize="words"
+                value={firstName}
+                placeholder="First"
+                placeholderTextColor="#666"
+                onChangeText={setFirstName}
+                style={inputStyle}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+                Last Name
+              </Text>
+              <TextInput
+                autoCapitalize="words"
+                value={lastName}
+                placeholder="Last"
+                placeholderTextColor="#666"
+                onChangeText={setLastName}
+                style={inputStyle}
+              />
+            </View>
+          </View>
+
+          <View style={{ marginBottom: 24 }}>
+            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+              Password
+            </Text>
+            <TextInput
+              value={password}
+              placeholder="Create a password"
+              placeholderTextColor="#666"
+              secureTextEntry
+              onChangeText={setPassword}
+              style={inputStyle}
+            />
+          </View>
+
+          <TouchableOpacity
+            onPress={onSignUpPress}
+            disabled={!isFormValid()}
+            style={{
+              backgroundColor: "#3a7bd5",
+              padding: 16,
+              borderRadius: 8,
+              opacity: isFormValid() ? 1 : 0.5,
+              shadowColor: "#3a7bd5",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.3,
+              shadowRadius: 4,
+              elevation: 3,
+            }}
+          >
+            <Text
+              style={{
+                color: "white",
+                textAlign: "center",
+                fontWeight: "600",
+                fontSize: 16,
+              }}
+            >
+              Continue
+            </Text>
+          </TouchableOpacity>
+
+          <View
+            style={{
+              flexDirection: "row",
+              marginTop: 24,
+              justifyContent: "center",
+              gap: 5,
+            }}
+          >
+            <Text style={{ color: "#a0a0a0" }}>Already have an account?</Text>
+            <Link href="/(auth)/Login" asChild>
+              <TouchableOpacity>
+                <Text style={{ color: "#3a7bd5", fontWeight: "500" }}>Sign in</Text>
+              </TouchableOpacity>
+            </Link>
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Verification Modal - Outside ScrollView to prevent scrolling when modal is open */}
       {showVerification && (
         <View
           style={{

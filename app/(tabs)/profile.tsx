@@ -84,7 +84,6 @@ export default function ProfileScreen() {
             },
             firebaseData: {
               ...userData,
-              // Ensure avatar is always a string, fallback to default
               avatar:
                 typeof userData.avatar === "string"
                   ? userData.avatar
@@ -132,13 +131,11 @@ export default function ProfileScreen() {
     if (!firebaseUserId || !user) return;
 
     try {
-      // Update Clerk user data
       await user.update({
         firstName: formData.firstName,
         lastName: formData.lastName,
       });
 
-      // Update Firebase data
       await updateDoc(doc(db, "users", firebaseUserId), {
         username: formData.username,
         pref: formData.genderPref,
@@ -151,7 +148,6 @@ export default function ProfileScreen() {
         ridesHosted: profileData?.firebaseData?.ridesHosted || 0,
       });
 
-      // Refresh data
       const userDoc = await getDoc(doc(db, "users", firebaseUserId));
       const userData = userDoc.data();
       setProfileData({
@@ -179,7 +175,6 @@ export default function ProfileScreen() {
   const handleChangeAvatar = async () => {
     if (!firebaseUserId) return;
 
-    // 1. Request permissions
     const permissionResult =
       await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
@@ -187,24 +182,22 @@ export default function ProfileScreen() {
       return;
     }
 
-    // 2. Pick image (without base64 first)
     const pickerResult = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.5, // Initial quality reduction
+      quality: 0.5,
     });
 
     if (!pickerResult.canceled && pickerResult.assets?.[0]?.uri) {
       try {
-        // 3. Compress and resize the image
         const manipResult = await ImageManipulator.manipulateAsync(
           pickerResult.assets[0].uri,
-          [{ resize: { width: 400 } }], // Resize to max 400px width
+          [{ resize: { width: 400 } }],
           {
-            compress: 0.4, // Further compression (0-1)
-            format: ImageManipulator.SaveFormat.JPEG, // JPEG is smaller than PNG
-            base64: true, // Get as base64
+            compress: 0.4,
+            format: ImageManipulator.SaveFormat.JPEG,
+            base64: true,
           }
         );
 
@@ -212,18 +205,14 @@ export default function ProfileScreen() {
 
         const base64String = `data:image/jpeg;base64,${manipResult.base64}`;
 
-        // 4. Validate size before uploading
         if (base64String.length > 900000) {
-          // Keep under 900KB to be safe
           throw new Error("Image is still too large after compression");
         }
 
-        // 5. Save to Firestore
         await updateDoc(doc(db, "users", firebaseUserId), {
           avatar: base64String,
         });
 
-        // 6. Update UI
         setProfileData((prev: any) => ({
           ...prev,
           firebaseData: {
@@ -253,9 +242,9 @@ export default function ProfileScreen() {
         flex={1}
         justifyContent="center"
         alignItems="center"
-        bg="$backgroundLight"
+        bg="#121212"
       >
-        <Text color="white">Loading profile...</Text>
+        <Text color="#a0a0a0">Loading profile...</Text>
       </Box>
     );
   }
@@ -266,17 +255,16 @@ export default function ProfileScreen() {
         flex={1}
         justifyContent="center"
         alignItems="center"
-        bg="$backgroundLight"
+        bg="#121212"
       >
-        <Text color="white">Please sign in to view your profile</Text>
-        <Button mt="$4" onPress={() => router.push("/(auth)/Login")}>
-          <Text>Sign In</Text>
+        <Text color="#a0a0a0">Please sign in to view your profile</Text>
+        <Button mt="$4" bg="#3a7bd5" onPress={() => router.push("/(auth)/Login")}>
+          <Text color="white">Sign In</Text>
         </Button>
       </Box>
     );
   }
 
-  // Get display data with proper fallbacks
   const displayData = {
     firstName:
       profileData?.firebaseData?.first_name ||
@@ -297,7 +285,6 @@ export default function ProfileScreen() {
     ridesHosted: profileData?.firebaseData?.ridesHosted || 0,
   };
 
-  // Get initials for avatar fallback
   const getInitials = () => {
     if (displayData.firstName && displayData.lastName) {
       return `${displayData.firstName[0]}${displayData.lastName[0]}`;
@@ -315,67 +302,64 @@ export default function ProfileScreen() {
         contentContainerStyle={{ flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"
       >
-        <Box flex={1} px="$4" py="$6" bg="$backgroundLight">
+        <Box flex={1} px="$4" py="$6" bg="#121212">
           <Heading size="xl" mb="$6" color="white">
             {isEditing ? "Edit Profile" : "Your Profile"}
           </Heading>
 
           <VStack space="lg" alignItems="center" pb="$16">
-            {/* Centered Profile Picture */}
-            <Box
-              width="100%"
-              alignItems="center"
-              justifyContent="center"
-              mb="$4"
-            >
+            {/* Profile Picture */}
+            <Box width="100%" alignItems="center" justifyContent="center" mb="$4">
               <TouchableOpacity
                 onPress={isEditing ? handleChangeAvatar : undefined}
                 style={{ alignItems: "center" }}
               >
-                <Avatar size="2xl" borderRadius="$full" bgColor="$blue500">
+                <Avatar size="2xl" borderRadius="$full" bgColor="#1e1e1e">
                   {displayData.avatar ? (
                     <Avatar.Image
                       source={{ uri: displayData.avatar }}
                       alt="Profile picture"
                     />
                   ) : (
-                    <Avatar.FallbackText>{getInitials()}</Avatar.FallbackText>
+                    <Avatar.FallbackText color="white">{getInitials()}</Avatar.FallbackText>
                   )}
                 </Avatar>
                 {isEditing && (
-                  <Text mt="$2" textAlign="center" color="$blue400">
+                  <Text mt="$2" textAlign="center" color="#3a7bd5">
                     Tap to change photo
                   </Text>
                 )}
               </TouchableOpacity>
             </Box>
 
-            <HStack space="xl" w="100%" justifyContent="space-between">
+            {/* Stats */}
+            <HStack space="xl" w="100%" justifyContent="space-between" px="$4">
               <Box alignItems="center">
-                <Text fontSize="$md" color="white">
+                <Text fontSize="$md" color="#a0a0a0">
                   Rides Joined
                 </Text>
-                <Text fontWeight="$bold" fontSize="$lg" color="white">
+                <Text fontWeight="$bold" fontSize="$xl" color="white">
                   {displayData.ridesJoined}
                 </Text>
               </Box>
               <Box alignItems="center">
-                <Text fontSize="$md" color="white">
+                <Text fontSize="$md" color="#a0a0a0">
                   Rides Hosted
                 </Text>
-                <Text fontWeight="$bold" fontSize="$lg" color="white">
+                <Text fontWeight="$bold" fontSize="$xl" color="white">
                   {displayData.ridesHosted}
                 </Text>
               </Box>
             </HStack>
 
+            {/* Profile Info */}
             {isEditing ? (
               <>
                 <VStack space="sm" w="100%">
-                  <Text fontSize="$md" color="white">
-                    First Name:
+                  <Text fontSize="$md" color="#a0a0a0">
+                    First Name
                   </Text>
-                  <Input>
+                  <Input bg="#1e1e1e" borderColor="#333">
                     <InputField
                       color="white"
                       value={formData.firstName}
@@ -388,10 +372,10 @@ export default function ProfileScreen() {
                 </VStack>
 
                 <VStack space="sm" w="100%">
-                  <Text fontSize="$md" color="white">
-                    Last Name:
+                  <Text fontSize="$md" color="#a0a0a0">
+                    Last Name
                   </Text>
-                  <Input>
+                  <Input bg="#1e1e1e" borderColor="#333">
                     <InputField
                       color="white"
                       value={formData.lastName}
@@ -404,10 +388,10 @@ export default function ProfileScreen() {
                 </VStack>
 
                 <VStack space="sm" w="100%">
-                  <Text fontSize="$md" color="white">
-                    Username:
+                  <Text fontSize="$md" color="#a0a0a0">
+                    Username
                   </Text>
-                  <Input>
+                  <Input bg="#1e1e1e" borderColor="#333">
                     <InputField
                       color="white"
                       value={formData.username}
@@ -422,8 +406,8 @@ export default function ProfileScreen() {
             ) : (
               <>
                 <VStack space="sm" w="100%" alignItems="flex-start">
-                  <Text fontSize="$md" color="white">
-                    Name:
+                  <Text fontSize="$md" color="#a0a0a0">
+                    Name
                   </Text>
                   <Text fontWeight="$semibold" fontSize="$lg" color="white">
                     {displayData.firstName} {displayData.lastName}
@@ -431,8 +415,8 @@ export default function ProfileScreen() {
                 </VStack>
 
                 <VStack space="sm" w="100%" alignItems="flex-start">
-                  <Text fontSize="$md" color="white">
-                    Username:
+                  <Text fontSize="$md" color="#a0a0a0">
+                    Username
                   </Text>
                   <Text fontWeight="$semibold" fontSize="$lg" color="white">
                     {displayData.username || "Not set"}
@@ -442,19 +426,19 @@ export default function ProfileScreen() {
             )}
 
             <VStack space="sm" w="100%" alignItems="flex-start">
-              <Text fontSize="$md" color="white">
-                Email:
+              <Text fontSize="$md" color="#a0a0a0">
+                Email
               </Text>
               <Text fontWeight="$semibold" fontSize="$lg" color="white">
                 {displayData.email}
               </Text>
             </VStack>
 
-            <Box w="100%">
-              <Text fontSize="$md" color="white" mb="$2">
+            {/* Gender Preference */}
+            <VStack space="sm" w="100%">
+              <Text fontSize="$md" color="#a0a0a0">
                 Gender Preference
               </Text>
-
               {isEditing ? (
                 <Select
                   selectedValue={formData.genderPref}
@@ -462,7 +446,7 @@ export default function ProfileScreen() {
                     setFormData({ ...formData, genderPref: value })
                   }
                 >
-                  <SelectTrigger variant="outline" size="md">
+                  <SelectTrigger bg="#1e1e1e" borderColor="#333">
                     <SelectInput
                       color="white"
                       value={
@@ -478,15 +462,15 @@ export default function ProfileScreen() {
                       }
                     />
                     <SelectIcon>
-                      <Icon as={ChevronDownIcon} color="white" />
+                      <Icon as={ChevronDownIcon} color="#a0a0a0" />
                     </SelectIcon>
                   </SelectTrigger>
 
                   <SelectPortal>
-                    <SelectBackdrop />
-                    <SelectContent>
+                    <SelectBackdrop bg="rgba(0,0,0,0.7)" />
+                    <SelectContent bg="#1e1e1e" borderColor="#333">
                       <SelectDragIndicatorWrapper>
-                        <SelectDragIndicator />
+                        <SelectDragIndicator bg="#3a3a3a" />
                       </SelectDragIndicatorWrapper>
                       <SelectItem label="No Preference" value="N" />
                       <SelectItem label="Male Only" value="M" />
@@ -508,17 +492,20 @@ export default function ProfileScreen() {
                     : ""}
                 </Text>
               )}
-            </Box>
+            </VStack>
 
+            {/* Action Buttons */}
             <VStack space="md" mt="$6" w="100%">
               {isEditing ? (
                 <>
-                  <Button onPress={handleUpdateProfile}>
-                    <Text color="white">Save Changes</Text>
+                  <Button bg="#3a7bd5" onPress={handleUpdateProfile}>
+                    <Text color="white" fontWeight="$semibold">
+                      Save Changes
+                    </Text>
                   </Button>
                   <Button
-                    action="secondary"
                     variant="outline"
+                    borderColor="#333"
                     onPress={() => setIsEditing(false)}
                   >
                     <Text color="white">Cancel</Text>
@@ -527,14 +514,16 @@ export default function ProfileScreen() {
               ) : (
                 <>
                   <Button
-                    action="secondary"
                     variant="outline"
+                    borderColor="#333"
                     onPress={() => setIsEditing(true)}
                   >
                     <Text color="white">Edit Profile</Text>
                   </Button>
-                  <Button action="negative" onPress={handleLogout}>
-                    <Text color="white">Log Out</Text>
+                  <Button bg="#d53a3a" onPress={handleLogout}>
+                    <Text color="white" fontWeight="$semibold">
+                      Log Out
+                    </Text>
                   </Button>
                 </>
               )}
