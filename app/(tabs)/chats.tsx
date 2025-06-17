@@ -10,11 +10,13 @@ import {
   ScrollView,
   Spinner,
   Text,
-  VStack,
+  VStack
 } from "@gluestack-ui/themed";
 import { useRouter } from "expo-router";
 import {
   collection,
+  doc,
+  getDoc,
   getDocs,
   limit,
   orderBy,
@@ -59,6 +61,24 @@ export default function ChatsScreen() {
           const messagesSnapshot = await getDocs(messagesQuery);
           const latestMessage = messagesSnapshot.docs[0]?.data();
 
+          const memberData = await Promise.all(
+            (ride.memberIds ?? []).map(async (uid: string) => {
+              try {
+                const userDoc = await getDoc(doc(db, "users", uid));
+                if (userDoc.exists()) {
+                  const data = userDoc.data();
+                  return {
+                    id: uid,
+                    username: data.username || "Unknown",
+                    avatar: data.avatar || DEFAULT_AVATAR,
+                  };
+                }
+              } catch {
+                return null;
+              }
+            })
+          );
+
           return {
             id: rideId,
             title: `${ride.from} → ${ride.to}`,
@@ -68,7 +88,7 @@ export default function ChatsScreen() {
                 hour: "2-digit",
                 minute: "2-digit",
               }) ?? "—",
-            members: ride.memberIds ?? [],
+            members: memberData.filter(Boolean),
           };
         })
       );
@@ -155,9 +175,12 @@ export default function ChatsScreen() {
                   </Text>
 
                   <HStack space="sm" mt="$2">
-                    {group.members.slice(0, 5).map((uid: string, index: number) => (
-                      <Avatar key={index} size="sm" bgColor="#121212">
-                        <AvatarImage source={{ uri: DEFAULT_AVATAR }} alt="User" />
+                    {group.members.slice(0, 5).map((user: any) => (
+                      <Avatar key={user.id} size="sm" bgColor="#121212">
+                        <AvatarImage
+                          source={{ uri: user.avatar }}
+                          alt={user.username}
+                        />
                       </Avatar>
                     ))}
                     {group.members.length > 5 && (

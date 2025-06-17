@@ -21,11 +21,11 @@ import {
   arrayUnion,
   collection,
   doc,
+  getDoc,
   getDocs,
   orderBy,
   query,
-  updateDoc,
-  where,
+  updateDoc
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { RefreshControl } from "react-native";
@@ -85,7 +85,7 @@ export default function HomeScreen() {
         orderBy("createdAt", sortOrder === "newest" ? "desc" : "asc")
       );
       const rideSnapshot = await getDocs(rideQuery);
-
+  
       const rideData: Ride[] = rideSnapshot.docs.map((doc) => {
         const data = doc.data();
         return {
@@ -100,26 +100,28 @@ export default function HomeScreen() {
           memberIds: data.memberIds ?? [],
         };
       });
-
-      const allUserIds = Array.from(
-        new Set(rideData.flatMap((ride) => ride.memberIds))
-      );
-
+  
       const usersData: Record<string, User> = {};
-      for (const uid of allUserIds) {
-        const userQuery = query(collection(db, "users"), where("id", "==", uid));
-        const userSnapshot = await getDocs(userQuery);
-        if (!userSnapshot.empty) {
-          const userData = userSnapshot.docs[0].data();
-          usersData[uid] = {
-            id: uid,
-            avatar: userData.avatar || DEFAULT_AVATAR,
-          };
-        } else {
-          usersData[uid] = { id: uid, avatar: DEFAULT_AVATAR };
+      for (const ride of rideData) {
+        for (const uid of ride.memberIds) {
+          if (!usersData[uid]) {
+            const userDoc = await getDoc(doc(db, "users", uid));
+            if (userDoc.exists()) {
+              const data = userDoc.data();
+              usersData[uid] = {
+                id: uid,
+                avatar: data.avatar || data.profileImage || DEFAULT_AVATAR,
+              };
+            } else {
+              usersData[uid] = {
+                id: uid,
+                avatar: DEFAULT_AVATAR,
+              };
+            }
+          }
         }
       }
-
+  
       setUsers(usersData);
       setRides(rideData);
     } catch (err) {

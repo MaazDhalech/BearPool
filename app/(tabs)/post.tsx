@@ -1,7 +1,7 @@
 import { db } from "@/services/firebaseConfig";
-import { useAuth } from "@clerk/clerk-expo";
-import { useRouter } from "expo-router"; // <-- added
-import { Timestamp, addDoc, collection } from "firebase/firestore";
+import { useAuth, useUser } from "@clerk/clerk-expo";
+import { useRouter } from "expo-router";
+import { Timestamp, addDoc, collection, doc, getDoc, setDoc } from "firebase/firestore";
 import { useState } from "react";
 import {
   Alert,
@@ -16,7 +16,9 @@ import {
 
 export default function PostScreen() {
   const { userId } = useAuth();
-  const router = useRouter(); // <-- added
+  const { user } = useUser();
+  const router = useRouter();
+
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [date, setDate] = useState("");
@@ -39,6 +41,19 @@ export default function PostScreen() {
     setLoading(true);
     try {
       if (!userId) throw new Error("User not authenticated");
+
+      // Ensure user data exists in Firebase
+      const userDocRef = doc(db, "users", userId);
+      const existingUser = await getDoc(userDocRef);
+
+      if (!existingUser.exists()) {
+        await setDoc(userDocRef, {
+          name: user?.fullName || "Unknown",
+          email: user?.primaryEmailAddress?.emailAddress || "Unknown",
+          profileImage: user?.imageUrl || "",
+          createdAt: Timestamp.now(),
+        });
+      }
 
       const chatId = `ride_${Date.now()}_${userId}`;
 

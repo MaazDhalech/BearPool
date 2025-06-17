@@ -52,6 +52,7 @@ export default function RideDetailsPage() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const { userId } = useAuth();
+
   const [ride, setRide] = useState<Ride | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -98,7 +99,6 @@ export default function RideDetailsPage() {
         memberIds: arrayUnion(userId),
       });
 
-      // Redirect to group chat
       router.push({
         pathname: "/(stack)/ride/[id]/chat",
         params: { id: ride.id },
@@ -132,7 +132,7 @@ export default function RideDetailsPage() {
     );
   }
 
-  const alreadyJoined = ride.memberIds.includes(userId!);
+  const alreadyJoined = userId ? ride.memberIds.includes(userId) : false;
 
   return (
     <ScrollView px="$4" pt="$8" bg="#121212" contentContainerStyle={{ paddingBottom: 100 }}>

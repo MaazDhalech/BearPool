@@ -29,13 +29,10 @@ import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 import {
-  collection,
   doc,
   getDoc,
-  getDocs,
-  query,
-  updateDoc,
-  where,
+  setDoc,
+  updateDoc
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { Platform, TouchableOpacity } from "react-native";
@@ -46,7 +43,6 @@ const DEFAULT_AVATAR =
 export default function ProfileScreen() {
   const { isLoaded, userId: clerkUserId, signOut } = useAuth();
   const { user } = useUser();
-  const [firebaseUserId, setFirebaseUserId] = useState<string | null>(null);
   const [profileData, setProfileData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -62,61 +58,42 @@ export default function ProfileScreen() {
 
     const fetchUserData = async () => {
       try {
-        const usersRef = collection(db, "users");
-        const q = query(
-          usersRef,
-          where("email", "==", user.primaryEmailAddress?.emailAddress)
-        );
+        const userDocRef = doc(db, "users", clerkUserId);
+        const userSnap = await getDoc(userDocRef);
 
-        const querySnapshot = await getDocs(q);
-
-        if (!querySnapshot.empty) {
-          const userDoc = querySnapshot.docs[0];
-          setFirebaseUserId(userDoc.id);
-
-          const userData = userDoc.data();
-          const combinedData = {
-            clerkData: {
-              email: user.primaryEmailAddress?.emailAddress,
-              firstName: user.firstName,
-              lastName: user.lastName,
-              username: user.username,
-            },
-            firebaseData: {
-              ...userData,
+        const firebaseData = userSnap.exists()
+          ? {
+              ...userSnap.data(),
               avatar:
-                typeof userData.avatar === "string"
-                  ? userData.avatar
+                typeof userSnap.data().avatar === "string"
+                  ? userSnap.data().avatar
                   : DEFAULT_AVATAR,
-            },
-          };
-
-          setProfileData(combinedData);
-
-          setFormData({
-            firstName: user.firstName || "",
-            lastName: user.lastName || "",
-            username: userData.username || user.username || "",
-            genderPref: userData.pref || "N",
-          });
-        } else {
-          console.warn("No Firestore user found for Clerk user");
-          setProfileData({
-            clerkData: {
-              email: user.primaryEmailAddress?.emailAddress,
-              firstName: user.firstName,
-              lastName: user.lastName,
-              username: user.username,
-            },
-            firebaseData: {
+            }
+          : {
               avatar: DEFAULT_AVATAR,
               pref: "N",
               username: user.username || "",
               ridesJoined: 0,
               ridesHosted: 0,
-            },
-          });
-        }
+              createdAt: new Date(),
+            };
+
+        setProfileData({
+          clerkData: {
+            email: user.primaryEmailAddress?.emailAddress,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            username: user.username,
+          },
+          firebaseData,
+        });
+
+        setFormData({
+          firstName: user.firstName || "",
+          lastName: user.lastName || "",
+          username: firebaseData.username || user.username || "",
+          genderPref: firebaseData.pref || "N",
+        });
       } catch (error) {
         console.error("Error fetching user data:", error);
       } finally {
@@ -128,7 +105,7 @@ export default function ProfileScreen() {
   }, [isLoaded, clerkUserId, user]);
 
   const handleUpdateProfile = async () => {
-    if (!firebaseUserId || !user) return;
+    if (!clerkUserId || !user) return;
 
     try {
       await user.update({
@@ -136,7 +113,7 @@ export default function ProfileScreen() {
         lastName: formData.lastName,
       });
 
-      await updateDoc(doc(db, "users", firebaseUserId), {
+      const updatedData = {
         username: formData.username,
         pref: formData.genderPref,
         email: user.primaryEmailAddress?.emailAddress,
@@ -146,10 +123,10 @@ export default function ProfileScreen() {
         createdAt: profileData?.firebaseData?.createdAt || new Date(),
         ridesJoined: profileData?.firebaseData?.ridesJoined || 0,
         ridesHosted: profileData?.firebaseData?.ridesHosted || 0,
-      });
+      };
 
-      const userDoc = await getDoc(doc(db, "users", firebaseUserId));
-      const userData = userDoc.data();
+      await setDoc(doc(db, "users", clerkUserId), updatedData);
+
       setProfileData({
         clerkData: {
           email: user.primaryEmailAddress?.emailAddress,
@@ -157,13 +134,7 @@ export default function ProfileScreen() {
           lastName: formData.lastName,
           username: user.username,
         },
-        firebaseData: {
-          ...userData,
-          avatar:
-            typeof userData?.avatar === "string"
-              ? userData.avatar
-              : DEFAULT_AVATAR,
-        },
+        firebaseData: updatedData,
       });
 
       setIsEditing(false);
@@ -173,7 +144,7 @@ export default function ProfileScreen() {
   };
 
   const handleChangeAvatar = async () => {
-    if (!firebaseUserId) return;
+    if (!clerkUserId) return;
 
     const permissionResult =
       await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -204,12 +175,11 @@ export default function ProfileScreen() {
         if (!manipResult.base64) throw new Error("Compression failed");
 
         const base64String = `data:image/jpeg;base64,${manipResult.base64}`;
-
         if (base64String.length > 900000) {
           throw new Error("Image is still too large after compression");
         }
 
-        await updateDoc(doc(db, "users", firebaseUserId), {
+        await updateDoc(doc(db, "users", clerkUserId), {
           avatar: base64String,
         });
 

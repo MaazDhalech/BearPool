@@ -13,7 +13,6 @@ import {
   View
 } from "react-native";
 import "react-native-get-random-values";
-import { v4 as uuidv4 } from "uuid";
 
 const isBerkeleyEmail = (email: string) => {
   return email.toLowerCase().endsWith("@berkeley.edu");
@@ -91,19 +90,20 @@ export default function Signup() {
           await setActive({ session: completeSignUp.createdSessionId });
         }
 
-        const userId = uuidv4();
-        await setDoc(doc(db, "users", userId), {
-          id: userId,
-          avatar: BLANK_AVATAR,
-          username: username.trim(),
-          email: emailAddress.toLowerCase(),
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-          pref: "N",
-          createdAt: new Date(),
-          ridesJoined: 0,
-          ridesHosted: 0,
-        });
+              const clerkId = completeSignUp.createdUserId;
+      await setDoc(doc(db, "users", clerkId), {
+        clerkId,
+        avatar: BLANK_AVATAR,
+        username: username.trim(),
+        email: emailAddress.toLowerCase(),
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        pref: "N",
+        createdAt: new Date(),
+        ridesJoined: 0,
+        ridesHosted: 0,
+      });
+
 
         router.replace("/");
       } else {
