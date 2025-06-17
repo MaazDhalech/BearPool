@@ -12,13 +12,6 @@ import {
   View
 } from "react-native";
 
-import { db } from "@/services/firebaseConfig";
-import { collection, getDocs, query, where } from "firebase/firestore";
-
-const isBerkeleyEmail = (email: string) => {
-  return email.toLowerCase().endsWith("@berkeley.edu");
-};
-
 export default function Login() {
   const { signIn, setActive, isLoaded } = useSignIn();
   const router = useRouter();
@@ -26,29 +19,6 @@ export default function Login() {
   const [identifier, setIdentifier] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [loading, setLoading] = React.useState(false);
-
-  async function resolveEmail(input: string): Promise<string | null> {
-    input = input.trim().toLowerCase();
-    if (isBerkeleyEmail(input)) {
-      return input;
-    }
-
-    try {
-      const usersRef = collection(db, "users");
-      const q = query(usersRef, where("username", "==", input));
-      const querySnapshot = await getDocs(q);
-      if (!querySnapshot.empty) {
-        const userDoc = querySnapshot.docs[0].data();
-        if (userDoc.email && isBerkeleyEmail(userDoc.email)) {
-          return userDoc.email.toLowerCase();
-        }
-      }
-    } catch (e) {
-      console.error("Error fetching user by username:", e);
-    }
-
-    return null;
-  }
 
   const onSignInPress = async () => {
     if (!isLoaded) return;
@@ -108,7 +78,7 @@ export default function Login() {
             <TextInput
               autoCapitalize="none"
               value={identifier}
-              placeholder="Enter Berkeley email or username"
+              placeholder="Enter email or username"
               placeholderTextColor="#666"
               onChangeText={setIdentifier}
               style={{
@@ -175,9 +145,7 @@ export default function Login() {
 
           <TouchableOpacity
             onPress={() => router.push("/(auth)/Reset")}
-            style={{
-              padding: 16,
-            }}
+            style={{ padding: 16 }}
           >
             <Text style={{ 
               color: "#3a7bd5", 
