@@ -43,11 +43,13 @@ type Ride = {
   notes?: string;
   createdAt: Timestamp;
   memberIds: string[];
+  genderPref: string;
 };
 
 type User = {
   id: string;
   avatar?: string;
+  genderPref?: string;
 };
 
 const getRelativeTime = (timestamp: Timestamp) => {
@@ -77,9 +79,27 @@ export default function HomeScreen() {
   const [users, setUsers] = useState<Record<string, User>>({});
   const [refreshing, setRefreshing] = useState(false);
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
+  const [userGenderPref, setUserGenderPref] = useState<string>("N");
+
+  // Fetch user's gender preference
+  const fetchUserGenderPref = async () => {
+    if (!userId) return;
+    try {
+      const userDoc = await getDoc(doc(db, "users", userId));
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        setUserGenderPref(data.pref || "N"); // Changed to use 'pref'
+      }
+    } catch (err) {
+      console.error("Error fetching user gender pref:", err);
+    }
+  };
 
   const fetchRidesAndUsers = async () => {
     try {
+      // First fetch user's gender preference
+      await fetchUserGenderPref();
+
       const rideQuery = query(
         collection(db, "rides"),
         orderBy("createdAt", sortOrder === "newest" ? "desc" : "asc")
@@ -98,6 +118,7 @@ export default function HomeScreen() {
           notes: data.notes ?? "",
           createdAt: data.createdAt ?? Timestamp.now(),
           memberIds: data.memberIds ?? [],
+          genderPref: data.genderPref ?? "N",
         };
       });
   
@@ -111,11 +132,13 @@ export default function HomeScreen() {
               usersData[uid] = {
                 id: uid,
                 avatar: data.avatar || data.profileImage || DEFAULT_AVATAR,
+                genderPref: data.pref || "N", // Changed to use 'pref'
               };
             } else {
               usersData[uid] = {
                 id: uid,
                 avatar: DEFAULT_AVATAR,
+                genderPref: "N",
               };
             }
           }
@@ -154,12 +177,11 @@ export default function HomeScreen() {
         render: () => (
           <Box bg="$green600" px="$4" py="$3" borderRadius="$md">
             <Text color="white" fontWeight="$bold">Joined Group</Text>
-            <Text color="white">You’ve successfully joined the ride.</Text>
+            <Text color="white">You've successfully joined the ride.</Text>
           </Box>
         ),
       });
   
-      // Optional: Wait a second before redirect for smoother UX
       setTimeout(() => {
         router.push({
           pathname: "/(stack)/ride/[id]/chat",
@@ -182,11 +204,16 @@ export default function HomeScreen() {
   };
   
   const filteredRides = rides.filter((ride) => {
-    const query = searchQuery.toLowerCase();
-    return (
-      ride.from.toLowerCase().includes(query) ||
-      ride.to.toLowerCase().includes(query)
-    );
+    const matchesSearch = 
+      ride.from.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ride.to.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesGenderPref = 
+      ride.genderPref === "N" ||
+      ride.genderPref === userGenderPref ||
+      userGenderPref === "N";
+    
+    return matchesSearch && matchesGenderPref;
   });
 
   const toggleSortOrder = () =>
@@ -229,110 +256,117 @@ export default function HomeScreen() {
       </HStack>
 
       <VStack space="lg" pb="$16">
-      {filteredRides.map((ride) => (
-  <Box
-    key={ride.id}
-    p="$4"
-    borderRadius="$lg"
-    borderWidth="$1"
-    borderColor="#333"
-    backgroundColor="#1e1e1e"
-    mb="$4"
-  >
-    <VStack space="xs">
-      <Text fontWeight="$bold" fontSize="$md" color="white">
-        {ride.from} → {ride.to}
-      </Text>
-      <Text color="#a0a0a0">
-        {ride.date}, {ride.time}
-      </Text>
-      <Text color="#a0a0a0">
-        {ride.seats} seat{ride.seats > 1 ? "s" : ""} available
-      </Text>
-      {ride.memberIds.length > 0 && (
-        <HStack space="sm" mt="$2" alignItems="center">
-          <Text color="#a0a0a0" mr="$2" fontSize="$sm">
-            Members:
-          </Text>
-          <HStack space="sm">
-            {ride.memberIds.slice(0, 5).map((uid) => {
-              const user = users[uid] || { avatar: DEFAULT_AVATAR };
-              return (
-                <Avatar key={uid} size="sm" bgColor="#1e1e1e">
-                  <AvatarImage source={{ uri: user.avatar }} alt="User avatar" />
-                </Avatar>
-              );
-            })}
-            {ride.memberIds.length > 5 && (
-              <Box
-                bg="#3a7bd5"
-                borderRadius="$full"
-                w="$6"
-                h="$6"
-                alignItems="center"
-                justifyContent="center"
-              >
-                <Text color="white" fontSize="$xs">
-                  +{ride.memberIds.length - 5}
+        {filteredRides.map((ride) => (
+          <Box
+            key={ride.id}
+            p="$4"
+            borderRadius="$lg"
+            borderWidth="$1"
+            borderColor="#333"
+            backgroundColor="#1e1e1e"
+            mb="$4"
+          >
+            <VStack space="xs">
+              <Text fontWeight="$bold" fontSize="$md" color="white">
+                {ride.from} → {ride.to}
+              </Text>
+              <Text color="#a0a0a0">
+                {ride.date}, {ride.time}
+              </Text>
+              <Text color="#a0a0a0">
+                {ride.seats} seat{ride.seats > 1 ? "s" : ""} available
+              </Text>
+              {ride.genderPref !== "N" && (
+                <Text color="#a0a0a0" fontSize="$sm">
+                  Gender preference: {ride.genderPref === "M" ? "Male" : 
+                                  ride.genderPref === "F" ? "Female" : 
+                                  "Non-binary"}
                 </Text>
-              </Box>
-            )}
-          </HStack>
-        </HStack>
-      )}
+              )}
+              {ride.memberIds.length > 0 && (
+                <HStack space="sm" mt="$2" alignItems="center">
+                  <Text color="#a0a0a0" mr="$2" fontSize="$sm">
+                    Members:
+                  </Text>
+                  <HStack space="sm">
+                    {ride.memberIds.slice(0, 5).map((uid) => {
+                      const user = users[uid] || { avatar: DEFAULT_AVATAR };
+                      return (
+                        <Avatar key={uid} size="sm" bgColor="#1e1e1e">
+                          <AvatarImage source={{ uri: user.avatar }} alt="User avatar" />
+                        </Avatar>
+                      );
+                    })}
+                    {ride.memberIds.length > 5 && (
+                      <Box
+                        bg="#3a7bd5"
+                        borderRadius="$full"
+                        w="$6"
+                        h="$6"
+                        alignItems="center"
+                        justifyContent="center"
+                      >
+                        <Text color="white" fontSize="$xs">
+                          +{ride.memberIds.length - 5}
+                        </Text>
+                      </Box>
+                    )}
+                  </HStack>
+                </HStack>
+              )}
 
-      {ride.notes && (
-        <Text color="#a0a0a0" mt="$1">
-          {ride.notes}
-        </Text>
-      )}
-      <Text mt="$1" color="#666" fontSize="$xs">
-        Posted {getRelativeTime(ride.createdAt)}
-      </Text>
-    </VStack>
+              {ride.notes && (
+                <Text color="#a0a0a0" mt="$1">
+                  {ride.notes}
+                </Text>
+              )}
+              <Text mt="$1" color="#666" fontSize="$xs">
+                Posted {getRelativeTime(ride.createdAt)}
+              </Text>
+            </VStack>
 
-    <HStack space="md" justifyContent="flex-end" mt="$4">
-      <Button
-        size="sm"
-        backgroundColor="#3a7bd5"
-        onPress={() =>
-          router.push({
-            pathname: "/(stack)/ride/[id]",
-            params: { id: ride.id },
-          })
-        }
-      >
-        <Text color="white">View Details</Text>
-      </Button>
+            <HStack space="md" justifyContent="flex-end" mt="$4">
+              <Button
+                size="sm"
+                backgroundColor="#3a7bd5"
+                onPress={() =>
+                  router.push({
+                    pathname: "/(stack)/ride/[id]",
+                    params: { id: ride.id },
+                  })
+                }
+              >
+                <Text color="white">View Details</Text>
+              </Button>
 
-      {ride.memberIds.includes(userId!) ? (
-        <Box
-          px="$3"
-          py="$2"
-          borderWidth="$1"
-          borderRadius="$md"
-          borderColor="#3a7bd5"
-          alignItems="center"
-          justifyContent="center"
-        >
-          <Text color="#3a7bd5" fontSize="$sm">
-            You are already in this group
-          </Text>
-        </Box>
-      ) : (
-        <Button
-          size="sm"
-          variant="outline"
-          borderColor="#3a7bd5"
-          backgroundColor="transparent"
-          onPress={() => handleJoinRide(ride.id)}
-        >
-          <Text color="#3a7bd5">Join Group</Text>
-        </Button>
-      )}
-    </HStack>
-  </Box>
-))}
+              {ride.memberIds.includes(userId!) ? (
+                <Box
+                  px="$3"
+                  py="$2"
+                  borderWidth="$1"
+                  borderRadius="$md"
+                  borderColor="#3a7bd5"
+                  alignItems="center"
+                  justifyContent="center"
+                >
+                  <Text color="#3a7bd5" fontSize="$sm">
+                    You are already in this group
+                  </Text>
+                </Box>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  borderColor="#3a7bd5"
+                  backgroundColor="transparent"
+                  onPress={() => handleJoinRide(ride.id)}
+                >
+                  <Text color="#3a7bd5">Join Group</Text>
+                </Button>
+              )}
+            </HStack>
+          </Box>
+        ))}
 
         {filteredRides.length === 0 && (
           <Text color="#a0a0a0" textAlign="center" mt="$6">
