@@ -1,5 +1,6 @@
 import { db } from "@/services/firebaseConfig";
 import { useAuth } from "@clerk/clerk-expo";
+import { useRouter } from "expo-router"; // <-- added
 import { Timestamp, addDoc, collection } from "firebase/firestore";
 import { useState } from "react";
 import {
@@ -15,6 +16,7 @@ import {
 
 export default function PostScreen() {
   const { userId } = useAuth();
+  const router = useRouter(); // <-- added
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [date, setDate] = useState("");
@@ -38,7 +40,9 @@ export default function PostScreen() {
     try {
       if (!userId) throw new Error("User not authenticated");
 
-      await addDoc(collection(db, "rides"), {
+      const chatId = `ride_${Date.now()}_${userId}`;
+
+      const docRef = await addDoc(collection(db, "rides"), {
         from,
         to,
         date,
@@ -48,14 +52,18 @@ export default function PostScreen() {
         createdAt: Timestamp.now(),
         hostId: userId,
         memberIds: [userId],
-        chatId: `ride_${Date.now()}_${userId}`,
+        chatId,
         rideFull: false,
         isActive: true,
         genderPref: "N",
       });
 
-      Alert.alert("Success", "Ride posted successfully!");
-      setFrom(""); setTo(""); setDate(""); setTime(""); setSeats("1"); setNotes("");
+      // Navigate to the new group chat
+      router.push({
+        pathname: "/(stack)/ride/[id]/chat",
+        params: { id: docRef.id },
+      });
+
     } catch (error) {
       console.error(error);
       Alert.alert("Error", "Failed to post ride. Please try again.");

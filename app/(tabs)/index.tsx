@@ -139,13 +139,13 @@ export default function HomeScreen() {
 
   const handleJoinRide = async (rideId: string) => {
     if (!userId) return;
-
+  
     try {
       const rideRef = doc(db, "rides", rideId);
       await updateDoc(rideRef, {
         memberIds: arrayUnion(userId),
       });
-
+  
       toast.show({
         placement: "top",
         duration: 3000,
@@ -156,8 +156,14 @@ export default function HomeScreen() {
           </Box>
         ),
       });
-
-      await fetchRidesAndUsers(); // Refresh UI
+  
+      // Optional: Wait a second before redirect for smoother UX
+      setTimeout(() => {
+        router.push({
+          pathname: "/(stack)/ride/[id]/chat",
+          params: { id: rideId },
+        });
+      }, 500);
     } catch (err) {
       console.error("Error joining ride:", err);
       toast.show({
@@ -172,7 +178,7 @@ export default function HomeScreen() {
       });
     }
   };
-
+  
   const filteredRides = rides.filter((ride) => {
     const query = searchQuery.toLowerCase();
     return (
@@ -221,93 +227,110 @@ export default function HomeScreen() {
       </HStack>
 
       <VStack space="lg" pb="$16">
-        {filteredRides.map((ride) => (
-          <Box
-            key={ride.id}
-            p="$4"
-            borderRadius="$lg"
-            borderWidth="$1"
-            borderColor="#333"
-            backgroundColor="#1e1e1e"
-            mb="$4"
-          >
-            <VStack space="xs">
-              <Text fontWeight="$bold" fontSize="$md" color="white">
-                {ride.from} → {ride.to}
-              </Text>
-              <Text color="#a0a0a0">
-                {ride.date}, {ride.time}
-              </Text>
-              <Text color="#a0a0a0">
-                {ride.seats} seat{ride.seats > 1 ? "s" : ""} available
-              </Text>
-              {ride.memberIds.length > 0 && (
-                <HStack space="sm" mt="$2" alignItems="center">
-                  <Text color="#a0a0a0" mr="$2" fontSize="$sm">
-                    Members:
-                  </Text>
-                  <HStack space="sm">
-                    {ride.memberIds.slice(0, 5).map((uid) => {
-                      const user = users[uid] || { avatar: DEFAULT_AVATAR };
-                      return (
-                        <Avatar key={uid} size="sm" bgColor="#1e1e1e">
-                          <AvatarImage source={{ uri: user.avatar }} alt="User avatar" />
-                        </Avatar>
-                      );
-                    })}
-                    {ride.memberIds.length > 5 && (
-                      <Box
-                        bg="#3a7bd5"
-                        borderRadius="$full"
-                        w="$6"
-                        h="$6"
-                        alignItems="center"
-                        justifyContent="center"
-                      >
-                        <Text color="white" fontSize="$xs">
-                          +{ride.memberIds.length - 5}
-                        </Text>
-                      </Box>
-                    )}
-                  </HStack>
-                </HStack>
-              )}
-
-              {ride.notes && (
-                <Text color="#a0a0a0" mt="$1">
-                  {ride.notes}
+      {filteredRides.map((ride) => (
+  <Box
+    key={ride.id}
+    p="$4"
+    borderRadius="$lg"
+    borderWidth="$1"
+    borderColor="#333"
+    backgroundColor="#1e1e1e"
+    mb="$4"
+  >
+    <VStack space="xs">
+      <Text fontWeight="$bold" fontSize="$md" color="white">
+        {ride.from} → {ride.to}
+      </Text>
+      <Text color="#a0a0a0">
+        {ride.date}, {ride.time}
+      </Text>
+      <Text color="#a0a0a0">
+        {ride.seats} seat{ride.seats > 1 ? "s" : ""} available
+      </Text>
+      {ride.memberIds.length > 0 && (
+        <HStack space="sm" mt="$2" alignItems="center">
+          <Text color="#a0a0a0" mr="$2" fontSize="$sm">
+            Members:
+          </Text>
+          <HStack space="sm">
+            {ride.memberIds.slice(0, 5).map((uid) => {
+              const user = users[uid] || { avatar: DEFAULT_AVATAR };
+              return (
+                <Avatar key={uid} size="sm" bgColor="#1e1e1e">
+                  <AvatarImage source={{ uri: user.avatar }} alt="User avatar" />
+                </Avatar>
+              );
+            })}
+            {ride.memberIds.length > 5 && (
+              <Box
+                bg="#3a7bd5"
+                borderRadius="$full"
+                w="$6"
+                h="$6"
+                alignItems="center"
+                justifyContent="center"
+              >
+                <Text color="white" fontSize="$xs">
+                  +{ride.memberIds.length - 5}
                 </Text>
-              )}
-              <Text mt="$1" color="#666" fontSize="$xs">
-                Posted {getRelativeTime(ride.createdAt)}
-              </Text>
-            </VStack>
+              </Box>
+            )}
+          </HStack>
+        </HStack>
+      )}
 
-            <HStack space="md" justifyContent="flex-end" mt="$4">
-              <Button
-                size="sm"
-                backgroundColor="#3a7bd5"
-                onPress={() =>
-                  router.push({
-                    pathname: "/(stack)/ride/[id]",
-                    params: { id: ride.id },
-                  })
-                }
-              >
-                <Text color="white">View Details</Text>
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                borderColor="#3a7bd5"
-                backgroundColor="transparent"
-                onPress={() => handleJoinRide(ride.id)}
-              >
-                <Text color="#3a7bd5">Join Group</Text>
-              </Button>
-            </HStack>
-          </Box>
-        ))}
+      {ride.notes && (
+        <Text color="#a0a0a0" mt="$1">
+          {ride.notes}
+        </Text>
+      )}
+      <Text mt="$1" color="#666" fontSize="$xs">
+        Posted {getRelativeTime(ride.createdAt)}
+      </Text>
+    </VStack>
+
+    <HStack space="md" justifyContent="flex-end" mt="$4">
+      <Button
+        size="sm"
+        backgroundColor="#3a7bd5"
+        onPress={() =>
+          router.push({
+            pathname: "/(stack)/ride/[id]",
+            params: { id: ride.id },
+          })
+        }
+      >
+        <Text color="white">View Details</Text>
+      </Button>
+
+      {ride.memberIds.includes(userId!) ? (
+        <Box
+          px="$3"
+          py="$2"
+          borderWidth="$1"
+          borderRadius="$md"
+          borderColor="#3a7bd5"
+          alignItems="center"
+          justifyContent="center"
+        >
+          <Text color="#3a7bd5" fontSize="$sm">
+            You are already in this group
+          </Text>
+        </Box>
+      ) : (
+        <Button
+          size="sm"
+          variant="outline"
+          borderColor="#3a7bd5"
+          backgroundColor="transparent"
+          onPress={() => handleJoinRide(ride.id)}
+        >
+          <Text color="#3a7bd5">Join Group</Text>
+        </Button>
+      )}
+    </HStack>
+  </Box>
+))}
 
         {filteredRides.length === 0 && (
           <Text color="#a0a0a0" textAlign="center" mt="$6">

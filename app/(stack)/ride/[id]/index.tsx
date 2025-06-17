@@ -10,7 +10,13 @@ import {
   VStack,
 } from "@gluestack-ui/themed";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Timestamp, arrayUnion, doc, getDoc, updateDoc } from "firebase/firestore";
+import {
+  Timestamp,
+  arrayUnion,
+  doc,
+  getDoc,
+  updateDoc,
+} from "firebase/firestore";
 import { useEffect, useState } from "react";
 
 type Ride = {
@@ -22,6 +28,7 @@ type Ride = {
   seats: number;
   notes?: string;
   createdAt: Timestamp;
+  memberIds: string[];
 };
 
 const getRelativeTime = (timestamp: Timestamp) => {
@@ -67,6 +74,7 @@ export default function RideDetailsPage() {
             seats: data.seats,
             notes: data.notes ?? "",
             createdAt: data.createdAt ?? Timestamp.now(),
+            memberIds: data.memberIds ?? [],
           });
         } else {
           console.warn("No such ride!");
@@ -90,8 +98,11 @@ export default function RideDetailsPage() {
         memberIds: arrayUnion(userId),
       });
 
-      console.log("Successfully joined the ride");
-      // You can replace this with a Toast if you'd like
+      // Redirect to group chat
+      router.push({
+        pathname: "/(stack)/ride/[id]/chat",
+        params: { id: ride.id },
+      });
     } catch (err) {
       console.error("Error joining ride:", err);
     }
@@ -120,6 +131,8 @@ export default function RideDetailsPage() {
       </Box>
     );
   }
+
+  const alreadyJoined = ride.memberIds.includes(userId!);
 
   return (
     <ScrollView px="$4" pt="$8" bg="#121212" contentContainerStyle={{ paddingBottom: 100 }}>
@@ -154,13 +167,29 @@ export default function RideDetailsPage() {
           </Text>
 
           <VStack space="sm" mt="$4">
-            <Button
-              size="md"
-              backgroundColor="#3a7bd5"
-              onPress={handleJoinRide}
-            >
-              <Text color="white">Join Ride</Text>
-            </Button>
+            {alreadyJoined ? (
+              <Box
+                px="$3"
+                py="$2"
+                borderWidth="$1"
+                borderRadius="$md"
+                borderColor="#3a7bd5"
+                alignItems="center"
+                justifyContent="center"
+              >
+                <Text color="#3a7bd5" fontSize="$sm">
+                  You are already in this group
+                </Text>
+              </Box>
+            ) : (
+              <Button
+                size="md"
+                backgroundColor="#3a7bd5"
+                onPress={handleJoinRide}
+              >
+                <Text color="white">Join Ride</Text>
+              </Button>
+            )}
 
             <Button
               variant="outline"
