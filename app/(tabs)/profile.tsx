@@ -5,26 +5,14 @@ import {
   AvatarImage,
   Box,
   Button,
-  ChevronDownIcon,
   HStack,
   Heading,
-  Icon,
   Input,
   InputField,
   KeyboardAvoidingView,
   ScrollView,
-  Select,
-  SelectBackdrop,
-  SelectContent,
-  SelectDragIndicator,
-  SelectDragIndicatorWrapper,
-  SelectIcon,
-  SelectInput,
-  SelectItem,
-  SelectPortal,
-  SelectTrigger,
   Text,
-  VStack,
+  VStack
 } from "@gluestack-ui/themed";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
@@ -38,23 +26,27 @@ import {
 import { useEffect, useState } from "react";
 import { Platform, TouchableOpacity } from "react-native";
 
+// Default avatar image (can be a placeholder image URL or base64 string)
 const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
 
 export default function ProfileScreen() {
-  const { isLoaded, userId: clerkUserId } = useAuth();
+  const { isLoaded, userId: clerkUserId, signOut } = useAuth();
   const { user } = useUser();
   const router = useRouter();
 
   const [profileData, setProfileData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
-    username: "",
-    genderPref: "N",
-  });
+  type Gender = "M" | "F" | "NB" | null;
+  
+    const [formData, setFormData] = useState({
+      firstName: "",
+      lastName: "",
+      username: "",
+      gender: null as Gender,
+      genderPref: "N",
+    });
 
   useEffect(() => {
     if (!isLoaded || !clerkUserId || !user) return;
@@ -79,6 +71,7 @@ export default function ProfileScreen() {
               ridesJoined: 0,
               ridesHosted: 0,
               createdAt: new Date(),
+              gender: null,
             };
 
         setProfileData({
@@ -95,6 +88,7 @@ export default function ProfileScreen() {
           firstName: user.firstName || "",
           lastName: user.lastName || "",
           username: firebaseData.username || user.username || "",
+          gender: firebaseData.gender || null,
           genderPref: firebaseData.pref || "N",
         });
       } catch (error) {
@@ -120,6 +114,7 @@ export default function ProfileScreen() {
       const updatedData = {
         username: formData.username,
         pref: formData.genderPref,
+        gender: formData.gender,
         email: user.primaryEmailAddress?.emailAddress || "",
         first_name: formData.firstName,
         last_name: formData.lastName,
@@ -182,8 +177,14 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = async () => {
-    await signOut();
-    router.replace("/(auth)/Login");
+    if (!isLoaded) return;
+
+    try {
+      await signOut();
+      router.replace("/(auth)/Login");
+    } catch (err) {
+      console.error("Error signing out:", err);
+    }
   };
 
   if (!isLoaded || loading) {
@@ -198,7 +199,11 @@ export default function ProfileScreen() {
     return (
       <Box flex={1} bg="#121212" justifyContent="center" alignItems="center">
         <Text color="#a0a0a0">Please sign in to view your profile</Text>
-        <Button mt="$4" bg="#3a7bd5" onPress={() => router.push("/(auth)/Login")}>
+        <Button
+          mt="$4"
+          bg="#3a7bd5"
+          onPress={() => router.push("/(auth)/Login")}
+        >
           <Text color="white">Sign In</Text>
         </Button>
       </Box>
@@ -206,10 +211,14 @@ export default function ProfileScreen() {
   }
 
   const display = {
-    firstName: profileData.firebaseData.first_name || profileData.clerkData.firstName,
-    lastName: profileData.firebaseData.last_name || profileData.clerkData.lastName,
-    username: profileData.firebaseData.username || profileData.clerkData.username,
+    firstName:
+      profileData.firebaseData.first_name || profileData.clerkData.firstName,
+    lastName:
+      profileData.firebaseData.last_name || profileData.clerkData.lastName,
+    username:
+      profileData.firebaseData.username || profileData.clerkData.username,
     email: profileData.clerkData.email,
+    gender: profileData.firebaseData.gender,
     genderPref: profileData.firebaseData.pref,
     avatar: profileData.firebaseData.avatar,
     ridesJoined: profileData.firebaseData.ridesJoined,
@@ -246,7 +255,9 @@ export default function ProfileScreen() {
                 )}
               </Avatar>
               {isEditing && (
-                <Text mt="$2" color="#3a7bd5">Tap to change photo</Text>
+                <Text mt="$2" color="#3a7bd5">
+                  Tap to change photo
+                </Text>
               )}
             </TouchableOpacity>
 
@@ -300,6 +311,50 @@ export default function ProfileScreen() {
                       }
                     />
                   </Input>
+
+                  <Text color="#a0a0a0" mt="$4">
+                    Gender
+                  </Text>
+                  <HStack space="sm" w="100%">
+                    {(["M", "F", "NB"] as Gender[]).map((option) => (
+                      <TouchableOpacity
+                        key={option}
+                        onPress={() =>
+                          setFormData({ ...formData, gender: option })
+                        }
+                        style={{
+                          flex: 1,
+                          padding: 12,
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor:
+                            formData.gender === option ? "#3a7bd5" : "#333",
+                          backgroundColor:
+                            formData.gender === option ? "#1a3a7b" : "#1e1e1e",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color:
+                              formData.gender === option
+                                ? "#ffffff"
+                                : "#a0a0a0",
+                            fontSize: 14,
+                            fontWeight:
+                              formData.gender === option ? "600" : "400",
+                          }}
+                        >
+                          {option === "M"
+                            ? "Male"
+                            : option === "F"
+                            ? "Female"
+                            : "Non-binary"}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </HStack>
                 </>
               ) : (
                 <>
@@ -308,55 +363,120 @@ export default function ProfileScreen() {
                     {display.firstName} {display.lastName}
                   </Text>
 
-                  <Text color="#a0a0a0" mt="$4">Username</Text>
+                  <Text color="#a0a0a0" mt="$4">
+                    Username
+                  </Text>
                   <Text color="white" fontSize="$lg" fontWeight="$semibold">
                     {display.username || "Not set"}
                   </Text>
+
+                  <Text color="#a0a0a0" mt="$4">
+                    Gender
+                  </Text>
+                  <Text color="white" fontSize="$lg" fontWeight="$semibold">
+                    {display.gender === "M"
+                      ? "Male"
+                      : display.gender === "F"
+                      ? "Female"
+                      : display.gender === "NB"
+                      ? "Non-binary"
+                      : "Not specified"}
+                  </Text>
                 </>
               )}
-
-              <Text color="#a0a0a0" mt="$4">Email</Text>
+              <Text color="#a0a0a0" mt="$4">
+                Email
+              </Text>
               <Text color="white" fontSize="$lg" fontWeight="$semibold">
                 {display.email}
               </Text>
-
-              <Text color="#a0a0a0" mt="$4">Gender Preference</Text>
+              <Text color="#a0a0a0" mt="$4">
+                Gender Preference
+              </Text>
               {isEditing ? (
-                <Select
-                  selectedValue={formData.genderPref}
-                  onValueChange={(v) =>
-                    setFormData({ ...formData, genderPref: v })
-                  }
-                >
-                  <SelectTrigger bg="#1e1e1e" borderColor="#333">
-                    <SelectInput color="white" value={
-                      formData.genderPref === "N"
-                        ? "No Preference"
-                        : formData.genderPref === "M"
-                        ? "Male Only"
-                        : formData.genderPref === "F"
-                        ? "Female Only"
-                        : "Non-binary Only"
-                    }/>
-                    <SelectIcon>
-                      <Icon as={ChevronDownIcon} color="#a0a0a0" />
-                    </SelectIcon>
-                  </SelectTrigger>
-                  <SelectPortal>
-                    <SelectBackdrop bg="rgba(0,0,0,0.7)" />
-                    <SelectContent bg="#1e1e1e" borderColor="#333">
-                      <SelectDragIndicatorWrapper>
-                        <SelectDragIndicator bg="#3a3a3a" />
-                      </SelectDragIndicatorWrapper>
-                      <SelectItem label="No Preference" value="N" />
-                      <SelectItem label="Male Only" value="M" />
-                      <SelectItem label="Female Only" value="F" />
-                      <SelectItem label="Non-binary Only" value="NB" />
-                    </SelectContent>
-                  </SelectPortal>
-                </Select>
+                <VStack space="sm" w="100%">
+                  {/* First row */}
+                  <HStack space="sm" w="100%">
+                    {(["N", "M"] as const).map((option) => (
+                      <TouchableOpacity
+                        key={option}
+                        onPress={() =>
+                          setFormData({ ...formData, genderPref: option })
+                        }
+                        style={{
+                          flex: 1,
+                          padding: 12,
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor:
+                            formData.genderPref === option ? "#3a7bd5" : "#333",
+                          backgroundColor:
+                            formData.genderPref === option
+                              ? "#1a3a7b"
+                              : "#1e1e1e",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color:
+                              formData.genderPref === option
+                                ? "#ffffff"
+                                : "#a0a0a0",
+                            fontSize: 14,
+                            fontWeight:
+                              formData.genderPref === option ? "600" : "400",
+                          }}
+                        >
+                          {option === "N" ? "No Preference" : "Male Only"}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </HStack>
+
+                  {/* Second row */}
+                  <HStack space="sm" w="100%">
+                    {(["F", "NB"] as const).map((option) => (
+                      <TouchableOpacity
+                        key={option}
+                        onPress={() =>
+                          setFormData({ ...formData, genderPref: option })
+                        }
+                        style={{
+                          flex: 1,
+                          padding: 12,
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor:
+                            formData.genderPref === option ? "#3a7bd5" : "#333",
+                          backgroundColor:
+                            formData.genderPref === option
+                              ? "#1a3a7b"
+                              : "#1e1e1e",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color:
+                              formData.genderPref === option
+                                ? "#ffffff"
+                                : "#a0a0a0",
+                            fontSize: 14,
+                            fontWeight:
+                              formData.genderPref === option ? "600" : "400",
+                          }}
+                        >
+                          {option === "F" ? "Female Only" : "Non-binary Only"}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </HStack>
+                </VStack>
               ) : (
-                <Text color="white" fontWeight="$semibold">
+                <Text color="white" fontSize="$lg" fontWeight="$semibold">
                   {display.genderPref === "N"
                     ? "No Preference"
                     : display.genderPref === "M"

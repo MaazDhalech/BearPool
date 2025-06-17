@@ -21,6 +21,8 @@ const isBerkeleyEmail = (email: string) => {
 const BLANK_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
 
+type Gender = "M" | "F" | "NB";
+
 export default function Signup() {
   const { isLoaded, signUp, setActive } = useSignUp();
   const router = useRouter();
@@ -30,6 +32,7 @@ export default function Signup() {
   const [password, setPassword] = React.useState("");
   const [firstName, setFirstName] = React.useState("");
   const [lastName, setLastName] = React.useState("");
+  const [gender, setGender] = React.useState<Gender | null>(null);
   const [error, setError] = React.useState("");
   const [showVerification, setShowVerification] = React.useState(false);
   const [verificationCode, setVerificationCode] = React.useState("");
@@ -40,11 +43,17 @@ export default function Signup() {
     username.trim().length > 0 &&
     password.length > 0 &&
     firstName.trim().length > 0 &&
-    lastName.trim().length > 0;
+    lastName.trim().length > 0 &&
+    gender !== null;
 
   const onSignUpPress = async () => {
     if (!isLoaded) return;
     setError("");
+
+    if (gender === null) {
+      setError("Please select your gender");
+      return;
+    }
 
     const passwordRegex =
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/;
@@ -90,20 +99,20 @@ export default function Signup() {
           await setActive({ session: completeSignUp.createdSessionId });
         }
 
-              const clerkId = completeSignUp.createdUserId;
-      await setDoc(doc(db, "users", clerkId), {
-        clerkId,
-        avatar: BLANK_AVATAR,
-        username: username.trim(),
-        email: emailAddress.toLowerCase(),
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-        pref: "N",
-        createdAt: new Date(),
-        ridesJoined: 0,
-        ridesHosted: 0,
-      });
-
+        const clerkId = completeSignUp.createdUserId;
+        await setDoc(doc(db, "users", clerkId), {
+          clerkId,
+          avatar: BLANK_AVATAR,
+          username: username.trim(),
+          email: emailAddress.toLowerCase(),
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          gender: gender, // Storing the selected gender
+          pref: "N", // Default preference
+          createdAt: new Date(),
+          ridesJoined: 0,
+          ridesHosted: 0,
+        });
 
         router.replace("/");
       } else {
@@ -215,6 +224,46 @@ export default function Signup() {
             </View>
           </View>
 
+<View style={{ marginBottom: 16 }}>
+  <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+    Gender (Required)
+  </Text>
+  <View style={{ flexDirection: "row", gap: 8 }}>
+    {(["M", "F", "NB"] as Gender[]).map((option) => (
+      <TouchableOpacity
+        key={option}
+        onPress={() => setGender(option)}
+        style={{
+          flex: 1,
+          paddingVertical: 12,
+          paddingHorizontal: 8,
+          borderRadius: 8,
+          borderWidth: 1,
+          borderColor: gender === option ? "#3a7bd5" : "#333",
+          backgroundColor: gender === option ? "#1a3a7b" : "#1e1e1e",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: 50,
+        }}
+      >
+        <Text 
+          style={{ 
+            color: gender === option ? "#ffffff" : "#a0a0a0",
+            fontSize: 14,
+            fontWeight: gender === option ? "600" : "400",
+            textAlign: 'center',
+            lineHeight: 20,
+          }}
+        >
+          {option === "M" ? "Male" : 
+           option === "F" ? "Female" : 
+           "Non-binary"}
+        </Text>
+      </TouchableOpacity>
+    ))}
+  </View>
+</View>
+
           <View style={{ marginBottom: 24 }}>
             <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
               Password
@@ -274,7 +323,7 @@ export default function Signup() {
         </View>
       </ScrollView>
 
-      {/* Verification Modal - Outside ScrollView to prevent scrolling when modal is open */}
+      {/* Verification Modal */}
       {showVerification && (
         <View
           style={{
