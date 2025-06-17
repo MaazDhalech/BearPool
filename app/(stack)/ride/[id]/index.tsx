@@ -1,18 +1,18 @@
 import { db } from "@/services/firebaseConfig";
+import { useAuth } from "@clerk/clerk-expo";
 import {
-    Box,
-    Button,
-    Heading,
-    ScrollView,
-    Spinner,
-    Text,
-    VStack,
+  Box,
+  Button,
+  Heading,
+  ScrollView,
+  Spinner,
+  Text,
+  VStack,
 } from "@gluestack-ui/themed";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Timestamp, doc, getDoc } from "firebase/firestore";
+import { Timestamp, arrayUnion, doc, getDoc, updateDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
 
-// Type for a single ride
 type Ride = {
   id: string;
   from: string;
@@ -44,6 +44,7 @@ const getRelativeTime = (timestamp: Timestamp) => {
 export default function RideDetailsPage() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
+  const { userId } = useAuth();
   const [ride, setRide] = useState<Ride | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -80,22 +81,40 @@ export default function RideDetailsPage() {
     fetchRide();
   }, [id]);
 
+  const handleJoinRide = async () => {
+    if (!userId || !ride?.id) return;
+
+    try {
+      const rideRef = doc(db, "rides", ride.id);
+      await updateDoc(rideRef, {
+        memberIds: arrayUnion(userId),
+      });
+
+      console.log("Successfully joined the ride");
+      // You can replace this with a Toast if you'd like
+    } catch (err) {
+      console.error("Error joining ride:", err);
+    }
+  };
+
   if (loading) {
     return (
-      <Box flex={1} justifyContent="center" alignItems="center" bg="$backgroundLight">
+      <Box flex={1} justifyContent="center" alignItems="center" bg="#121212">
         <Spinner size="large" />
-        <Text mt="$4">Loading ride details...</Text>
+        <Text mt="$4" color="#a0a0a0">
+          Loading ride details...
+        </Text>
       </Box>
     );
   }
 
   if (!ride) {
     return (
-      <Box flex={1} justifyContent="center" alignItems="center" px="$4" bg="$backgroundLight">
+      <Box flex={1} justifyContent="center" alignItems="center" px="$4" bg="#121212">
         <Text fontSize="$lg" color="$red500">
           Ride not found.
         </Text>
-        <Button mt="$4" onPress={() => router.back()}>
+        <Button mt="$4" onPress={() => router.back()} bg="#3a7bd5">
           <Text color="white">Go Back</Text>
         </Button>
       </Box>
@@ -103,38 +122,57 @@ export default function RideDetailsPage() {
   }
 
   return (
-    <ScrollView px="$4" py="$6" bg="$backgroundLight">
-      <VStack space="md">
-        <Heading size="lg">Ride from {ride.from} → {ride.to}</Heading>
-        <Text>Date: {ride.date}</Text>
-        <Text>Time: {ride.time}</Text>
-        <Text>Seats Available: {ride.seats}</Text>
-        {ride.notes ? <Text>Notes: {ride.notes}</Text> : null}
-        <Text fontSize="$sm" color="$coolGray500">
-          Posted {getRelativeTime(ride.createdAt)}
-        </Text>
+    <ScrollView px="$4" pt="$8" bg="#121212" contentContainerStyle={{ paddingBottom: 100 }}>
+      <Box
+        p="$4"
+        borderRadius="$lg"
+        borderWidth="$1"
+        borderColor="#333"
+        backgroundColor="#1e1e1e"
+        mb="$4"
+      >
+        <VStack space="sm">
+          <Heading size="lg" color="white">
+            {ride.from} → {ride.to}
+          </Heading>
 
-        <Button
-          size="md"
-          mt="$4"
-          action="primary"
-          onPress={() => {
-            // Placeholder — integrate join logic later
-            console.log(`Joined ride ${ride.id}`);
-          }}
-        >
-          <Text color="white">Join Ride</Text>
-        </Button>
+          <Text color="#a0a0a0">
+            {ride.date}, {ride.time}
+          </Text>
+          <Text color="#a0a0a0">
+            {ride.seats} seat{ride.seats > 1 ? "s" : ""} available
+          </Text>
 
-        <Button
-          mt="$2"
-          variant="outline"
-          action="secondary"
-          onPress={() => router.back()}
-        >
-          <Text color="$primary500">Back</Text>
-        </Button>
-      </VStack>
+          {ride.notes && (
+            <Text color="#a0a0a0" mt="$1">
+              Notes: {ride.notes}
+            </Text>
+          )}
+
+          <Text mt="$1" color="#666" fontSize="$xs">
+            Posted {getRelativeTime(ride.createdAt)}
+          </Text>
+
+          <VStack space="sm" mt="$4">
+            <Button
+              size="md"
+              backgroundColor="#3a7bd5"
+              onPress={handleJoinRide}
+            >
+              <Text color="white">Join Ride</Text>
+            </Button>
+
+            <Button
+              variant="outline"
+              borderColor="#3a7bd5"
+              backgroundColor="transparent"
+              onPress={() => router.back()}
+            >
+              <Text color="#3a7bd5">Back</Text>
+            </Button>
+          </VStack>
+        </VStack>
+      </Box>
     </ScrollView>
   );
 }
