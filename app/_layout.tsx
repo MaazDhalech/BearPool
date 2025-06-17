@@ -3,11 +3,7 @@ import { config } from "@/gluestack-ui.config";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { ClerkProvider } from "@clerk/clerk-expo";
 import { GluestackUIProvider } from "@gluestack-ui/themed";
-import {
-  DarkTheme,
-  DefaultTheme,
-  ThemeProvider,
-} from "@react-navigation/native";
+import { DarkTheme, ThemeProvider } from "@react-navigation/native";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SecureStore from "expo-secure-store";
@@ -36,40 +32,44 @@ export default function RootLayout() {
   return (
     <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
       <GluestackUIProvider config={config}>
-        <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+        {/* Always use the dark theme for navigation */}
+        <ThemeProvider value={DarkTheme}>
           {/* Instagram-style status bar */}
           <ExpoStatusBar
-            style={colorScheme === "dark" ? "light" : "dark"}
+            style="light"
             translucent
             backgroundColor="transparent"
           />
-          
+
           {/* Main container with dynamic padding */}
-          <View style={{
-            flex: 1,
-            backgroundColor: colorScheme === "dark" ? "#000000" : "#ffffff",
-            paddingTop: Platform.OS === "android" ? StatusBar.currentHeight ?? 0 : 0
-          }}>
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: colorScheme === "dark" ? "#000000" : "#ffffff",
+              paddingTop:
+                Platform.OS === "android" ? StatusBar.currentHeight ?? 0 : 0,
+            }}
+          >
             <Stack
               screenOptions={{
                 headerStyle: {
-                  backgroundColor: colorScheme === "dark" ? "#000000" : "#ffffff",
+                  backgroundColor: "#000000",
                 },
-                headerTintColor: colorScheme === "dark" ? "#ffffff" : "#000000",
+                headerTintColor: "#ffffff",
                 headerTitleStyle: {
                   fontWeight: "bold",
                 },
                 headerShadowVisible: false, // Remove header bottom border
                 contentStyle: {
-                  backgroundColor: colorScheme === "dark" ? "#000000" : "#ffffff",
+                  backgroundColor: "#000000",
                 },
               }}
             >
-              <Stack.Screen 
-                name="(tabs)" 
-                options={{ 
+              <Stack.Screen
+                name="(tabs)"
+                options={{
                   headerShown: false,
-                }} 
+                }}
               />
               <Stack.Screen name="+not-found" />
             </Stack>

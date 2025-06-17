@@ -2,6 +2,7 @@ import { db } from "@/services/firebaseConfig";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import {
   Avatar,
+  AvatarImage,
   Box,
   Button,
   ChevronDownIcon,
@@ -27,7 +28,7 @@ import {
 } from "@gluestack-ui/themed";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
-import { router } from "expo-router";
+import { useRouter } from "expo-router";
 import {
   doc,
   getDoc,
@@ -41,8 +42,10 @@ const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
 
 export default function ProfileScreen() {
-  const { isLoaded, userId: clerkUserId, signOut } = useAuth();
+  const { isLoaded, userId: clerkUserId } = useAuth();
   const { user } = useUser();
+  const router = useRouter();
+
   const [profileData, setProfileData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -80,10 +83,10 @@ export default function ProfileScreen() {
 
         setProfileData({
           clerkData: {
-            email: user.primaryEmailAddress?.emailAddress,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            username: user.username,
+            email: user.primaryEmailAddress?.emailAddress || "",
+            firstName: user.firstName || "",
+            lastName: user.lastName || "",
+            username: user.username || "",
           },
           firebaseData,
         });
@@ -95,7 +98,7 @@ export default function ProfileScreen() {
           genderPref: firebaseData.pref || "N",
         });
       } catch (error) {
-        console.error("Error fetching user data:", error);
+        console.error("Error fetching profile:", error);
       } finally {
         setLoading(false);
       }
@@ -106,114 +109,86 @@ export default function ProfileScreen() {
 
   const handleUpdateProfile = async () => {
     if (!clerkUserId || !user) return;
-
     try {
+      // update Clerk
       await user.update({
         firstName: formData.firstName,
         lastName: formData.lastName,
       });
 
+      // update Firestore
       const updatedData = {
         username: formData.username,
         pref: formData.genderPref,
-        email: user.primaryEmailAddress?.emailAddress,
+        email: user.primaryEmailAddress?.emailAddress || "",
         first_name: formData.firstName,
         last_name: formData.lastName,
-        avatar: profileData?.firebaseData?.avatar || DEFAULT_AVATAR,
-        createdAt: profileData?.firebaseData?.createdAt || new Date(),
-        ridesJoined: profileData?.firebaseData?.ridesJoined || 0,
-        ridesHosted: profileData?.firebaseData?.ridesHosted || 0,
+        avatar: profileData.firebaseData.avatar,
+        createdAt: profileData.firebaseData.createdAt,
+        ridesJoined: profileData.firebaseData.ridesJoined,
+        ridesHosted: profileData.firebaseData.ridesHosted,
       };
-
       await setDoc(doc(db, "users", clerkUserId), updatedData);
 
       setProfileData({
         clerkData: {
-          email: user.primaryEmailAddress?.emailAddress,
+          ...profileData.clerkData,
           firstName: formData.firstName,
           lastName: formData.lastName,
-          username: user.username,
+          username: formData.username,
         },
         firebaseData: updatedData,
       });
-
       setIsEditing(false);
     } catch (error) {
-      console.error("Error updating profile:", error);
+      console.error("Error saving profile:", error);
     }
   };
 
   const handleChangeAvatar = async () => {
     if (!clerkUserId) return;
-
-    const permissionResult =
-      await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      alert("Permission to access camera roll is required!");
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      alert("Camera roll permissions required");
       return;
     }
-
-    const pickerResult = await ImagePicker.launchImageLibraryAsync({
+    const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
       aspect: [1, 1],
       quality: 0.5,
     });
+    if (result.canceled) return;
 
-    if (!pickerResult.canceled && pickerResult.assets?.[0]?.uri) {
-      try {
-        const manipResult = await ImageManipulator.manipulateAsync(
-          pickerResult.assets[0].uri,
-          [{ resize: { width: 400 } }],
-          {
-            compress: 0.4,
-            format: ImageManipulator.SaveFormat.JPEG,
-            base64: true,
-          }
-        );
-
-        if (!manipResult.base64) throw new Error("Compression failed");
-
-        const base64String = `data:image/jpeg;base64,${manipResult.base64}`;
-        if (base64String.length > 900000) {
-          throw new Error("Image is still too large after compression");
-        }
-
-        await updateDoc(doc(db, "users", clerkUserId), {
-          avatar: base64String,
-        });
-
-        setProfileData((prev: any) => ({
-          ...prev,
-          firebaseData: {
-            ...prev.firebaseData,
-            avatar: base64String,
-          },
-        }));
-      } catch (error) {
-        console.error("Error updating avatar:", error);
-        alert("Image is too large. Please choose a smaller file.");
-      }
+    const asset = result.assets[0];
+    const compressed = await ImageManipulator.manipulateAsync(
+      asset.uri,
+      [{ resize: { width: 400 } }],
+      { compress: 0.4, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+    );
+    if (!compressed.base64) {
+      alert("Image compression failed");
+      return;
     }
+    const base64 = `data:image/jpeg;base64,${compressed.base64}`;
+    if (base64.length > 900000) {
+      alert("Image too large, choose a smaller one");
+      return;
+    }
+    await updateDoc(doc(db, "users", clerkUserId), { avatar: base64 });
+    setProfileData((p: any) => ({
+      ...p,
+      firebaseData: { ...p.firebaseData, avatar: base64 },
+    }));
   };
 
   const handleLogout = async () => {
-    try {
-      await signOut();
-      router.replace("/(auth)/Login");
-    } catch (error) {
-      console.error("Error signing out:", error);
-    }
+    await signOut();
+    router.replace("/(auth)/Login");
   };
 
   if (!isLoaded || loading) {
     return (
-      <Box
-        flex={1}
-        justifyContent="center"
-        alignItems="center"
-        bg="#121212"
-      >
+      <Box flex={1} bg="#121212" justifyContent="center" alignItems="center">
         <Text color="#a0a0a0">Loading profile...</Text>
       </Box>
     );
@@ -221,12 +196,7 @@ export default function ProfileScreen() {
 
   if (!user) {
     return (
-      <Box
-        flex={1}
-        justifyContent="center"
-        alignItems="center"
-        bg="#121212"
-      >
+      <Box flex={1} bg="#121212" justifyContent="center" alignItems="center">
         <Text color="#a0a0a0">Please sign in to view your profile</Text>
         <Button mt="$4" bg="#3a7bd5" onPress={() => router.push("/(auth)/Login")}>
           <Text color="white">Sign In</Text>
@@ -235,32 +205,19 @@ export default function ProfileScreen() {
     );
   }
 
-  const displayData = {
-    firstName:
-      profileData?.firebaseData?.first_name ||
-      profileData?.clerkData?.firstName ||
-      "",
-    lastName:
-      profileData?.firebaseData?.last_name ||
-      profileData?.clerkData?.lastName ||
-      "",
-    username:
-      profileData?.firebaseData?.username ||
-      profileData?.clerkData?.username ||
-      "",
-    email: profileData?.clerkData?.email || "",
-    genderPref: profileData?.firebaseData?.pref || "N",
-    avatar: profileData?.firebaseData?.avatar || DEFAULT_AVATAR,
-    ridesJoined: profileData?.firebaseData?.ridesJoined || 0,
-    ridesHosted: profileData?.firebaseData?.ridesHosted || 0,
+  const display = {
+    firstName: profileData.firebaseData.first_name || profileData.clerkData.firstName,
+    lastName: profileData.firebaseData.last_name || profileData.clerkData.lastName,
+    username: profileData.firebaseData.username || profileData.clerkData.username,
+    email: profileData.clerkData.email,
+    genderPref: profileData.firebaseData.pref,
+    avatar: profileData.firebaseData.avatar,
+    ridesJoined: profileData.firebaseData.ridesJoined,
+    ridesHosted: profileData.firebaseData.ridesHosted,
   };
 
-  const getInitials = () => {
-    if (displayData.firstName && displayData.lastName) {
-      return `${displayData.firstName[0]}${displayData.lastName[0]}`;
-    }
-    return displayData.username?.[0] || "U";
-  };
+  const initials =
+    (display.firstName?.[0] || "") + (display.lastName?.[0] || "") || "U";
 
   return (
     <KeyboardAvoidingView
@@ -268,174 +225,123 @@ export default function ProfileScreen() {
       style={{ flex: 1 }}
       keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
     >
-      <ScrollView
-        contentContainerStyle={{ flexGrow: 1 }}
-        keyboardShouldPersistTaps="handled"
-      >
-        <Box flex={1} px="$4" py="$6" bg="#121212">
-          <Heading size="xl" mt = "$10" mb="$6" color="white">
+      <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: 120 }}>
+        <Box flex={1} bg="#121212" px="$4" py="$6">
+          <Heading size="xl" color="white" mb="$6" mt="$8">
             {isEditing ? "Edit Profile" : "Your Profile"}
           </Heading>
 
-          <VStack space="lg" alignItems="center" pb="$16">
-            {/* Profile Picture */}
-            <Box width="100%" alignItems="center" justifyContent="center" mb="$4">
-              <TouchableOpacity
-                onPress={isEditing ? handleChangeAvatar : undefined}
-                style={{ alignItems: "center" }}
-              >
-                <Avatar size="2xl" borderRadius="$full" bgColor="#1e1e1e">
-                  {displayData.avatar ? (
-                    <Avatar.Image
-                      source={{ uri: displayData.avatar }}
-                      alt="Profile picture"
-                    />
-                  ) : (
-                    <Avatar.FallbackText color="white">{getInitials()}</Avatar.FallbackText>
-                  )}
-                </Avatar>
-                {isEditing && (
-                  <Text mt="$2" textAlign="center" color="#3a7bd5">
-                    Tap to change photo
-                  </Text>
+          <VStack space="lg" alignItems="center">
+            <TouchableOpacity
+              onPress={isEditing ? handleChangeAvatar : undefined}
+              style={{ marginBottom: 24 }}
+            >
+              <Avatar size="2xl" bg="#1e1e1e" borderRadius="$full">
+                {display.avatar ? (
+                  <AvatarImage source={{ uri: display.avatar }} alt="Avatar" />
+                ) : (
+                  <Avatar.FallbackText color="white">
+                    {initials}
+                  </Avatar.FallbackText>
                 )}
-              </TouchableOpacity>
-            </Box>
+              </Avatar>
+              {isEditing && (
+                <Text mt="$2" color="#3a7bd5">Tap to change photo</Text>
+              )}
+            </TouchableOpacity>
 
-            {/* Stats */}
-            <HStack space="xl" w="100%" justifyContent="space-between" px="$4">
-              <Box alignItems="center">
-                <Text fontSize="$md" color="#a0a0a0">
-                  Rides Joined
+            <HStack space="xl" w="100%" justifyContent="space-evenly">
+              <VStack alignItems="center">
+                <Text color="#a0a0a0">Rides Joined</Text>
+                <Text color="white" fontWeight="$bold" fontSize="$xl">
+                  {display.ridesJoined}
                 </Text>
-                <Text fontWeight="$bold" fontSize="$xl" color="white">
-                  {displayData.ridesJoined}
+              </VStack>
+              <VStack alignItems="center">
+                <Text color="#a0a0a0">Rides Hosted</Text>
+                <Text color="white" fontWeight="$bold" fontSize="$xl">
+                  {display.ridesHosted}
                 </Text>
-              </Box>
-              <Box alignItems="center">
-                <Text fontSize="$md" color="#a0a0a0">
-                  Rides Hosted
-                </Text>
-                <Text fontWeight="$bold" fontSize="$xl" color="white">
-                  {displayData.ridesHosted}
-                </Text>
-              </Box>
+              </VStack>
             </HStack>
 
-            {/* Profile Info */}
-            {isEditing ? (
-              <>
-                <VStack space="sm" w="100%">
-                  <Text fontSize="$md" color="#a0a0a0">
-                    First Name
-                  </Text>
+            <VStack space="sm" w="100%" mt="$6">
+              {isEditing ? (
+                <>
+                  <Text color="#a0a0a0">First Name</Text>
                   <Input bg="#1e1e1e" borderColor="#333">
                     <InputField
                       color="white"
                       value={formData.firstName}
-                      onChangeText={(text) =>
-                        setFormData({ ...formData, firstName: text })
+                      onChangeText={(t) =>
+                        setFormData({ ...formData, firstName: t })
                       }
-                      returnKeyType="next"
                     />
                   </Input>
-                </VStack>
 
-                <VStack space="sm" w="100%">
-                  <Text fontSize="$md" color="#a0a0a0">
-                    Last Name
-                  </Text>
+                  <Text color="#a0a0a0">Last Name</Text>
                   <Input bg="#1e1e1e" borderColor="#333">
                     <InputField
                       color="white"
                       value={formData.lastName}
-                      onChangeText={(text) =>
-                        setFormData({ ...formData, lastName: text })
+                      onChangeText={(t) =>
+                        setFormData({ ...formData, lastName: t })
                       }
-                      returnKeyType="next"
                     />
                   </Input>
-                </VStack>
 
-                <VStack space="sm" w="100%">
-                  <Text fontSize="$md" color="#a0a0a0">
-                    Username
-                  </Text>
+                  <Text color="#a0a0a0">Username</Text>
                   <Input bg="#1e1e1e" borderColor="#333">
                     <InputField
                       color="white"
                       value={formData.username}
-                      onChangeText={(text) =>
-                        setFormData({ ...formData, username: text })
+                      onChangeText={(t) =>
+                        setFormData({ ...formData, username: t })
                       }
-                      returnKeyType="done"
                     />
                   </Input>
-                </VStack>
-              </>
-            ) : (
-              <>
-                <VStack space="sm" w="100%" alignItems="flex-start">
-                  <Text fontSize="$md" color="#a0a0a0">
-                    Name
+                </>
+              ) : (
+                <>
+                  <Text color="#a0a0a0">Name</Text>
+                  <Text color="white" fontSize="$lg" fontWeight="$semibold">
+                    {display.firstName} {display.lastName}
                   </Text>
-                  <Text fontWeight="$semibold" fontSize="$lg" color="white">
-                    {displayData.firstName} {displayData.lastName}
-                  </Text>
-                </VStack>
 
-                <VStack space="sm" w="100%" alignItems="flex-start">
-                  <Text fontSize="$md" color="#a0a0a0">
-                    Username
+                  <Text color="#a0a0a0" mt="$4">Username</Text>
+                  <Text color="white" fontSize="$lg" fontWeight="$semibold">
+                    {display.username || "Not set"}
                   </Text>
-                  <Text fontWeight="$semibold" fontSize="$lg" color="white">
-                    {displayData.username || "Not set"}
-                  </Text>
-                </VStack>
-              </>
-            )}
+                </>
+              )}
 
-            <VStack space="sm" w="100%" alignItems="flex-start">
-              <Text fontSize="$md" color="#a0a0a0">
-                Email
+              <Text color="#a0a0a0" mt="$4">Email</Text>
+              <Text color="white" fontSize="$lg" fontWeight="$semibold">
+                {display.email}
               </Text>
-              <Text fontWeight="$semibold" fontSize="$lg" color="white">
-                {displayData.email}
-              </Text>
-            </VStack>
 
-            {/* Gender Preference */}
-            <VStack space="sm" w="100%">
-              <Text fontSize="$md" color="#a0a0a0">
-                Gender Preference
-              </Text>
+              <Text color="#a0a0a0" mt="$4">Gender Preference</Text>
               {isEditing ? (
                 <Select
                   selectedValue={formData.genderPref}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, genderPref: value })
+                  onValueChange={(v) =>
+                    setFormData({ ...formData, genderPref: v })
                   }
                 >
                   <SelectTrigger bg="#1e1e1e" borderColor="#333">
-                    <SelectInput
-                      color="white"
-                      value={
-                        formData.genderPref === "N"
-                          ? "No Preference"
-                          : formData.genderPref === "M"
-                          ? "Male Only"
-                          : formData.genderPref === "F"
-                          ? "Female Only"
-                          : formData.genderPref === "NB"
-                          ? "Non-binary Only"
-                          : ""
-                      }
-                    />
+                    <SelectInput color="white" value={
+                      formData.genderPref === "N"
+                        ? "No Preference"
+                        : formData.genderPref === "M"
+                        ? "Male Only"
+                        : formData.genderPref === "F"
+                        ? "Female Only"
+                        : "Non-binary Only"
+                    }/>
                     <SelectIcon>
                       <Icon as={ChevronDownIcon} color="#a0a0a0" />
                     </SelectIcon>
                   </SelectTrigger>
-
                   <SelectPortal>
                     <SelectBackdrop bg="rgba(0,0,0,0.7)" />
                     <SelectContent bg="#1e1e1e" borderColor="#333">
@@ -450,22 +356,19 @@ export default function ProfileScreen() {
                   </SelectPortal>
                 </Select>
               ) : (
-                <Text fontWeight="$semibold" fontSize="$lg" color="white">
-                  {formData.genderPref === "N"
+                <Text color="white" fontWeight="$semibold">
+                  {display.genderPref === "N"
                     ? "No Preference"
-                    : formData.genderPref === "M"
+                    : display.genderPref === "M"
                     ? "Male Only"
-                    : formData.genderPref === "F"
+                    : display.genderPref === "F"
                     ? "Female Only"
-                    : formData.genderPref === "NB"
-                    ? "Non-binary Only"
-                    : ""}
+                    : "Non-binary Only"}
                 </Text>
               )}
             </VStack>
 
-            {/* Action Buttons */}
-            <VStack space="md" mt="$6" w="100%">
+            <VStack space="md" mt="$8" w="100%">
               {isEditing ? (
                 <>
                   <Button bg="#3a7bd5" onPress={handleUpdateProfile}>
@@ -490,7 +393,7 @@ export default function ProfileScreen() {
                   >
                     <Text color="white">Edit Profile</Text>
                   </Button>
-                  <Button bg="#d53a3a" onPress={handleLogout}>
+                  <Button bg="#3a7bd5" onPress={handleLogout}>
                     <Text color="white" fontWeight="$semibold">
                       Log Out
                     </Text>

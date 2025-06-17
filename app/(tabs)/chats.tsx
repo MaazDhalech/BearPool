@@ -14,16 +14,19 @@ import {
 } from "@gluestack-ui/themed";
 import { useRouter } from "expo-router";
 import {
+  Timestamp,
   collection,
   doc,
   getDoc,
-  getDocs,
   limit,
+  onSnapshot,
   orderBy,
   query,
-  where,
+  serverTimestamp,
+  updateDoc,
+  where
 } from "firebase/firestore";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RefreshControl } from "react-native";
 
 const DEFAULT_AVATAR =
@@ -38,87 +41,171 @@ export default function ChatsScreen() {
   const { userId } = useAuth();
   const router = useRouter();
 
-  const fetchChatGroups = useCallback(async () => {
+  const unsubRidesRef = useRef<() => void>();
+  const unsubMsgsRef = useRef<Array<() => void>>([]);
+
+  const setupListeners = async () => {
+    // cleanup old listeners
+    unsubRidesRef.current?.();
+    unsubMsgsRef.current.forEach(unsub => unsub());
+    unsubMsgsRef.current = [];
+
     setError(null);
-    try {
-      const q = query(
-        collection(db, "rides"),
-        where("memberIds", "array-contains", userId)
-      );
-      const snapshot = await getDocs(q);
+    setLoading(true);
 
-      const rideData = await Promise.all(
-        snapshot.docs.map(async (docSnap) => {
-          const rideId = docSnap.id;
+    // 1) listen for any ride you’re in
+    const ridesQ = query(
+      collection(db, "rides"),
+      where("memberIds", "array-contains", userId)
+    );
+    unsubRidesRef.current = onSnapshot(
+      ridesQ,
+      async rideSnap => {
+        const groups: any[] = [];
+        for (const docSnap of rideSnap.docs) {
           const ride = docSnap.data();
+          groups.push({
+            id: docSnap.id,
+            title: `${ride.from} → ${ride.to}`,
+            preview: "No messages yet",
+            time: "—",
+            members: [] as any[],
+            joinedAt: (ride.createdAt as any)?.toMillis() || 0,
+            lastMessageTs: 0,
+            unreadCount: 0,
+          });
+        }
 
-          const messagesRef = collection(db, "rides", rideId, "messages");
-          const messagesQuery = query(
-            messagesRef,
+        // fetch avatars for members
+        await Promise.all(
+          groups.map(async g => {
+            const rideDoc = rideSnap.docs.find(d => d.id === g.id)!;
+            const ids: string[] = rideDoc.data().memberIds || [];
+            const members = await Promise.all(
+              ids.map(async uid => {
+                try {
+                  const udoc = await getDoc(doc(db, "users", uid));
+                  if (udoc.exists()) {
+                    const d = udoc.data();
+                    return { id: uid, avatar: d.avatar || DEFAULT_AVATAR };
+                  }
+                } catch {}
+                return null;
+              })
+            );
+            g.members = members.filter(Boolean);
+          })
+        );
+
+        setChatGroups(groups);
+        setLoading(false);
+        setRefreshing(false);
+
+        // 2) for each ride, subscribe to messages & unread count
+        rideSnap.docs.forEach(docSnap => {
+          const rideId = docSnap.id;
+          const data = docSnap.data() as any;
+
+          // lastRead timestamp for this user
+          const lr = data.lastRead?.[userId] as Timestamp | null;
+          const lastReadTs = lr instanceof Timestamp
+            ? lr
+            : Timestamp.fromMillis(0);
+
+          // subscribe to latest message
+          const msgQ = query(
+            collection(db, "rides", rideId, "messages"),
             orderBy("timestamp", "desc"),
             limit(1)
           );
-          const messagesSnapshot = await getDocs(messagesQuery);
-          const latestMessage = messagesSnapshot.docs[0]?.data();
-
-          const memberData = await Promise.all(
-            (ride.memberIds ?? []).map(async (uid: string) => {
-              try {
-                const userDoc = await getDoc(doc(db, "users", uid));
-                if (userDoc.exists()) {
-                  const data = userDoc.data();
+          const unsubLatest = onSnapshot(msgQ, msgSnap => {
+            const latest = msgSnap.docs[0]?.data();
+            setChatGroups(prev =>
+              prev
+                .map(g => {
+                  if (g.id !== rideId) return g;
                   return {
-                    id: uid,
-                    username: data.username || "Unknown",
-                    avatar: data.avatar || DEFAULT_AVATAR,
+                    ...g,
+                    preview: latest?.text ?? "No messages yet",
+                    time:
+                      latest?.timestamp
+                        ?.toDate()
+                        .toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit"
+                        }) ?? "—",
+                    lastMessageTs:
+                      (latest?.timestamp as any)?.toMillis() || 0
                   };
-                }
-              } catch {
-                return null;
-              }
-            })
+                })
+                .sort((a, b) => {
+                  const aKey = a.lastMessageTs || a.joinedAt;
+                  const bKey = b.lastMessageTs || b.joinedAt;
+                  return bKey - aKey;
+                })
+            );
+          });
+          unsubMsgsRef.current.push(unsubLatest);
+
+          // subscribe to unread count
+          const unreadQ = query(
+            collection(db, "rides", rideId, "messages"),
+            where("timestamp", ">", lastReadTs)
           );
-
-          return {
-            id: rideId,
-            title: `${ride.from} → ${ride.to}`,
-            preview: latestMessage?.text ?? "No messages yet",
-            timestamp:
-              latestMessage?.timestamp?.toDate().toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              }) ?? "—",
-            members: memberData.filter(Boolean),
-          };
-        })
-      );
-
-      setChatGroups(rideData);
-    } catch (err) {
-      console.error("Error fetching chat groups:", err);
-      setError("Failed to load your ride chats.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [userId]);
+          const unsubUnread = onSnapshot(unreadQ, snap => {
+            const count = snap.docs.length;
+            setChatGroups(prev =>
+              prev.map(g =>
+                g.id === rideId ? { ...g, unreadCount: count } : g
+              )
+            );
+          });
+          unsubMsgsRef.current.push(unsubUnread);
+        });
+      },
+      err => {
+        console.error("rides listener error", err);
+        setError("Failed to load your ride chats.");
+        setLoading(false);
+        setRefreshing(false);
+      }
+    );
+  };
 
   useEffect(() => {
-    if (userId) fetchChatGroups();
-  }, [userId, fetchChatGroups]);
+    if (!userId) return;
+    setupListeners();
+    return () => {
+      unsubRidesRef.current?.();
+      unsubMsgsRef.current.forEach(u => u());
+    };
+  }, [userId]);
 
-  const handleRefresh = () => {
+  const onRefresh = () => {
     setRefreshing(true);
-    fetchChatGroups();
+    setupListeners();
+  };
+
+  const handlePress = async (rideId: string) => {
+    // clear unread by updating lastRead to now
+    await updateDoc(doc(db, "rides", rideId), {
+      [`lastRead.${userId}`]: serverTimestamp()
+    });
+    // navigate to chat
+    router.push({
+      pathname: "/(stack)/ride/[id]/chat",
+      params: { id: rideId }
+    });
   };
 
   return (
     <ScrollView
       bg="#121212"
+      contentContainerStyle={{ paddingBottom: 120 }}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
-          onRefresh={handleRefresh}
+          onRefresh={onRefresh}
           tintColor="#a0a0a0"
         />
       }
@@ -133,57 +220,56 @@ export default function ChatsScreen() {
             <Spinner size="large" color="#3a7bd5" />
           </HStack>
         ) : error ? (
-          <Text color="#ff6666" mt="$4" textAlign="center">
+          <Text color="#ff6666" textAlign="center">
             {error}
           </Text>
         ) : chatGroups.length === 0 ? (
-          <Text color="#888" mt="$4" textAlign="center">
+          <Text color="#888" textAlign="center">
             You’re not part of any ride groups yet.
           </Text>
         ) : (
           <VStack space="lg">
-            {chatGroups.map((group) => (
+            {chatGroups.map(grp => (
               <Pressable
-                key={group.id}
+                key={grp.id}
                 borderRadius="$lg"
                 bg="#1e1e1e"
                 p="$4"
                 borderWidth="$1"
                 borderColor="#333"
-                onPress={() =>
-                  router.push({
-                    pathname: "/(stack)/ride/[id]/chat",
-                    params: { id: group.id },
-                  })
-                }
+                onPress={() => handlePress(grp.id)}
               >
-                <VStack space="sm">
+                <VStack space="xs">
                   <HStack justifyContent="space-between" alignItems="center">
                     <Text fontWeight="$bold" fontSize="$md" color="white">
-                      {group.title}
+                      {grp.title}
+                    </Text>
+                    {grp.unreadCount > 0 && (
+                      <Box bg="$red600" px="$2" py="$1" borderRadius="$sm">
+                        <Text color="white" fontSize="$2xs">
+                          {grp.unreadCount} new
+                        </Text>
+                      </Box>
+                    )}
+                  </HStack>
+                  <HStack justifyContent="space-between">
+                    <Text color="#aaa" numberOfLines={1} flex={1}>
+                      {grp.preview}
                     </Text>
                     <Text fontSize="$xs" color="#999">
-                      {group.timestamp}
+                      {grp.time}
                     </Text>
                   </HStack>
-
-                  <Text color="#aaa" numberOfLines={1}>
-                    {group.preview}
-                  </Text>
                   <Text color="#666" fontSize="$xs" italic>
                     Tap to view chat →
                   </Text>
-
                   <HStack space="sm" mt="$2">
-                    {group.members.slice(0, 5).map((user: any) => (
-                      <Avatar key={user.id} size="sm" bgColor="#121212">
-                        <AvatarImage
-                          source={{ uri: user.avatar }}
-                          alt={user.username}
-                        />
+                    {grp.members.slice(0, 5).map((u: any) => (
+                      <Avatar key={u.id} size="sm" bgColor="#121212">
+                        <AvatarImage source={{ uri: u.avatar }} alt="" />
                       </Avatar>
                     ))}
-                    {group.members.length > 5 && (
+                    {grp.members.length > 5 && (
                       <Box
                         bg="#3a7bd5"
                         borderRadius="$full"
@@ -193,7 +279,7 @@ export default function ChatsScreen() {
                         justifyContent="center"
                       >
                         <Text color="white" fontSize="$xs">
-                          +{group.members.length - 5}
+                          +{grp.members.length - 5}
                         </Text>
                       </Box>
                     )}

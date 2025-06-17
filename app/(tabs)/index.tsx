@@ -13,7 +13,7 @@ import {
   ScrollView,
   Text,
   VStack,
-  useToast,
+  useToast
 } from "@gluestack-ui/themed";
 import { useRouter } from "expo-router";
 import {
@@ -23,12 +23,13 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
   orderBy,
   query,
   updateDoc,
 } from "firebase/firestore";
-import { useEffect, useState } from "react";
-import { RefreshControl } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { AppState, RefreshControl } from "react-native";
 
 const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
@@ -44,6 +45,7 @@ type Ride = {
   createdAt: Timestamp;
   memberIds: string[];
   genderPref: string;
+  hostId: string;
 };
 
 type User = {
@@ -79,26 +81,119 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
   const [userGenderPref, setUserGenderPref] = useState<string>("N");
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
 
-  // Fetch user's gender preference
+  // Refs to track listeners and prevent memory leaks
+  const ridesUnsubscribeRef = useRef<(() => void) | null>(null);
+  const appStateRef = useRef(AppState.currentState);
+
   const fetchUserGenderPref = async () => {
     if (!userId) return;
     try {
       const userDoc = await getDoc(doc(db, "users", userId));
       if (userDoc.exists()) {
         const data = userDoc.data();
-        setUserGenderPref(data.pref || "N"); // Changed to use 'pref'
+        setUserGenderPref(data.pref || "N");
       }
     } catch (err) {
       console.error("Error fetching user gender pref:", err);
     }
   };
 
-  const fetchRidesAndUsers = async () => {
-    try {
-      // First fetch user's gender preference
-      await fetchUserGenderPref();
+  const fetchUsersForRides = async (rideData: Ride[]) => {
+    const usersData: Record<string, User> = {};
+    
+    // Get all unique user IDs from all rides
+    const allUserIds = new Set<string>();
+    rideData.forEach(ride => {
+      ride.memberIds.forEach(uid => allUserIds.add(uid));
+    });
 
+    // Fetch user data for all unique user IDs
+    for (const uid of allUserIds) {
+      try {
+        const userDoc = await getDoc(doc(db, "users", uid));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          usersData[uid] = {
+            id: uid,
+            avatar: data.avatar || data.profileImage || DEFAULT_AVATAR,
+            genderPref: data.pref || "N",
+          };
+        } else {
+          usersData[uid] = {
+            id: uid,
+            avatar: DEFAULT_AVATAR,
+            genderPref: "N",
+          };
+        }
+      } catch (err) {
+        console.error(`Error fetching user ${uid}:`, err);
+        usersData[uid] = {
+          id: uid,
+          avatar: DEFAULT_AVATAR,
+          genderPref: "N",
+        };
+      }
+    }
+
+    setUsers(prev => ({ ...prev, ...usersData }));
+  };
+
+  const setupRealTimeListener = () => {
+    // Clean up existing listener
+    if (ridesUnsubscribeRef.current) {
+      ridesUnsubscribeRef.current();
+    }
+
+    const rideQuery = query(
+      collection(db, "rides"),
+      orderBy("createdAt", sortOrder === "newest" ? "desc" : "asc")
+    );
+
+    // Set up real-time listener
+    const unsubscribe = onSnapshot(
+      rideQuery,
+      async (snapshot) => {
+        try {
+          const rideData: Ride[] = snapshot.docs.map((doc) => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              from: data.from ?? "Unknown",
+              to: data.to ?? "Unknown",
+              date: data.date ?? "Unknown",
+              time: data.time ?? "Unknown",
+              seats: data.seats ?? 1,
+              notes: data.notes ?? "",
+              createdAt: data.createdAt ?? Timestamp.now(),
+              memberIds: data.memberIds ?? [],
+              genderPref: data.genderPref ?? "N",
+              hostId: data.hostId ?? "",
+            };
+          });
+
+          setRides(rideData);
+          
+          // Fetch user data for new rides
+          await fetchUsersForRides(rideData);
+          
+        } catch (err) {
+          console.error("Error processing real-time update:", err);
+        }
+      },
+      (error) => {
+        console.error("Real-time listener error:", error);
+        // Fall back to manual fetch if real-time fails
+        fetchRidesManually();
+      }
+    );
+
+    ridesUnsubscribeRef.current = unsubscribe;
+  };
+
+  const fetchRidesManually = async () => {
+    try {
       const rideQuery = query(
         collection(db, "rides"),
         orderBy("createdAt", sortOrder === "newest" ? "desc" : "asc")
@@ -118,71 +213,76 @@ export default function HomeScreen() {
           createdAt: data.createdAt ?? Timestamp.now(),
           memberIds: data.memberIds ?? [],
           genderPref: data.genderPref ?? "N",
+          hostId: data.hostId ?? "",
         };
       });
 
-      const usersData: Record<string, User> = {};
-      for (const ride of rideData) {
-        for (const uid of ride.memberIds) {
-          if (!usersData[uid]) {
-            const userDoc = await getDoc(doc(db, "users", uid));
-            if (userDoc.exists()) {
-              const data = userDoc.data();
-              usersData[uid] = {
-                id: uid,
-                avatar: data.avatar || data.profileImage || DEFAULT_AVATAR,
-                genderPref: data.pref || "N", // Changed to use 'pref'
-              };
-            } else {
-              usersData[uid] = {
-                id: uid,
-                avatar: DEFAULT_AVATAR,
-                genderPref: "N",
-              };
-            }
-          }
-        }
-      }
-
-      setUsers(usersData);
       setRides(rideData);
+      await fetchUsersForRides(rideData);
     } catch (err) {
-      console.error("Error fetching rides/users:", err);
+      console.error("Error fetching rides manually:", err);
     }
   };
 
+  // Initialize data and set up listeners
   useEffect(() => {
-    fetchRidesAndUsers();
+    const initializeData = async () => {
+      await fetchUserGenderPref();
+      setupRealTimeListener();
+    };
+
+    initializeData();
+
+    // Clean up listener on unmount
+    return () => {
+      if (ridesUnsubscribeRef.current) {
+        ridesUnsubscribeRef.current();
+      }
+    };
+  }, [sortOrder]); // Re-setup when sort order changes
+
+  // Handle app state changes (foreground/background)
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: string) => {
+      if (
+        appStateRef.current.match(/inactive|background/) &&
+        nextAppState === 'active'
+      ) {
+        // App came to foreground, refresh data
+        setupRealTimeListener();
+      }
+      appStateRef.current = nextAppState;
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    
+    return () => subscription?.remove();
   }, [sortOrder]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchRidesAndUsers();
+    await fetchUserGenderPref();
+    await fetchRidesManually();
     setRefreshing(false);
   };
 
   const handleJoinRide = async (rideId: string) => {
     if (!userId) return;
-
     try {
       const rideRef = doc(db, "rides", rideId);
       await updateDoc(rideRef, {
         memberIds: arrayUnion(userId),
       });
-
       toast.show({
         placement: "top",
         duration: 3000,
         render: () => (
           <Box bg="$green600" px="$4" py="$3" borderRadius="$md">
-            <Text color="white" fontWeight="$bold">
-              Joined Group
-            </Text>
+            <Text color="white" fontWeight="$bold">Joined Group</Text>
             <Text color="white">You've successfully joined the ride.</Text>
           </Box>
         ),
       });
-
       setTimeout(() => {
         router.push({ pathname: "/(stack)/ride/[id]/chat", params: { id: rideId } });
       }, 500);
@@ -193,9 +293,7 @@ export default function HomeScreen() {
         duration: 3000,
         render: () => (
           <Box bg="$red600" px="$4" py="$3" borderRadius="$md">
-            <Text color="white" fontWeight="$bold">
-              Join Failed
-            </Text>
+            <Text color="white" fontWeight="$bold">Join Failed</Text>
             <Text color="white">Could not join this ride. Try again.</Text>
           </Box>
         ),
@@ -203,17 +301,23 @@ export default function HomeScreen() {
     }
   };
 
+  const handleEditPress = (rideId: string) => {
+    setOpenDropdown(null); // Close dropdown
+    router.push({
+      pathname: "/(stack)/ride/[id]/edit",
+      params: { id: rideId },
+    });
+  };
+
   const filteredRides = rides.filter((ride) => {
-    const matchesSearch =
-      ride.from.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ride.to.toLowerCase().includes(searchQuery.toLowerCase());
-
-    const matchesGenderPref =
-      ride.genderPref === "N" ||
-      ride.genderPref === userGenderPref ||
-      userGenderPref === "N";
-
-    return matchesSearch && matchesGenderPref;
+    const qs = searchQuery.toLowerCase();
+    return (
+      (ride.from.toLowerCase().includes(qs) ||
+       ride.to.toLowerCase().includes(qs)) &&
+      (ride.genderPref === "N" ||
+       ride.genderPref === userGenderPref ||
+       userGenderPref === "N")
+    );
   });
 
   const toggleSortOrder = () =>
@@ -238,7 +342,12 @@ export default function HomeScreen() {
       </Heading>
 
       <HStack alignItems="center" space="md" mb="$6">
-        <Input flex={1} size="md" borderColor="#333" backgroundColor="#1e1e1e">
+        <Input
+          flex={1}
+          size="md"
+          borderColor="#333"
+          backgroundColor="#1e1e1e"
+        >
           <InputField
             placeholder="Search by location or destination..."
             placeholderTextColor="#666"
@@ -266,78 +375,113 @@ export default function HomeScreen() {
           <Box
             key={ride.id}
             p="$4"
-            borderRadius="$lg"
-            borderWidth="$1"
-            borderColor="#333"
-            backgroundColor="#1e1e1e"
             mb="$4"
+            bg="#1e1e1e"
+            borderWidth={1}
+            borderColor="#333"
+            borderRadius="$lg"
+            position="relative"
           >
-            <VStack space="xs">
+            <HStack justifyContent="space-between" alignItems="center" mb="$2">
               <Text fontWeight="$bold" fontSize="$md" color="white">
                 {ride.from} → {ride.to}
               </Text>
-              <Text color="#a0a0a0">
-                {ride.date}, {ride.time}
-              </Text>
-              <Text color="#a0a0a0">
-                {ride.seats} seat{ride.seats > 1 ? "s" : ""} available
-              </Text>
-              <Text color="#a0a0a0" fontSize="$sm">
-                Gender preference:{" "}
-                {ride.genderPref === "M"
-                  ? "Male"
-                  : ride.genderPref === "F"
-                  ? "Female"
-                  : ride.genderPref === "NB"
-                  ? "Non-binary"
-                  : "No preference"}
-              </Text>
-              {ride.memberIds.length > 0 && (
-                <HStack space="sm" mt="$2" alignItems="center">
-                  <Text color="#a0a0a0" mr="$2" fontSize="$sm">
-                    Members:
-                  </Text>
-                  <HStack space="sm">
-                    {ride.memberIds.slice(0, 5).map((uid) => {
-                      const user = users[uid] || { avatar: DEFAULT_AVATAR };
-                      return (
-                        <Avatar key={uid} size="sm" bgColor="#1e1e1e">
-                          <AvatarImage
-                            source={{ uri: user.avatar }}
-                            alt="User avatar"
-                          />
-                        </Avatar>
-                      );
-                    })}
-                    {ride.memberIds.length > 5 && (
-                      <Box
-                        bg="#3a7bd5"
-                        borderRadius="$full"
-                        w="$6"
-                        h="$6"
-                        alignItems="center"
-                        justifyContent="center"
+              {ride.hostId === userId && (
+                <Box position="relative">
+                  <Pressable
+                    onPress={() => setOpenDropdown(openDropdown === ride.id ? null : ride.id)}
+                    p="$2"
+                  >
+                    <Text color="#a0a0a0" fontSize="$lg">⋮</Text>
+                  </Pressable>
+                  
+                  {openDropdown === ride.id && (
+                    <Box
+                      position="absolute"
+                      top="$8"
+                      right="$0"
+                      bg="#2a2a2a"
+                      borderWidth={1}
+                      borderColor="#333"
+                      borderRadius="$md"
+                      p="$2"
+                      minWidth="$24"
+                      zIndex={10}
+                    >
+                      <Pressable
+                        onPress={() => handleEditPress(ride.id)}
+                        p="$2"
+                        borderRadius="$sm"
+                        _pressed={{ bg: "#3a3a3a" }}
                       >
-                        <Text color="white" fontSize="$xs">
-                          +{ride.memberIds.length - 5}
-                        </Text>
-                      </Box>
-                    )}
-                  </HStack>
-                </HStack>
+                        <Text color="white" fontSize="$sm">Edit Post</Text>
+                      </Pressable>
+                    </Box>
+                  )}
+                </Box>
               )}
+            </HStack>
 
-              {ride.notes && (
-                <Text color="#a0a0a0" mt="$1">
-                  {ride.notes}
+            <Text color="#a0a0a0">
+              {ride.date}, {ride.time}
+            </Text>
+            <Text color="#a0a0a0">
+              {ride.seats} seat{ride.seats > 1 ? "s" : ""} available
+            </Text>
+            <Text color="#a0a0a0" fontSize="$sm" mb="$2">
+              Gender preference:{" "}
+              {ride.genderPref === "M"
+                ? "Male"
+                : ride.genderPref === "F"
+                ? "Female"
+                : ride.genderPref === "NB"
+                ? "Non-binary"
+                : "No preference"}
+            </Text>
+
+            {ride.memberIds.length > 0 && (
+              <HStack space="sm" mt="$2" alignItems="center" mb="$2">
+                <Text color="#a0a0a0" mr="$2" fontSize="$sm">
+                  Members:
                 </Text>
-              )}
-              <Text mt="$1" color="#666" fontSize="$xs">
-                Posted {getRelativeTime(ride.createdAt)}
-              </Text>
-            </VStack>
+                <HStack space="sm">
+                  {ride.memberIds.slice(0, 5).map((uid) => {
+                    const u = users[uid] || { avatar: DEFAULT_AVATAR };
+                    return (
+                      <Avatar key={uid} size="sm" bgColor="#1e1e1e">
+                        <AvatarImage source={{ uri: u.avatar }} alt="User avatar" />
+                      </Avatar>
+                    );
+                  })}
+                  {ride.memberIds.length > 5 && (
+                    <Box
+                      bg="#3a7bd5"
+                      borderRadius="$full"
+                      w="$6"
+                      h="$6"
+                      alignItems="center"
+                      justifyContent="center"
+                    >
+                      <Text color="white" fontSize="$xs">
+                        +{ride.memberIds.length - 5}
+                      </Text>
+                    </Box>
+                  )}
+                </HStack>
+              </HStack>
+            )}
 
-            <HStack space="md" justifyContent="flex-end" mt="$4">
+            {ride.notes && (
+              <Text color="#a0a0a0" mb="$2">
+                {ride.notes}
+              </Text>
+            )}
+
+            <Text fontSize="$xs" color="#666" mb="$4">
+              Posted {getRelativeTime(ride.createdAt)}
+            </Text>
+
+            <HStack space="md" justifyContent="flex-end">
               <Button
                 size="sm"
                 backgroundColor="#3a7bd5"
@@ -352,19 +496,20 @@ export default function HomeScreen() {
               </Button>
 
               {ride.memberIds.includes(userId!) ? (
-                <Box
-                  px="$3"
-                  py="$2"
-                  borderWidth="$1"
-                  borderRadius="$md"
+                <Button
+                  size="sm"
+                  variant="outline"
                   borderColor="#3a7bd5"
-                  alignItems="center"
-                  justifyContent="center"
+                  backgroundColor="transparent"
+                  onPress={() =>
+                    router.push({
+                      pathname: "/(stack)/ride/[id]/chat",
+                      params: { id: ride.id },
+                    })
+                  }
                 >
-                  <Text color="#3a7bd5" fontSize="$sm">
-                    You are already in this group
-                  </Text>
-                </Box>
+                  <Text color="#3a7bd5">View Chat</Text>
+                </Button>
               ) : (
                 <Button
                   size="sm"
@@ -377,6 +522,19 @@ export default function HomeScreen() {
                 </Button>
               )}
             </HStack>
+
+            {/* Overlay to close dropdown when clicking outside */}
+            {openDropdown === ride.id && (
+              <Pressable
+                position="absolute"
+                top="$0"
+                left="$0"
+                right="$0"
+                bottom="$0"
+                onPress={() => setOpenDropdown(null)}
+                zIndex={5}
+              />
+            )}
           </Box>
         ))}
 

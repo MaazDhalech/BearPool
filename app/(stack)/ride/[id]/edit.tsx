@@ -1,23 +1,25 @@
 import { db } from "@/services/firebaseConfig";
 import { useAuth, useUser } from "@clerk/clerk-expo";
-import { useRouter } from "expo-router";
-import { Timestamp, addDoc, collection, doc, getDoc, setDoc } from "firebase/firestore";
-import { useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { useEffect, useState } from "react";
 import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from "react-native";
 
-export default function PostScreen() {
+export default function EditRideScreen() {
   const { userId } = useAuth();
   const { user } = useUser();
   const router = useRouter();
+  const { id } = useLocalSearchParams();
 
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -27,65 +29,112 @@ export default function PostScreen() {
   const [notes, setNotes] = useState("");
   const [genderPref, setGenderPref] = useState("N");
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const getSafeSeats = () => {
-    const parsed = parseInt(seats, 10);
+    const parsed = parseInt(seats);
     return isNaN(parsed) ? 1 : parsed;
   };
 
-  const clearForm = () => {
-    setFrom("");
-    setTo("");
-    setDate("");
-    setTime("");
-    setSeats("1");
-    setNotes("");
-    setGenderPref("N");
-  };
+  // Load existing ride data
+  useEffect(() => {
+    const loadRideData = async () => {
+      if (!id || !userId) return;
+      
+      try {
+        const rideDoc = await getDoc(doc(db, "rides", id as string));
+        
+        if (!rideDoc.exists()) {
+          Alert.alert("Error", "Ride not found");
+          router.back();
+          return;
+        }
 
-  const handleSubmit = async () => {
+        const rideData = rideDoc.data();
+        
+        // Check if current user is the host
+        if (rideData.hostId !== userId) {
+          Alert.alert("Error", "You can only edit your own rides");
+          router.back();
+          return;
+        }
+
+        // Pre-fill the form with existing data
+        setFrom(rideData.from || "");
+        setTo(rideData.to || "");
+        setDate(rideData.date || "");
+        setTime(rideData.time || "");
+        setSeats(String(rideData.seats || 1));
+        setNotes(rideData.notes || "");
+        setGenderPref(rideData.genderPref || "N");
+        
+      } catch (error) {
+        console.error("Error loading ride data:", error);
+        Alert.alert("Error", "Failed to load ride data");
+        router.back();
+      } finally {
+        setInitialLoading(false);
+      }
+    };
+
+    loadRideData();
+  }, [id, userId]);
+
+  const handleSaveChanges = async () => {
     if (!from || !to || !date || !time || !seats) {
       Alert.alert("Error", "Please fill out all required fields");
       return;
     }
+
+    if (!id) {
+      Alert.alert("Error", "No ride ID provided");
+      return;
+    }
+
     setLoading(true);
     try {
-      if (!userId) throw new Error("User not authenticated");
-      const userDocRef = doc(db, "users", userId);
-      const existingUser = await getDoc(userDocRef);
-      if (!existingUser.exists()) {
-        await setDoc(userDocRef, {
-          name: user?.fullName || "Unknown",
-          email: user?.primaryEmailAddress?.emailAddress || "Unknown",
-          profileImage: user?.imageUrl || "",
-          createdAt: Timestamp.now(),
-        });
-      }
-      const chatId = `ride_${Date.now()}_${userId}`;
-      await addDoc(collection(db, "rides"), {
+      const rideRef = doc(db, "rides", id as string);
+      
+      await updateDoc(rideRef, {
         from,
         to,
         date,
         time,
-        seats: Number(getSafeSeats()),
+        seats: Number(seats),
         notes,
-        createdAt: Timestamp.now(),
-        hostId: userId,
-        memberIds: [userId],
-        chatId,
-        rideFull: false,
-        isActive: true,
         genderPref,
+        // Optionally add an updatedAt timestamp
+        // updatedAt: Timestamp.now(),
       });
-      clearForm();
-      router.replace("/");
+
+      Alert.alert("Success", "Ride updated successfully!", [
+        {
+          text: "OK",
+          onPress: () => router.back()
+        }
+      ]);
+
     } catch (error) {
-      console.error(error);
-      Alert.alert("Error", "Failed to post ride. Please try again.");
+      console.error("Error updating ride:", error);
+      Alert.alert("Error", "Failed to update ride. Please try again.");
     } finally {
       setLoading(false);
     }
   };
+
+  if (initialLoading) {
+    return (
+      <View style={{ 
+        flex: 1, 
+        backgroundColor: "#121212", 
+        justifyContent: "center", 
+        alignItems: "center" 
+      }}>
+        <ActivityIndicator size="large" color="#3a7bd5" />
+        <Text style={{ color: "#ffffff", marginTop: 16 }}>Loading ride details...</Text>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -94,7 +143,7 @@ export default function PostScreen() {
       keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}
     >
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1, padding: 20, paddingBottom: 120 }}
+        contentContainerStyle={{ flexGrow: 1, padding: 20 }}
         keyboardShouldPersistTaps="handled"
       >
         <View style={{ marginTop: 60, marginBottom: 20 }}>
@@ -105,7 +154,7 @@ export default function PostScreen() {
             marginBottom: 30,
             textAlign: "left"
           }}>
-            Post a Ride
+            Edit Ride
           </Text>
 
           {[
@@ -134,6 +183,7 @@ export default function PostScreen() {
             </View>
           ))}
 
+          {/* Seat Picker */}
           <View style={{ marginBottom: 16 }}>
             <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
               How many people do you want in the car?
@@ -176,6 +226,7 @@ export default function PostScreen() {
             </View>
           </View>
 
+          {/* Gender Preference */}
           <View style={{ marginBottom: 16 }}>
             <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
               Gender Preference
@@ -206,7 +257,7 @@ export default function PostScreen() {
                     width: "48%",
                   }}
                 >
-                  <Text style={{
+                  <Text style={{ 
                     color: genderPref === option.value ? "white" : "#a0a0a0",
                     textAlign: "center",
                     fontSize: 14,
@@ -218,6 +269,7 @@ export default function PostScreen() {
             </View>
           </View>
 
+          {/* Notes */}
           <View style={{ marginBottom: 24 }}>
             <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>Additional Notes</Text>
             <TextInput
@@ -237,8 +289,9 @@ export default function PostScreen() {
             />
           </View>
 
+          {/* Save Changes Button */}
           <TouchableOpacity
-            onPress={handleSubmit}
+            onPress={handleSaveChanges}
             activeOpacity={0.8}
             disabled={loading}
             style={{
@@ -259,7 +312,7 @@ export default function PostScreen() {
               fontWeight: "600",
               fontSize: 16,
             }}>
-              {loading ? "Posting..." : "Post Ride"}
+              {loading ? "Saving..." : "Save Changes"}
             </Text>
           </TouchableOpacity>
         </View>
