@@ -22,14 +22,12 @@ import {
   collection,
   doc,
   getDoc,
-  getDocs,
-  onSnapshot,
+  getDocs, increment, onSnapshot,
   orderBy,
-  query,
-  updateDoc,
+  query, writeBatch
 } from "firebase/firestore";
 import { useEffect, useRef, useState } from "react";
-import { AppState, RefreshControl } from "react-native";
+import { AppState, AppStateStatus, RefreshControl } from "react-native";
 
 const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
@@ -85,7 +83,7 @@ export default function HomeScreen() {
 
   // Refs to track listeners and prevent memory leaks
   const ridesUnsubscribeRef = useRef<(() => void) | null>(null);
-  const appStateRef = useRef(AppState.currentState);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   const fetchUserGenderPref = async () => {
     if (!userId) return;
@@ -243,16 +241,16 @@ export default function HomeScreen() {
 
   // Handle app state changes (foreground/background)
   useEffect(() => {
-    const handleAppStateChange = (nextAppState: string) => {
-      if (
-        appStateRef.current.match(/inactive|background/) &&
-        nextAppState === 'active'
-      ) {
-        // App came to foreground, refresh data
-        setupRealTimeListener();
-      }
-      appStateRef.current = nextAppState;
-    };
+const handleAppStateChange = (nextAppState: AppStateStatus) => {
+  if (
+    appStateRef.current.match(/inactive|background/) &&
+    nextAppState === 'active'
+  ) {
+    // App came to foreground, refresh data
+    setupRealTimeListener();
+  }
+  appStateRef.current = nextAppState;
+};
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     
@@ -266,40 +264,55 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
-  const handleJoinRide = async (rideId: string) => {
-    if (!userId) return;
-    try {
-      const rideRef = doc(db, "rides", rideId);
-      await updateDoc(rideRef, {
-        memberIds: arrayUnion(userId),
-      });
-      toast.show({
-        placement: "top",
-        duration: 3000,
-        render: () => (
-          <Box bg="$green600" px="$4" py="$3" borderRadius="$md">
-            <Text color="white" fontWeight="$bold">Joined Group</Text>
-            <Text color="white">You've successfully joined the ride.</Text>
-          </Box>
-        ),
-      });
-      setTimeout(() => {
-        router.push({ pathname: "/(stack)/ride/[id]/chat", params: { id: rideId } });
-      }, 500);
-    } catch (err) {
-      console.error("Error joining ride:", err);
-      toast.show({
-        placement: "top",
-        duration: 3000,
-        render: () => (
-          <Box bg="$red600" px="$4" py="$3" borderRadius="$md">
-            <Text color="white" fontWeight="$bold">Join Failed</Text>
-            <Text color="white">Could not join this ride. Try again.</Text>
-          </Box>
-        ),
-      });
-    }
-  };
+const handleJoinRide = async (rideId: string) => {
+  if (!userId) return;
+  try {
+    const rideRef = doc(db, "rides", rideId);
+    const userRef = doc(db, "users", userId);
+    
+    // Perform both updates in a batch to ensure atomicity
+    const batch = writeBatch(db);
+    
+    // Add user to ride's memberIds
+    batch.update(rideRef, {
+      memberIds: arrayUnion(userId),
+    });
+    
+    // Increment user's ridesJoined count
+    batch.update(userRef, {
+      ridesJoined: increment(1),
+    });
+    
+    await batch.commit();
+
+    toast.show({
+      placement: "top",
+      duration: 3000,
+      render: () => (
+        <Box bg="$green600" px="$4" py="$3" borderRadius="$md">
+          <Text color="white" fontWeight="$bold">Joined Group</Text>
+          <Text color="white">You've successfully joined the ride.</Text>
+        </Box>
+      ),
+    });
+    
+    setTimeout(() => {
+      router.push({ pathname: "/(stack)/ride/[id]/chat", params: { id: rideId } });
+    }, 500);
+  } catch (err) {
+    console.error("Error joining ride:", err);
+    toast.show({
+      placement: "top",
+      duration: 3000,
+      render: () => (
+        <Box bg="$red600" px="$4" py="$3" borderRadius="$md">
+          <Text color="white" fontWeight="$bold">Join Failed</Text>
+          <Text color="white">Could not join this ride. Try again.</Text>
+        </Box>
+      ),
+    });
+  }
+};
 
   const handleEditPress = (rideId: string) => {
     setOpenDropdown(null); // Close dropdown
@@ -412,12 +425,12 @@ export default function HomeScreen() {
                         onPress={() => handleEditPress(ride.id)}
                         p="$2"
                         borderRadius="$sm"
-                        _pressed={{ bg: "#3a3a3a" }}
+                        $pressed={{ bg: "#3a3a3a" }}
                       >
                         <Text color="white" fontSize="$sm">Edit Post</Text>
                       </Pressable>
                     </Box>
-                  )}
+                  )}  
                 </Box>
               )}
             </HStack>

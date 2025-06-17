@@ -1,7 +1,7 @@
 import { db } from "@/services/firebaseConfig";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
-import { Timestamp, addDoc, collection, doc, getDoc, setDoc } from "firebase/firestore";
+import { Timestamp, addDoc, collection, doc, getDoc, increment, setDoc } from "firebase/firestore";
 import { useState } from "react";
 import {
   Alert,
@@ -13,7 +13,6 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-
 export default function PostScreen() {
   const { userId } = useAuth();
   const { user } = useUser();
@@ -43,49 +42,58 @@ export default function PostScreen() {
     setGenderPref("N");
   };
 
-  const handleSubmit = async () => {
-    if (!from || !to || !date || !time || !seats) {
-      Alert.alert("Error", "Please fill out all required fields");
-      return;
-    }
-    setLoading(true);
-    try {
-      if (!userId) throw new Error("User not authenticated");
-      const userDocRef = doc(db, "users", userId);
-      const existingUser = await getDoc(userDocRef);
-      if (!existingUser.exists()) {
-        await setDoc(userDocRef, {
-          name: user?.fullName || "Unknown",
-          email: user?.primaryEmailAddress?.emailAddress || "Unknown",
-          profileImage: user?.imageUrl || "",
-          createdAt: Timestamp.now(),
-        });
-      }
-      const chatId = `ride_${Date.now()}_${userId}`;
-      await addDoc(collection(db, "rides"), {
-        from,
-        to,
-        date,
-        time,
-        seats: Number(getSafeSeats()),
-        notes,
+const handleSubmit = async () => {
+  if (!from || !to || !date || !time || !seats) {
+    Alert.alert("Error", "Please fill out all required fields");
+    return;
+  }
+  setLoading(true);
+  try {
+    if (!userId) throw new Error("User not authenticated");
+    const userDocRef = doc(db, "users", userId);
+    const existingUser = await getDoc(userDocRef);
+    
+    if (!existingUser.exists()) {
+      await setDoc(userDocRef, {
+        name: user?.fullName || "Unknown",
+        email: user?.primaryEmailAddress?.emailAddress || "Unknown",
+        profileImage: user?.imageUrl || "",
         createdAt: Timestamp.now(),
-        hostId: userId,
-        memberIds: [userId],
-        chatId,
-        rideFull: false,
-        isActive: true,
-        genderPref,
+        ridesHosted: 1, // Initialize with 1 since this is their first ride
       });
-      clearForm();
-      router.replace("/");
-    } catch (error) {
-      console.error(error);
-      Alert.alert("Error", "Failed to post ride. Please try again.");
-    } finally {
-      setLoading(false);
+    } else {
+      // Increment ridesHosted by 1 if user already exists
+      await setDoc(userDocRef, {
+        ridesHosted: increment(1)
+      }, { merge: true });
     }
-  };
+
+    const chatId = `ride_${Date.now()}_${userId}`;
+    await addDoc(collection(db, "rides"), {
+      from,
+      to,
+      date,
+      time,
+      seats: Number(getSafeSeats()),
+      notes,
+      createdAt: Timestamp.now(),
+      hostId: userId,
+      memberIds: [userId],
+      chatId,
+      rideFull: false,
+      isActive: true,
+      genderPref,
+    });
+    
+    clearForm();
+    router.replace("/");
+  } catch (error) {
+    console.error(error);
+    Alert.alert("Error", "Failed to post ride. Please try again.");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <KeyboardAvoidingView
