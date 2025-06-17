@@ -25,6 +25,7 @@ export default function PostScreen() {
   const [time, setTime] = useState("");
   const [seats, setSeats] = useState("1");
   const [notes, setNotes] = useState("");
+  const [genderPref, setGenderPref] = useState("N"); // Default to No preference
   const [loading, setLoading] = useState(false);
 
   const getSafeSeats = () => {
@@ -70,7 +71,7 @@ export default function PostScreen() {
         chatId,
         rideFull: false,
         isActive: true,
-        genderPref: "N",
+        genderPref, // Use the selected gender preference
       });
 
       // Navigate to the new group chat
@@ -174,6 +175,49 @@ export default function PostScreen() {
               >
                 <Text style={{ color: "white", fontSize: 18 }}>+</Text>
               </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Gender Preference */}
+          <View style={{ marginBottom: 16 }}>
+            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+              Gender Preference
+            </Text>
+            <View style={{
+              flexDirection: "row",
+              flexWrap: "wrap",
+              justifyContent: "space-between",
+              marginTop: 8
+            }}>
+              {[
+                { value: "N", label: "No Preference" },
+                { value: "M", label: "Male" },
+                { value: "F", label: "Female" },
+                { value: "NB", label: "Non-binary" },
+              ].map((option) => (
+                <TouchableOpacity
+                  key={option.value}
+                  onPress={() => setGenderPref(option.value)}
+                  style={{
+                    backgroundColor: genderPref === option.value ? "#3a7bd5" : "#1e1e1e",
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: genderPref === option.value ? "#3a7bd5" : "#333",
+                    marginBottom: 8,
+                    width: "48%",
+                  }}
+                >
+                  <Text style={{ 
+                    color: genderPref === option.value ? "white" : "#a0a0a0",
+                    textAlign: "center",
+                    fontSize: 14,
+                  }}>
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
 

@@ -61,7 +61,9 @@ const getRelativeTime = (timestamp: Timestamp) => {
   if (diffMins < 1) return "just now";
   if (diffMins < 60) return `${diffMins} min${diffMins === 1 ? "" : "s"} ago`;
   const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+  if (diffHours < 24)
+    return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+
   const diffDays = Math.floor(diffHours / 24);
   return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
 };
@@ -78,13 +80,14 @@ export default function HomeScreen() {
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
   const [userGenderPref, setUserGenderPref] = useState<string>("N");
 
+  // Fetch user's gender preference
   const fetchUserGenderPref = async () => {
     if (!userId) return;
     try {
       const userDoc = await getDoc(doc(db, "users", userId));
       if (userDoc.exists()) {
         const data = userDoc.data();
-        setUserGenderPref(data.pref || "N");
+        setUserGenderPref(data.pref || "N"); // Changed to use 'pref'
       }
     } catch (err) {
       console.error("Error fetching user gender pref:", err);
@@ -93,7 +96,9 @@ export default function HomeScreen() {
 
   const fetchRidesAndUsers = async () => {
     try {
+      // First fetch user's gender preference
       await fetchUserGenderPref();
+
       const rideQuery = query(
         collection(db, "rides"),
         orderBy("createdAt", sortOrder === "newest" ? "desc" : "asc")
@@ -126,7 +131,7 @@ export default function HomeScreen() {
               usersData[uid] = {
                 id: uid,
                 avatar: data.avatar || data.profileImage || DEFAULT_AVATAR,
-                genderPref: data.pref || "N",
+                genderPref: data.pref || "N", // Changed to use 'pref'
               };
             } else {
               usersData[uid] = {
@@ -158,16 +163,21 @@ export default function HomeScreen() {
 
   const handleJoinRide = async (rideId: string) => {
     if (!userId) return;
+
     try {
       const rideRef = doc(db, "rides", rideId);
-      await updateDoc(rideRef, { memberIds: arrayUnion(userId) });
+      await updateDoc(rideRef, {
+        memberIds: arrayUnion(userId),
+      });
 
       toast.show({
         placement: "top",
         duration: 3000,
         render: () => (
           <Box bg="$green600" px="$4" py="$3" borderRadius="$md">
-            <Text color="white" fontWeight="$bold">Joined Group</Text>
+            <Text color="white" fontWeight="$bold">
+              Joined Group
+            </Text>
             <Text color="white">You've successfully joined the ride.</Text>
           </Box>
         ),
@@ -183,7 +193,9 @@ export default function HomeScreen() {
         duration: 3000,
         render: () => (
           <Box bg="$red600" px="$4" py="$3" borderRadius="$md">
-            <Text color="white" fontWeight="$bold">Join Failed</Text>
+            <Text color="white" fontWeight="$bold">
+              Join Failed
+            </Text>
             <Text color="white">Could not join this ride. Try again.</Text>
           </Box>
         ),
@@ -214,7 +226,11 @@ export default function HomeScreen() {
       bg="#121212"
       contentContainerStyle={{ paddingBottom: 120 }}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#a0a0a0" />
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          tintColor="#a0a0a0"
+        />
       }
     >
       <Heading size="xl" color="white" mb="$6" mt="$16">
@@ -239,7 +255,9 @@ export default function HomeScreen() {
           borderWidth={1}
           borderColor="#333"
         >
-          <Text color="#3a7bd5" fontSize="$2xl" fontWeight="$bold">⇅</Text>
+          <Text color="#3a7bd5" fontSize="$2xl" fontWeight="$bold">
+            ⇅
+          </Text>
         </Pressable>
       </HStack>
 
@@ -258,23 +276,36 @@ export default function HomeScreen() {
               <Text fontWeight="$bold" fontSize="$md" color="white">
                 {ride.from} → {ride.to}
               </Text>
-              <Text color="#a0a0a0">{ride.date}, {ride.time}</Text>
-              <Text color="#a0a0a0">{ride.seats} seat{ride.seats > 1 ? "s" : ""} available</Text>
+              <Text color="#a0a0a0">
+                {ride.date}, {ride.time}
+              </Text>
+              <Text color="#a0a0a0">
+                {ride.seats} seat{ride.seats > 1 ? "s" : ""} available
+              </Text>
               <Text color="#a0a0a0" fontSize="$sm">
                 Gender preference:{" "}
-                {ride.genderPref === "M" ? "Male" :
-                  ride.genderPref === "F" ? "Female" :
-                  ride.genderPref === "NB" ? "Non-binary" : "No preference"}
+                {ride.genderPref === "M"
+                  ? "Male"
+                  : ride.genderPref === "F"
+                  ? "Female"
+                  : ride.genderPref === "NB"
+                  ? "Non-binary"
+                  : "No preference"}
               </Text>
               {ride.memberIds.length > 0 && (
                 <HStack space="sm" mt="$2" alignItems="center">
-                  <Text color="#a0a0a0" mr="$2" fontSize="$sm">Members:</Text>
+                  <Text color="#a0a0a0" mr="$2" fontSize="$sm">
+                    Members:
+                  </Text>
                   <HStack space="sm">
                     {ride.memberIds.slice(0, 5).map((uid) => {
                       const user = users[uid] || { avatar: DEFAULT_AVATAR };
                       return (
                         <Avatar key={uid} size="sm" bgColor="#1e1e1e">
-                          <AvatarImage source={{ uri: user.avatar }} alt="User avatar" />
+                          <AvatarImage
+                            source={{ uri: user.avatar }}
+                            alt="User avatar"
+                          />
                         </Avatar>
                       );
                     })}
@@ -295,8 +326,11 @@ export default function HomeScreen() {
                   </HStack>
                 </HStack>
               )}
+
               {ride.notes && (
-                <Text color="#a0a0a0" mt="$1">{ride.notes}</Text>
+                <Text color="#a0a0a0" mt="$1">
+                  {ride.notes}
+                </Text>
               )}
               <Text mt="$1" color="#666" fontSize="$xs">
                 Posted {getRelativeTime(ride.createdAt)}
@@ -307,19 +341,30 @@ export default function HomeScreen() {
               <Button
                 size="sm"
                 backgroundColor="#3a7bd5"
-                onPress={() => router.push({ pathname: "/(stack)/ride/[id]", params: { id: ride.id } })}
+                onPress={() =>
+                  router.push({
+                    pathname: "/(stack)/ride/[id]",
+                    params: { id: ride.id },
+                  })
+                }
               >
                 <Text color="white">View Details</Text>
               </Button>
 
               {ride.memberIds.includes(userId!) ? (
-                <Button
-                  size="sm"
-                  backgroundColor="#3a7bd5"
-                  onPress={() => router.push({ pathname: "/(stack)/ride/[id]/chat", params: { id: ride.id } })}
+                <Box
+                  px="$3"
+                  py="$2"
+                  borderWidth="$1"
+                  borderRadius="$md"
+                  borderColor="#3a7bd5"
+                  alignItems="center"
+                  justifyContent="center"
                 >
-                  <Text color="white">View Chat</Text>
-                </Button>
+                  <Text color="#3a7bd5" fontSize="$sm">
+                    You are already in this group
+                  </Text>
+                </Box>
               ) : (
                 <Button
                   size="sm"
