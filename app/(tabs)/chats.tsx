@@ -2,6 +2,7 @@ import { db } from "@/services/firebaseConfig";
 import { useAuth } from "@clerk/clerk-expo";
 import {
   Avatar,
+  AvatarImage,
   Box,
   HStack,
   Heading,
@@ -22,6 +23,9 @@ import {
 } from "firebase/firestore";
 import { useCallback, useEffect, useState } from "react";
 import { RefreshControl } from "react-native";
+
+const DEFAULT_AVATAR =
+  "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
 
 export default function ChatsScreen() {
   const [chatGroups, setChatGroups] = useState<any[]>([]);
@@ -90,26 +94,30 @@ export default function ChatsScreen() {
 
   return (
     <ScrollView
-      bg="$backgroundLight"
+      bg="#121212"
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          tintColor="#a0a0a0"
+        />
       }
     >
       <Box px="$4" py="$6">
-        <Heading size="xl" mb="$4" color="$textDark">
+        <Heading size="xl" color="white" mb="$6" mt="$16">
           Your Ride Groups
         </Heading>
 
         {loading ? (
           <HStack justifyContent="center" mt="$10">
-            <Spinner size="large" color="$primary500" />
+            <Spinner size="large" color="#3a7bd5" />
           </HStack>
         ) : error ? (
-          <Text color="$red600" mt="$4" textAlign="center">
+          <Text color="#ff6666" mt="$4" textAlign="center">
             {error}
           </Text>
         ) : chatGroups.length === 0 ? (
-          <Text color="$coolGray500" mt="$4" textAlign="center">
+          <Text color="#888" mt="$4" textAlign="center">
             You’re not part of any ride groups yet.
           </Text>
         ) : (
@@ -118,8 +126,10 @@ export default function ChatsScreen() {
               <Pressable
                 key={group.id}
                 borderRadius="$lg"
-                bg="$white"
+                bg="#1e1e1e"
                 p="$4"
+                borderWidth="$1"
+                borderColor="#333"
                 onPress={() =>
                   router.push({
                     pathname: "/(stack)/ride/[id]/chat",
@@ -127,31 +137,43 @@ export default function ChatsScreen() {
                   })
                 }
               >
-                <VStack space="xs">
+                <VStack space="sm">
                   <HStack justifyContent="space-between" alignItems="center">
-                    <Text fontWeight="$bold" fontSize="$md" color="$textDark">
+                    <Text fontWeight="$bold" fontSize="$md" color="white">
                       {group.title}
                     </Text>
-                    <Text fontSize="$xs" color="$coolGray500">
+                    <Text fontSize="$xs" color="#999">
                       {group.timestamp}
                     </Text>
                   </HStack>
 
-                  <VStack space="xs">
-                    <Text color="$coolGray600" numberOfLines={1}>
-                      {group.preview}
-                    </Text>
-                    <Text color="$coolGray400" fontSize="$xs" italic>
-                      Tap to view chat →
-                    </Text>
-                  </VStack>
+                  <Text color="#aaa" numberOfLines={1}>
+                    {group.preview}
+                  </Text>
+                  <Text color="#666" fontSize="$xs" italic>
+                    Tap to view chat →
+                  </Text>
 
                   <HStack space="sm" mt="$2">
-                    {group.members.map((uid: string, index: number) => (
-                      <Avatar key={index} size="sm">
-                        <Text>{uid.slice(0, 2).toUpperCase()}</Text>
+                    {group.members.slice(0, 5).map((uid: string, index: number) => (
+                      <Avatar key={index} size="sm" bgColor="#121212">
+                        <AvatarImage source={{ uri: DEFAULT_AVATAR }} alt="User" />
                       </Avatar>
                     ))}
+                    {group.members.length > 5 && (
+                      <Box
+                        bg="#3a7bd5"
+                        borderRadius="$full"
+                        w="$6"
+                        h="$6"
+                        alignItems="center"
+                        justifyContent="center"
+                      >
+                        <Text color="white" fontSize="$xs">
+                          +{group.members.length - 5}
+                        </Text>
+                      </Box>
+                    )}
                   </HStack>
                 </VStack>
               </Pressable>
