@@ -31,6 +31,11 @@ type Ride = {
   memberIds: string[];
 };
 
+type Member = {
+  id: string;
+  name: string;
+};
+
 const getRelativeTime = (timestamp: Timestamp) => {
   if (!timestamp || !(timestamp instanceof Timestamp)) return "unknown";
   const postedDate = timestamp.toDate();
@@ -55,6 +60,7 @@ export default function RideDetailsPage() {
 
   const [ride, setRide] = useState<Ride | null>(null);
   const [loading, setLoading] = useState(true);
+  const [members, setMembers] = useState<Member[]>([]);
 
   useEffect(() => {
     const fetchRide = async () => {
@@ -89,6 +95,35 @@ export default function RideDetailsPage() {
 
     fetchRide();
   }, [id]);
+
+  useEffect(() => {
+    const fetchMembers = async () => {
+      if (!ride) return;
+
+      const fetched: Member[] = [];
+      for (const uid of ride.memberIds) {
+        try {
+          const userDoc = await getDoc(doc(db, "users", uid));
+          if (userDoc.exists()) {
+            const data = userDoc.data();
+            const fullName =
+              [data.first_name, data.last_name].filter(Boolean).join(" ") ||
+              data.username ||
+              "Anonymous";
+            fetched.push({ id: uid, name: fullName });
+          } else {
+            fetched.push({ id: uid, name: "Unknown User" });
+          }
+        } catch (err) {
+          console.error("Failed to fetch member", uid, err);
+        }
+      }
+
+      setMembers(fetched);
+    };
+
+    fetchMembers();
+  }, [ride]);
 
   const handleJoinRide = async () => {
     if (!userId || !ride?.id) return;
@@ -166,30 +201,42 @@ export default function RideDetailsPage() {
             Posted {getRelativeTime(ride.createdAt)}
           </Text>
 
-          <VStack space="sm" mt="$4">
-            {alreadyJoined ? (
-              <Box
-                px="$3"
-                py="$2"
-                borderWidth="$1"
-                borderRadius="$md"
-                borderColor="#3a7bd5"
-                alignItems="center"
-                justifyContent="center"
-              >
-                <Text color="#3a7bd5" fontSize="$sm">
-                  You are already in this group
-                </Text>
-              </Box>
-            ) : (
-              <Button
-                size="md"
-                backgroundColor="#3a7bd5"
-                onPress={handleJoinRide}
-              >
-                <Text color="white">Join Ride</Text>
-              </Button>
-            )}
+          {/* Group Members */}
+          {members.length > 0 && (
+            <Box mt="$4">
+              <Text color="#aaaaaa" fontSize="$sm" mb="$2">
+                Group Members:
+              </Text>
+              <VStack space="xs">
+                {members.map((member) => (
+                  <Text key={member.id} color="white" fontSize="$sm">
+                    • {member.name}
+                  </Text>
+                ))}
+              </VStack>
+            </Box>
+          )}
+
+          {/* Action Buttons */}
+          <VStack space="sm" mt="$6">
+          {alreadyJoined ? (
+            <Button
+              size="md"
+              backgroundColor="#3a7bd5"
+              onPress={() =>
+                router.push({
+                  pathname: "/(stack)/ride/[id]/chat",
+                  params: { id: ride.id },
+                })
+              }
+            >
+              <Text color="white">View Chat</Text>
+            </Button>
+          ) : (
+            <Button size="md" backgroundColor="#3a7bd5" onPress={handleJoinRide}>
+              <Text color="white">Join Ride</Text>
+            </Button>
+          )}
 
             <Button
               variant="outline"

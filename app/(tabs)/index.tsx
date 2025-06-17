@@ -25,7 +25,7 @@ import {
   getDocs,
   orderBy,
   query,
-  updateDoc
+  updateDoc,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { RefreshControl } from "react-native";
@@ -43,11 +43,13 @@ type Ride = {
   notes?: string;
   createdAt: Timestamp;
   memberIds: string[];
+  genderPref: string;
 };
 
 type User = {
   id: string;
   avatar?: string;
+  genderPref?: string;
 };
 
 const getRelativeTime = (timestamp: Timestamp) => {
@@ -56,13 +58,10 @@ const getRelativeTime = (timestamp: Timestamp) => {
   const now = new Date();
   const diffMs = now.getTime() - postedDate.getTime();
   const diffMins = Math.floor(diffMs / 60000);
-
   if (diffMins < 1) return "just now";
   if (diffMins < 60) return `${diffMins} min${diffMins === 1 ? "" : "s"} ago`;
-
   const diffHours = Math.floor(diffMins / 60);
   if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
-
   const diffDays = Math.floor(diffHours / 24);
   return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
 };
@@ -77,15 +76,30 @@ export default function HomeScreen() {
   const [users, setUsers] = useState<Record<string, User>>({});
   const [refreshing, setRefreshing] = useState(false);
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
+  const [userGenderPref, setUserGenderPref] = useState<string>("N");
+
+  const fetchUserGenderPref = async () => {
+    if (!userId) return;
+    try {
+      const userDoc = await getDoc(doc(db, "users", userId));
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        setUserGenderPref(data.pref || "N");
+      }
+    } catch (err) {
+      console.error("Error fetching user gender pref:", err);
+    }
+  };
 
   const fetchRidesAndUsers = async () => {
     try {
+      await fetchUserGenderPref();
       const rideQuery = query(
         collection(db, "rides"),
         orderBy("createdAt", sortOrder === "newest" ? "desc" : "asc")
       );
       const rideSnapshot = await getDocs(rideQuery);
-  
+
       const rideData: Ride[] = rideSnapshot.docs.map((doc) => {
         const data = doc.data();
         return {
@@ -98,9 +112,10 @@ export default function HomeScreen() {
           notes: data.notes ?? "",
           createdAt: data.createdAt ?? Timestamp.now(),
           memberIds: data.memberIds ?? [],
+          genderPref: data.genderPref ?? "N",
         };
       });
-  
+
       const usersData: Record<string, User> = {};
       for (const ride of rideData) {
         for (const uid of ride.memberIds) {
@@ -111,17 +126,19 @@ export default function HomeScreen() {
               usersData[uid] = {
                 id: uid,
                 avatar: data.avatar || data.profileImage || DEFAULT_AVATAR,
+                genderPref: data.pref || "N",
               };
             } else {
               usersData[uid] = {
                 id: uid,
                 avatar: DEFAULT_AVATAR,
+                genderPref: "N",
               };
             }
           }
         }
       }
-  
+
       setUsers(usersData);
       setRides(rideData);
     } catch (err) {
@@ -141,30 +158,23 @@ export default function HomeScreen() {
 
   const handleJoinRide = async (rideId: string) => {
     if (!userId) return;
-  
     try {
       const rideRef = doc(db, "rides", rideId);
-      await updateDoc(rideRef, {
-        memberIds: arrayUnion(userId),
-      });
-  
+      await updateDoc(rideRef, { memberIds: arrayUnion(userId) });
+
       toast.show({
         placement: "top",
         duration: 3000,
         render: () => (
           <Box bg="$green600" px="$4" py="$3" borderRadius="$md">
             <Text color="white" fontWeight="$bold">Joined Group</Text>
-            <Text color="white">You’ve successfully joined the ride.</Text>
+            <Text color="white">You've successfully joined the ride.</Text>
           </Box>
         ),
       });
-  
-      // Optional: Wait a second before redirect for smoother UX
+
       setTimeout(() => {
-        router.push({
-          pathname: "/(stack)/ride/[id]/chat",
-          params: { id: rideId },
-        });
+        router.push({ pathname: "/(stack)/ride/[id]/chat", params: { id: rideId } });
       }, 500);
     } catch (err) {
       console.error("Error joining ride:", err);
@@ -180,13 +190,18 @@ export default function HomeScreen() {
       });
     }
   };
-  
+
   const filteredRides = rides.filter((ride) => {
-    const query = searchQuery.toLowerCase();
-    return (
-      ride.from.toLowerCase().includes(query) ||
-      ride.to.toLowerCase().includes(query)
-    );
+    const matchesSearch =
+      ride.from.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ride.to.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesGenderPref =
+      ride.genderPref === "N" ||
+      ride.genderPref === userGenderPref ||
+      userGenderPref === "N";
+
+    return matchesSearch && matchesGenderPref;
   });
 
   const toggleSortOrder = () =>
@@ -229,110 +244,96 @@ export default function HomeScreen() {
       </HStack>
 
       <VStack space="lg" pb="$16">
-      {filteredRides.map((ride) => (
-  <Box
-    key={ride.id}
-    p="$4"
-    borderRadius="$lg"
-    borderWidth="$1"
-    borderColor="#333"
-    backgroundColor="#1e1e1e"
-    mb="$4"
-  >
-    <VStack space="xs">
-      <Text fontWeight="$bold" fontSize="$md" color="white">
-        {ride.from} → {ride.to}
-      </Text>
-      <Text color="#a0a0a0">
-        {ride.date}, {ride.time}
-      </Text>
-      <Text color="#a0a0a0">
-        {ride.seats} seat{ride.seats > 1 ? "s" : ""} available
-      </Text>
-      {ride.memberIds.length > 0 && (
-        <HStack space="sm" mt="$2" alignItems="center">
-          <Text color="#a0a0a0" mr="$2" fontSize="$sm">
-            Members:
-          </Text>
-          <HStack space="sm">
-            {ride.memberIds.slice(0, 5).map((uid) => {
-              const user = users[uid] || { avatar: DEFAULT_AVATAR };
-              return (
-                <Avatar key={uid} size="sm" bgColor="#1e1e1e">
-                  <AvatarImage source={{ uri: user.avatar }} alt="User avatar" />
-                </Avatar>
-              );
-            })}
-            {ride.memberIds.length > 5 && (
-              <Box
-                bg="#3a7bd5"
-                borderRadius="$full"
-                w="$6"
-                h="$6"
-                alignItems="center"
-                justifyContent="center"
+        {filteredRides.map((ride) => (
+          <Box
+            key={ride.id}
+            p="$4"
+            borderRadius="$lg"
+            borderWidth="$1"
+            borderColor="#333"
+            backgroundColor="#1e1e1e"
+            mb="$4"
+          >
+            <VStack space="xs">
+              <Text fontWeight="$bold" fontSize="$md" color="white">
+                {ride.from} → {ride.to}
+              </Text>
+              <Text color="#a0a0a0">{ride.date}, {ride.time}</Text>
+              <Text color="#a0a0a0">{ride.seats} seat{ride.seats > 1 ? "s" : ""} available</Text>
+              <Text color="#a0a0a0" fontSize="$sm">
+                Gender preference:{" "}
+                {ride.genderPref === "M" ? "Male" :
+                  ride.genderPref === "F" ? "Female" :
+                  ride.genderPref === "NB" ? "Non-binary" : "No preference"}
+              </Text>
+              {ride.memberIds.length > 0 && (
+                <HStack space="sm" mt="$2" alignItems="center">
+                  <Text color="#a0a0a0" mr="$2" fontSize="$sm">Members:</Text>
+                  <HStack space="sm">
+                    {ride.memberIds.slice(0, 5).map((uid) => {
+                      const user = users[uid] || { avatar: DEFAULT_AVATAR };
+                      return (
+                        <Avatar key={uid} size="sm" bgColor="#1e1e1e">
+                          <AvatarImage source={{ uri: user.avatar }} alt="User avatar" />
+                        </Avatar>
+                      );
+                    })}
+                    {ride.memberIds.length > 5 && (
+                      <Box
+                        bg="#3a7bd5"
+                        borderRadius="$full"
+                        w="$6"
+                        h="$6"
+                        alignItems="center"
+                        justifyContent="center"
+                      >
+                        <Text color="white" fontSize="$xs">
+                          +{ride.memberIds.length - 5}
+                        </Text>
+                      </Box>
+                    )}
+                  </HStack>
+                </HStack>
+              )}
+              {ride.notes && (
+                <Text color="#a0a0a0" mt="$1">{ride.notes}</Text>
+              )}
+              <Text mt="$1" color="#666" fontSize="$xs">
+                Posted {getRelativeTime(ride.createdAt)}
+              </Text>
+            </VStack>
+
+            <HStack space="md" justifyContent="flex-end" mt="$4">
+              <Button
+                size="sm"
+                backgroundColor="#3a7bd5"
+                onPress={() => router.push({ pathname: "/(stack)/ride/[id]", params: { id: ride.id } })}
               >
-                <Text color="white" fontSize="$xs">
-                  +{ride.memberIds.length - 5}
-                </Text>
-              </Box>
-            )}
-          </HStack>
-        </HStack>
-      )}
+                <Text color="white">View Details</Text>
+              </Button>
 
-      {ride.notes && (
-        <Text color="#a0a0a0" mt="$1">
-          {ride.notes}
-        </Text>
-      )}
-      <Text mt="$1" color="#666" fontSize="$xs">
-        Posted {getRelativeTime(ride.createdAt)}
-      </Text>
-    </VStack>
-
-    <HStack space="md" justifyContent="flex-end" mt="$4">
-      <Button
-        size="sm"
-        backgroundColor="#3a7bd5"
-        onPress={() =>
-          router.push({
-            pathname: "/(stack)/ride/[id]",
-            params: { id: ride.id },
-          })
-        }
-      >
-        <Text color="white">View Details</Text>
-      </Button>
-
-      {ride.memberIds.includes(userId!) ? (
-        <Box
-          px="$3"
-          py="$2"
-          borderWidth="$1"
-          borderRadius="$md"
-          borderColor="#3a7bd5"
-          alignItems="center"
-          justifyContent="center"
-        >
-          <Text color="#3a7bd5" fontSize="$sm">
-            You are already in this group
-          </Text>
-        </Box>
-      ) : (
-        <Button
-          size="sm"
-          variant="outline"
-          borderColor="#3a7bd5"
-          backgroundColor="transparent"
-          onPress={() => handleJoinRide(ride.id)}
-        >
-          <Text color="#3a7bd5">Join Group</Text>
-        </Button>
-      )}
-    </HStack>
-  </Box>
-))}
+              {ride.memberIds.includes(userId!) ? (
+                <Button
+                  size="sm"
+                  backgroundColor="#3a7bd5"
+                  onPress={() => router.push({ pathname: "/(stack)/ride/[id]/chat", params: { id: ride.id } })}
+                >
+                  <Text color="white">View Chat</Text>
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  borderColor="#3a7bd5"
+                  backgroundColor="transparent"
+                  onPress={() => handleJoinRide(ride.id)}
+                >
+                  <Text color="#3a7bd5">Join Group</Text>
+                </Button>
+              )}
+            </HStack>
+          </Box>
+        ))}
 
         {filteredRides.length === 0 && (
           <Text color="#a0a0a0" textAlign="center" mt="$6">

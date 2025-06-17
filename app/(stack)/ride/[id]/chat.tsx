@@ -42,133 +42,146 @@ type UserMap = {
 };
 
 export default function RideChatScreen() {
-  const { id: rideId } = useLocalSearchParams();
-  const { user } = useUser();
-  const [messages, setMessages] = useState<any[]>([]);
-  const [input, setInput] = useState("");
-  const [rideInfo, setRideInfo] = useState<{ from: string; to: string } | null>(null);
-  const [userMap, setUserMap] = useState<UserMap>({});
-  const scrollRef = useRef<any>(null);
-  const animatedValue = useRef(new Animated.Value(0)).current;
-
-  const animatePressIn = () => {
-    Animated.timing(animatedValue, {
-      toValue: 1,
-      duration: 150,
-      useNativeDriver: false,
-    }).start();
-  };
-
-  const animatePressOut = () => {
-    Animated.timing(animatedValue, {
-      toValue: 0,
-      duration: 150,
-      useNativeDriver: false,
-    }).start();
-  };
-
-  const interpolatedColor = animatedValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["#3a7bd5", "#122a58"],
-  });
-
-  useEffect(() => {
-    if (!rideId) return;
-
-    const q = query(
-      collection(db, "rides", String(rideId), "messages"),
-      orderBy("timestamp", "asc")
-    );
-
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const msgs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      setMessages(msgs);
-
-      // Fetch user data for all unique senderIds
-      const uniqueSenderIds = Array.from(new Set(msgs.map((m) => m.senderId)));
-      const newUserMap: UserMap = { ...userMap };
-
-      for (const uid of uniqueSenderIds) {
-        if (!newUserMap[uid]) {
-          const userDoc = await getDoc(doc(db, "users", uid));
-          if (userDoc.exists()) {
-            const data = userDoc.data();
-            newUserMap[uid] = {
-              name: data.username || "Anonymous",
-              avatar: data.avatar || DEFAULT_AVATAR,
-            };
-          } else {
-            newUserMap[uid] = {
-              name: "Unknown",
-              avatar: DEFAULT_AVATAR,
-            };
+    const { id: rideId } = useLocalSearchParams();
+    const { user } = useUser();
+    const [messages, setMessages] = useState<any[]>([]);
+    const [input, setInput] = useState("");
+    const [rideInfo, setRideInfo] = useState<{ from: string; to: string } | null>(null);
+    const [userMap, setUserMap] = useState<UserMap>({});
+    const scrollRef = useRef<any>(null);
+    const animatedValue = useRef(new Animated.Value(0)).current;
+    const navAnim = useRef(new Animated.Value(0)).current;
+  
+    const animatePressIn = () => {
+      Animated.timing(animatedValue, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: false,
+      }).start();
+    };
+  
+    const animatePressOut = () => {
+      Animated.timing(animatedValue, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: false,
+      }).start();
+    };
+  
+    const animateNavPressIn = () => {
+      Animated.timing(navAnim, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: false,
+      }).start();
+    };
+  
+    const animateNavPressOut = () => {
+      Animated.timing(navAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: false,
+      }).start();
+    };
+  
+    const interpolatedColor = animatedValue.interpolate({
+      inputRange: [0, 1],
+      outputRange: ["#3a7bd5", "#122a58"],
+    });
+  
+    useEffect(() => {
+      if (!rideId) return;
+  
+      const q = query(
+        collection(db, "rides", String(rideId), "messages"),
+        orderBy("timestamp", "asc")
+      );
+  
+      const unsubscribe = onSnapshot(q, async (snapshot) => {
+        const msgs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        setMessages(msgs);
+  
+        const uniqueSenderIds = Array.from(new Set(msgs.map((m) => m.senderId)));
+        const newUserMap: UserMap = { ...userMap };
+  
+        for (const uid of uniqueSenderIds) {
+          if (!newUserMap[uid]) {
+            const userDoc = await getDoc(doc(db, "users", uid));
+            if (userDoc.exists()) {
+              const data = userDoc.data();
+              newUserMap[uid] = {
+                name: data.username || "Anonymous",
+                avatar: data.avatar || DEFAULT_AVATAR,
+              };
+            } else {
+              newUserMap[uid] = {
+                name: "Unknown",
+                avatar: DEFAULT_AVATAR,
+              };
+            }
           }
         }
-      }
-      
-
-      setUserMap(newUserMap);
-
-      setTimeout(() => {
-        scrollRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    });
-
-    return unsubscribe;
-  }, [rideId]);
-
-  useEffect(() => {
-    if (!rideId) return;
-
-    const fetchRideInfo = async () => {
-      try {
-        const rideRef = doc(db, "rides", String(rideId));
-        const rideSnap = await getDoc(rideRef);
-        if (rideSnap.exists()) {
-          const data = rideSnap.data();
-          setRideInfo({ from: data.from, to: data.to });
+  
+        setUserMap(newUserMap);
+        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+      });
+  
+      return unsubscribe;
+    }, [rideId]);
+  
+    useEffect(() => {
+      if (!rideId) return;
+  
+      const fetchRideInfo = async () => {
+        try {
+          const rideRef = doc(db, "rides", String(rideId));
+          const rideSnap = await getDoc(rideRef);
+          if (rideSnap.exists()) {
+            const data = rideSnap.data();
+            setRideInfo({ from: data.from, to: data.to });
+          }
+        } catch (err) {
+          console.error("Failed to fetch ride info:", err);
         }
+      };
+  
+      fetchRideInfo();
+    }, [rideId]);
+  
+    const handleSend = async () => {
+      if (!input.trim() || !user?.id) return;
+  
+      try {
+        const userDoc = await getDoc(doc(db, "users", user.id));
+        const userData = userDoc.exists() ? userDoc.data() : null;
+  
+        await addDoc(collection(db, "rides", String(rideId), "messages"), {
+          text: input.trim(),
+          senderId: user.id,
+          senderName:
+            userData?.username || user.username || user.fullName || "Anonymous",
+          avatar: userData?.avatar || user.imageUrl || DEFAULT_AVATAR,
+          timestamp: serverTimestamp(),
+        });
+  
+        setInput("");
       } catch (err) {
-        console.error("Failed to fetch ride info:", err);
+        console.error("Failed to send message:", err);
       }
     };
-
-    fetchRideInfo();
-  }, [rideId]);
-
-  const handleSend = async () => {
-    if (!input.trim() || !user?.id) return;
-
-    try {
-      const userDoc = await getDoc(doc(db, "users", user.id));
-      const userData = userDoc.exists() ? userDoc.data() : null;
-
-      await addDoc(collection(db, "rides", String(rideId), "messages"), {
-        text: input.trim(),
-        senderId: user.id,
-        senderName:
-          userData?.username || user.username || user.fullName || "Anonymous",
-        avatar: userData?.avatar || user.imageUrl || DEFAULT_AVATAR,
-        timestamp: serverTimestamp(),
-      });
-
-      setInput("");
-    } catch (err) {
-      console.error("Failed to send message:", err);
-    }
-  };
-
-  return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
-      >
-        <Box flex={1} px="$3" py="$4" bg="#121212">
-          {rideInfo && (
-            <Box mb="$4" alignItems="center">
+  
+    return (
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+        >
+          <Box flex={1} px="$3" py="$4" bg="#121212">
+            {rideInfo && (
               <Pressable
+                onPressIn={animateNavPressIn}
+                onPressOut={animateNavPressOut}
                 onPress={() =>
                   router.push({
                     pathname: "/(stack)/ride/[id]/group-settings",
@@ -176,19 +189,30 @@ export default function RideChatScreen() {
                   })
                 }
               >
-                <Text
-                  fontSize={18}
-                  fontWeight="600"
-                  color="white"
-                  textAlign="center"
-                  style={{ textDecorationLine: "underline" }}
+                <Animated.View
+                  style={{
+                    alignItems: "center",
+                    paddingVertical: 8,
+                    marginBottom: 16,
+                    backgroundColor: navAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ["transparent", "#2a2a2a"],
+                    }),
+                  }}
                 >
-                  {rideInfo.from} → {rideInfo.to}
-                </Text>
+                  <Text
+                    style={{
+                      fontSize: 18,
+                      fontWeight: "600",
+                      color: "white",
+                      textAlign: "center",
+                    }}
+                  >
+                    {rideInfo.from} → {rideInfo.to}
+                  </Text>
+                </Animated.View>
               </Pressable>
-            </Box>
-          )}
-
+            )}
           <ScrollView
             flex={1}
             ref={scrollRef}
