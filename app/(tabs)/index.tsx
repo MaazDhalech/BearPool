@@ -450,7 +450,7 @@ export default function HomeScreen() {
               </HStack>
 
               <Text color="#a0a0a0">
-                {ride.date}, {ride.time}
+                {ride.date} | {ride.time}
               </Text>
               <Text color="#a0a0a0">
                 {ride.seats} seat{ride.seats > 1 ? "s" : ""} available

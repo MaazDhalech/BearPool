@@ -1,7 +1,16 @@
 import { db } from "@/services/firebaseConfig";
 import { useAuth, useUser } from "@clerk/clerk-expo";
+import { format, isValid, parse } from "date-fns";
 import { useRouter } from "expo-router";
-import { Timestamp, addDoc, collection, doc, getDoc, increment, setDoc } from "firebase/firestore";
+import {
+  Timestamp,
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  increment,
+  setDoc,
+} from "firebase/firestore";
 import { useState } from "react";
 import {
   Alert,
@@ -11,8 +20,11 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
+
+const MAX_NOTES_LENGTH = 200;
+
 export default function PostScreen() {
   const { userId } = useAuth();
   const { user } = useUser();
@@ -42,58 +54,135 @@ export default function PostScreen() {
     setGenderPref("N");
   };
 
-const handleSubmit = async () => {
-  if (!from || !to || !date || !time || !seats) {
-    Alert.alert("Error", "Please fill out all required fields");
-    return;
-  }
-  setLoading(true);
-  try {
-    if (!userId) throw new Error("User not authenticated");
-    const userDocRef = doc(db, "users", userId);
-    const existingUser = await getDoc(userDocRef);
-    
-    if (!existingUser.exists()) {
-      await setDoc(userDocRef, {
-        name: user?.fullName || "Unknown",
-        email: user?.primaryEmailAddress?.emailAddress || "Unknown",
-        profileImage: user?.imageUrl || "",
-        createdAt: Timestamp.now(),
-        ridesHosted: 1, // Initialize with 1 since this is their first ride
-      });
-    } else {
-      // Increment ridesHosted by 1 if user already exists
-      await setDoc(userDocRef, {
-        ridesHosted: increment(1)
-      }, { merge: true });
+  function validateAndFormatDate(dateStr: string): string | null {
+    const cleanedDateStr = dateStr
+      .replace(/(\d+)(st|nd|rd|th)/gi, "$1")
+      .replace(/,?\s+(\d{4})$/, " $1")
+      .trim();
+
+    const formatsWithYear = [
+      "MMMM d, yyyy",
+      "MMM d, yyyy",
+      "MMMM d yyyy",
+      "MMM d yyyy",
+    ];
+
+    for (const fmt of formatsWithYear) {
+      const parsedDate = parse(cleanedDateStr, fmt, new Date());
+      if (isValid(parsedDate)) {
+        return format(parsedDate, "MMMM d");
+      }
     }
 
-    const chatId = `ride_${Date.now()}_${userId}`;
-    await addDoc(collection(db, "rides"), {
-      from,
-      to,
-      date,
-      time,
-      seats: Number(getSafeSeats()),
-      notes,
-      createdAt: Timestamp.now(),
-      hostId: userId,
-      memberIds: [userId],
-      chatId,
-      rideFull: false,
-      isActive: true,
-      genderPref,
-    });
-    
-    clearForm();
-    router.replace("/");
-  } catch (error) {
-    console.error(error);
-    Alert.alert("Error", "Failed to post ride. Please try again.");
-  } finally {
-    setLoading(false);
+    const formatsWithoutYear = ["MMMM d", "MMM d"];
+
+    for (const fmt of formatsWithoutYear) {
+      const parsedDate = parse(cleanedDateStr, fmt, new Date());
+      if (isValid(parsedDate)) {
+        return format(parsedDate, "MMMM d");
+      }
+    }
+
+    return null;
   }
-};
+
+  function validateAndFormatTime(timeStr: string): string | null {
+    const parts = timeStr.split(/[-–]/).map((p) => p.trim());
+
+    const parseTime = (str: string) => {
+      let norm = str.toLowerCase().replace(/\s+/g, "");
+      if (!norm.match(/:\d{2}/)) {
+        norm = norm.replace(/(\d+)(am|pm)/, "$1:00$2");
+      }
+      const parsed = parse(norm, "h:mma", new Date());
+      return isValid(parsed) ? format(parsed, "h:mm a") : null;
+    };
+
+    if (parts.length === 1) {
+      return parseTime(parts[0]);
+    } else if (parts.length === 2) {
+      const start = parseTime(parts[0]);
+      const end = parseTime(parts[1]);
+      if (start && end) return `${start} - ${end}`;
+    }
+
+    return null;
+  }
+
+  const handleSubmit = async () => {
+    if (!from || !to || !date || !time || !seats) {
+      Alert.alert("Error", "Please fill out all required fields");
+      return;
+    }
+
+    const formattedDate = validateAndFormatDate(date);
+    if (!formattedDate) {
+      Alert.alert(
+        "Invalid Date",
+        "Please enter a valid date like 'June 20th, 2025' or 'Jun 20 2025'."
+      );
+      return;
+    }
+
+    const formattedTime = validateAndFormatTime(time);
+    if (!formattedTime) {
+      Alert.alert(
+        "Invalid Time",
+        "Please enter a valid time like '4:00 PM' or time range like '4:00–6:00 PM'."
+      );
+      return;
+    }
+
+    setLoading(true);
+    try {
+      if (!userId) throw new Error("User not authenticated");
+      const userDocRef = doc(db, "users", userId);
+      const existingUser = await getDoc(userDocRef);
+
+      if (!existingUser.exists()) {
+        await setDoc(userDocRef, {
+          name: user?.fullName || "Unknown",
+          email: user?.primaryEmailAddress?.emailAddress || "Unknown",
+          profileImage: user?.imageUrl || "",
+          createdAt: Timestamp.now(),
+          ridesHosted: 1,
+        });
+      } else {
+        await setDoc(
+          userDocRef,
+          {
+            ridesHosted: increment(1),
+          },
+          { merge: true }
+        );
+      }
+
+      const chatId = `ride_${Date.now()}_${userId}`;
+      await addDoc(collection(db, "rides"), {
+        from,
+        to,
+        date: formattedDate,
+        time: formattedTime,
+        seats: Number(getSafeSeats()),
+        notes,
+        createdAt: Timestamp.now(),
+        hostId: userId,
+        memberIds: [userId],
+        chatId,
+        rideFull: false,
+        isActive: true,
+        genderPref,
+      });
+
+      clearForm();
+      router.replace("/");
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Error", "Failed to post ride. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <KeyboardAvoidingView
@@ -106,24 +195,48 @@ const handleSubmit = async () => {
         keyboardShouldPersistTaps="handled"
       >
         <View style={{ marginTop: 60, marginBottom: 20 }}>
-          <Text style={{
-            color: "#ffffff",
-            fontSize: 28,
-            fontWeight: "600",
-            marginBottom: 30,
-            textAlign: "left"
-          }}>
+          <Text
+            style={{
+              color: "#ffffff",
+              fontSize: 28,
+              fontWeight: "600",
+              marginBottom: 30,
+              textAlign: "left",
+            }}
+          >
             Post a Ride
           </Text>
 
           {[
-            { label: "From", value: from, setter: setFrom, placeholder: "e.g. Berkeley – Unit 1" },
-            { label: "To", value: to, setter: setTo, placeholder: "e.g. SFO Terminal 2" },
-            { label: "Date", value: date, setter: setDate, placeholder: "e.g. June 20" },
-            { label: "Time", value: time, setter: setTime, placeholder: "e.g. 4:00–6:00 PM" },
+            {
+              label: "From",
+              value: from,
+              setter: setFrom,
+              placeholder: "e.g. Berkeley – Unit 1",
+            },
+            {
+              label: "To",
+              value: to,
+              setter: setTo,
+              placeholder: "e.g. SFO Terminal 2",
+            },
+            {
+              label: "Date",
+              value: date,
+              setter: setDate,
+              placeholder: "e.g. June 20",
+            },
+            {
+              label: "Time",
+              value: time,
+              setter: setTime,
+              placeholder: "e.g. 4:00–6:00 PM",
+            },
           ].map(({ label, value, setter, placeholder }) => (
             <View key={label} style={{ marginBottom: 16 }}>
-              <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>{label}</Text>
+              <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+                {label}
+              </Text>
               <TextInput
                 value={value}
                 placeholder={placeholder}
@@ -146,37 +259,50 @@ const handleSubmit = async () => {
             <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
               How many people do you want in the car?
             </Text>
-            <View style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              marginTop: 8
-            }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                marginTop: 8,
+              }}
+            >
               <TouchableOpacity
-                onPress={() => setSeats(String(Math.max(1, getSafeSeats() - 1)))}
+                onPress={() =>
+                  setSeats(String(Math.max(1, getSafeSeats() - 1)))
+                }
                 disabled={getSafeSeats() <= 1}
                 style={{
                   backgroundColor: getSafeSeats() <= 1 ? "#333" : "#3a7bd5",
                   padding: 12,
                   borderRadius: 8,
-                  marginRight: 16
+                  marginRight: 16,
                 }}
               >
                 <Text style={{ color: "white", fontSize: 18 }}>-</Text>
               </TouchableOpacity>
 
-              <Text style={{ color: "white", fontSize: 18, minWidth: 30, textAlign: "center" }}>
+              <Text
+                style={{
+                  color: "white",
+                  fontSize: 18,
+                  minWidth: 30,
+                  textAlign: "center",
+                }}
+              >
                 {seats}
               </Text>
 
               <TouchableOpacity
-                onPress={() => setSeats(String(Math.min(6, getSafeSeats() + 1)))}
+                onPress={() =>
+                  setSeats(String(Math.min(6, getSafeSeats() + 1)))
+                }
                 disabled={getSafeSeats() >= 6}
                 style={{
                   backgroundColor: getSafeSeats() >= 6 ? "#333" : "#3a7bd5",
                   padding: 12,
                   borderRadius: 8,
-                  marginLeft: 16
+                  marginLeft: 16,
                 }}
               >
                 <Text style={{ color: "white", fontSize: 18 }}>+</Text>
@@ -188,12 +314,14 @@ const handleSubmit = async () => {
             <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
               Gender Preference
             </Text>
-            <View style={{
-              flexDirection: "row",
-              flexWrap: "wrap",
-              justifyContent: "space-between",
-              marginTop: 8
-            }}>
+            <View
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                justifyContent: "space-between",
+                marginTop: 8,
+              }}
+            >
               {[
                 { value: "N", label: "No Preference" },
                 { value: "M", label: "Male" },
@@ -204,21 +332,25 @@ const handleSubmit = async () => {
                   key={option.value}
                   onPress={() => setGenderPref(option.value)}
                   style={{
-                    backgroundColor: genderPref === option.value ? "#3a7bd5" : "#1e1e1e",
+                    backgroundColor:
+                      genderPref === option.value ? "#3a7bd5" : "#1e1e1e",
                     paddingVertical: 12,
                     paddingHorizontal: 16,
                     borderRadius: 8,
                     borderWidth: 1,
-                    borderColor: genderPref === option.value ? "#3a7bd5" : "#333",
+                    borderColor:
+                      genderPref === option.value ? "#3a7bd5" : "#333",
                     marginBottom: 8,
                     width: "48%",
                   }}
                 >
-                  <Text style={{
-                    color: genderPref === option.value ? "white" : "#a0a0a0",
-                    textAlign: "center",
-                    fontSize: 14,
-                  }}>
+                  <Text
+                    style={{
+                      color: genderPref === option.value ? "white" : "#a0a0a0",
+                      textAlign: "center",
+                      fontSize: 14,
+                    }}
+                  >
                     {option.label}
                   </Text>
                 </TouchableOpacity>
@@ -227,12 +359,20 @@ const handleSubmit = async () => {
           </View>
 
           <View style={{ marginBottom: 24 }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>Additional Notes</Text>
+            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+              Additional Notes
+            </Text>
             <TextInput
               value={notes}
               placeholder="Optional"
               placeholderTextColor="#666"
-              onChangeText={setNotes}
+              onChangeText={(text) => {
+                if (text.length <= MAX_NOTES_LENGTH) {
+                  setNotes(text);
+                }
+              }}
+              maxLength={MAX_NOTES_LENGTH}
+              multiline={true}
               style={{
                 backgroundColor: "#1e1e1e",
                 color: "#ffffff",
@@ -241,8 +381,20 @@ const handleSubmit = async () => {
                 borderWidth: 1,
                 borderColor: "#333",
                 fontSize: 16,
+                minHeight: 80,
+                textAlignVertical: "top",
               }}
             />
+            <Text
+              style={{
+                color: "#666",
+                fontSize: 12,
+                marginTop: 4,
+                textAlign: "right",
+              }}
+            >
+              {notes.length} / {MAX_NOTES_LENGTH}
+            </Text>
           </View>
 
           <TouchableOpacity
@@ -261,12 +413,14 @@ const handleSubmit = async () => {
               elevation: 3,
             }}
           >
-            <Text style={{
-              color: "white",
-              textAlign: "center",
-              fontWeight: "600",
-              fontSize: 16,
-            }}>
+            <Text
+              style={{
+                color: "white",
+                textAlign: "center",
+                fontWeight: "600",
+                fontSize: 16,
+              }}
+            >
               {loading ? "Posting..." : "Post Ride"}
             </Text>
           </TouchableOpacity>

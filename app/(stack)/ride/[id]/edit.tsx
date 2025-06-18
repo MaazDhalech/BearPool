@@ -1,19 +1,22 @@
 import { db } from "@/services/firebaseConfig";
 import { useAuth, useUser } from "@clerk/clerk-expo";
+import { format, isValid, parse } from "date-fns";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
+
+const MAX_NOTES_LENGTH = 200;
 
 export default function EditRideScreen() {
   const { userId } = useAuth();
@@ -32,9 +35,64 @@ export default function EditRideScreen() {
   const [initialLoading, setInitialLoading] = useState(true);
 
   const getSafeSeats = () => {
-    const parsed = parseInt(seats);
+    const parsed = parseInt(seats, 10);
     return isNaN(parsed) ? 1 : parsed;
   };
+
+  function validateAndFormatDate(dateStr: string): string | null {
+    const cleanedDateStr = dateStr
+      .replace(/(\d+)(st|nd|rd|th)/gi, "$1")
+      .replace(/,?\s+(\d{4})$/, " $1")
+      .trim();
+
+    const formatsWithYear = [
+      "MMMM d, yyyy",
+      "MMM d, yyyy",
+      "MMMM d yyyy",
+      "MMM d yyyy",
+    ];
+
+    for (const fmt of formatsWithYear) {
+      const parsedDate = parse(cleanedDateStr, fmt, new Date());
+      if (isValid(parsedDate)) {
+        return format(parsedDate, "MMMM d");
+      }
+    }
+
+    const formatsWithoutYear = ["MMMM d", "MMM d"];
+
+    for (const fmt of formatsWithoutYear) {
+      const parsedDate = parse(cleanedDateStr, fmt, new Date());
+      if (isValid(parsedDate)) {
+        return format(parsedDate, "MMMM d");
+      }
+    }
+
+    return null;
+  }
+
+  function validateAndFormatTime(timeStr: string): string | null {
+    const parts = timeStr.split(/[-–]/).map((p) => p.trim());
+
+    const parseTime = (str: string) => {
+      let norm = str.toLowerCase().replace(/\s+/g, "");
+      if (!norm.match(/:\d{2}/)) {
+        norm = norm.replace(/(\d+)(am|pm)/, "$1:00$2");
+      }
+      const parsed = parse(norm, "h:mma", new Date());
+      return isValid(parsed) ? format(parsed, "h:mm a") : null;
+    };
+
+    if (parts.length === 1) {
+      return parseTime(parts[0]);
+    } else if (parts.length === 2) {
+      const start = parseTime(parts[0]);
+      const end = parseTime(parts[1]);
+      if (start && end) return `${start} - ${end}`;
+    }
+
+    return null;
+  }
 
   // Load existing ride data
   useEffect(() => {
@@ -86,6 +144,24 @@ export default function EditRideScreen() {
       return;
     }
 
+    const formattedDate = validateAndFormatDate(date);
+    if (!formattedDate) {
+      Alert.alert(
+        "Invalid Date",
+        "Please enter a valid date like 'June 20th, 2025' or 'Jun 20 2025'."
+      );
+      return;
+    }
+
+    const formattedTime = validateAndFormatTime(time);
+    if (!formattedTime) {
+      Alert.alert(
+        "Invalid Time",
+        "Please enter a valid time like '4:00 PM' or time range like '4:00–6:00 PM'."
+      );
+      return;
+    }
+
     if (!id) {
       Alert.alert("Error", "No ride ID provided");
       return;
@@ -98,13 +174,11 @@ export default function EditRideScreen() {
       await updateDoc(rideRef, {
         from,
         to,
-        date,
-        time,
-        seats: Number(seats),
+        date: formattedDate,
+        time: formattedTime,
+        seats: Number(getSafeSeats()),
         notes,
         genderPref,
-        // Optionally add an updatedAt timestamp
-        // updatedAt: Timestamp.now(),
       });
 
       Alert.alert("Success", "Ride updated successfully!", [
@@ -143,7 +217,7 @@ export default function EditRideScreen() {
       keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}
     >
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1, padding: 20 }}
+        contentContainerStyle={{ flexGrow: 1, padding: 20, paddingBottom: 120 }}
         keyboardShouldPersistTaps="handled"
       >
         <View style={{ marginTop: 60, marginBottom: 20 }}>
@@ -183,7 +257,6 @@ export default function EditRideScreen() {
             </View>
           ))}
 
-          {/* Seat Picker */}
           <View style={{ marginBottom: 16 }}>
             <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
               How many people do you want in the car?
@@ -226,7 +299,6 @@ export default function EditRideScreen() {
             </View>
           </View>
 
-          {/* Gender Preference */}
           <View style={{ marginBottom: 16 }}>
             <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
               Gender Preference
@@ -269,14 +341,19 @@ export default function EditRideScreen() {
             </View>
           </View>
 
-          {/* Notes */}
           <View style={{ marginBottom: 24 }}>
             <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>Additional Notes</Text>
             <TextInput
               value={notes}
               placeholder="Optional"
               placeholderTextColor="#666"
-              onChangeText={setNotes}
+              onChangeText={(text) => {
+                if (text.length <= MAX_NOTES_LENGTH) {
+                  setNotes(text);
+                }
+              }}
+              maxLength={MAX_NOTES_LENGTH}
+              multiline={true}
               style={{
                 backgroundColor: "#1e1e1e",
                 color: "#ffffff",
@@ -285,11 +362,22 @@ export default function EditRideScreen() {
                 borderWidth: 1,
                 borderColor: "#333",
                 fontSize: 16,
+                minHeight: 80,
+                textAlignVertical: "top",
               }}
             />
+            <Text
+              style={{
+                color: "#666",
+                fontSize: 12,
+                marginTop: 4,
+                textAlign: "right",
+              }}
+            >
+              {notes.length} / {MAX_NOTES_LENGTH}
+            </Text>
           </View>
 
-          {/* Save Changes Button */}
           <TouchableOpacity
             onPress={handleSaveChanges}
             activeOpacity={0.8}
