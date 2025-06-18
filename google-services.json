@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "290357677941",
+    "project_id": "bearpool-14bb5",
+    "storage_bucket": "bearpool-14bb5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:290357677941:android:23b7620d416a7eb9c1cd3c",
+        "android_client_info": {
+          "package_name": "com.bearpool.bearpool"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDe5Kkmyr8K0RD0GWuMnuz28yEd6CMs4iw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
