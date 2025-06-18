@@ -1,3 +1,4 @@
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { db } from "@/services/firebaseConfig";
 import { useAuth } from "@clerk/clerk-expo";
 import {
@@ -33,6 +34,7 @@ const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
 
 export default function ChatsScreen() {
+  const { expoPushToken } = usePushNotifications(); // ✅ Correct usage
   const [chatGroups, setChatGroups] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -44,8 +46,44 @@ export default function ChatsScreen() {
   const unsubRidesRef = useRef<(() => void) | null>(null);
   const unsubMsgsRef = useRef<Array<() => void>>([]);
 
+  // ✅ Save push token to Firestore if new
+  useEffect(() => {
+    if (!userId || !expoPushToken?.data) return;
+
+    const saveTokenToFirestore = async () => {
+      try {
+        const userRef = doc(db, "users", userId);
+        const userSnap = await getDoc(userRef);
+        const existingToken = userSnap.exists() ? userSnap.data()?.expoPushToken : null;
+
+        if (existingToken !== expoPushToken.data) {
+          await updateDoc(userRef, {
+            expoPushToken: expoPushToken.data,
+          });
+          console.log("✅ Push token saved to Firestore from ChatsScreen");
+        } else {
+          console.log("ℹ️ Push token already up-to-date (ChatsScreen)");
+        }
+      } catch (err) {
+        console.error("❌ Error saving push token:", err);
+      }
+    };
+
+    saveTokenToFirestore();
+  }, [expoPushToken, userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    setupListeners();
+
+    return () => {
+      unsubRidesRef.current?.();
+      unsubMsgsRef.current.forEach(u => u());
+    };
+  }, [userId]);
+
   const setupListeners = async () => {
-    // cleanup old listeners
     unsubRidesRef.current?.();
     unsubMsgsRef.current.forEach(unsub => unsub());
     unsubMsgsRef.current = [];
@@ -53,11 +91,11 @@ export default function ChatsScreen() {
     setError(null);
     setLoading(true);
 
-    // 1) listen for any ride you’re in
     const ridesQ = query(
       collection(db, "rides"),
       where("memberIds", "array-contains", userId)
     );
+
     unsubRidesRef.current = onSnapshot(
       ridesQ,
       async rideSnap => {
@@ -76,7 +114,6 @@ export default function ChatsScreen() {
           });
         }
 
-        // fetch avatars for members
         await Promise.all(
           groups.map(async g => {
             const rideDoc = rideSnap.docs.find(d => d.id === g.id)!;
@@ -101,18 +138,14 @@ export default function ChatsScreen() {
         setLoading(false);
         setRefreshing(false);
 
-        // 2) for each ride, subscribe to messages & unread count
         rideSnap.docs.forEach(docSnap => {
           const rideId = docSnap.id;
           const data = docSnap.data() as any;
-
-          // lastRead timestamp for this user
           const lr = userId && data.lastRead ? (data.lastRead[userId] as Timestamp | undefined) : undefined;
           const lastReadTs = lr instanceof Timestamp
             ? lr
             : Timestamp.fromMillis(0);
 
-          // subscribe to latest message
           const msgQ = query(
             collection(db, "rides", rideId, "messages"),
             orderBy("timestamp", "desc"),
@@ -147,7 +180,6 @@ export default function ChatsScreen() {
           });
           unsubMsgsRef.current.push(unsubLatest);
 
-          // subscribe to unread count
           const unreadQ = query(
             collection(db, "rides", rideId, "messages"),
             where("timestamp", ">", lastReadTs)
@@ -172,26 +204,15 @@ export default function ChatsScreen() {
     );
   };
 
-  useEffect(() => {
-    if (!userId) return;
-    setupListeners();
-    return () => {
-      unsubRidesRef.current?.();
-      unsubMsgsRef.current.forEach(u => u());
-    };
-  }, [userId]);
-
   const onRefresh = () => {
     setRefreshing(true);
     setupListeners();
   };
 
   const handlePress = async (rideId: string) => {
-    // clear unread by updating lastRead to now
     await updateDoc(doc(db, "rides", rideId), {
       [`lastRead.${userId}`]: serverTimestamp()
     });
-    // navigate to chat
     router.push({
       pathname: "/(stack)/ride/[id]/chat",
       params: { id: rideId }

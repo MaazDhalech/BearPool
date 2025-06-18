@@ -9,7 +9,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
 
 export default function Login() {
@@ -22,12 +22,11 @@ export default function Login() {
 
   const onSignInPress = async () => {
     if (!isLoaded) return;
-
     setLoading(true);
 
     try {
       const signInAttempt = await signIn.create({
-        identifier, // directly pass whatever user entered
+        identifier,
         password,
       });
 
@@ -56,18 +55,20 @@ export default function Login() {
         contentContainerStyle={{
           flexGrow: 1,
           justifyContent: "center",
-          padding: 20
+          padding: 20,
         }}
         keyboardShouldPersistTaps="handled"
       >
         <View style={{ marginBottom: 20 }}>
-          <Text style={{ 
-            color: "#ffffff", 
-            fontSize: 28, 
-            fontWeight: "600", 
-            marginBottom: 30, 
-            textAlign: "center" 
-          }}>
+          <Text
+            style={{
+              color: "#ffffff",
+              fontSize: 28,
+              fontWeight: "600",
+              marginBottom: 30,
+              textAlign: "center",
+            }}
+          >
             Welcome Back
           </Text>
 
@@ -132,9 +133,9 @@ export default function Login() {
             }}
           >
             <Text
-              style={{ 
-                color: "white", 
-                textAlign: "center", 
+              style={{
+                color: "white",
+                textAlign: "center",
                 fontWeight: "600",
                 fontSize: 16,
               }}
@@ -147,12 +148,14 @@ export default function Login() {
             onPress={() => router.push("/(auth)/Reset")}
             style={{ padding: 16 }}
           >
-            <Text style={{ 
-              color: "#3a7bd5", 
-              textAlign: "center", 
-              fontWeight: "500",
-              fontSize: 14,
-            }}>
+            <Text
+              style={{
+                color: "#3a7bd5",
+                textAlign: "center",
+                fontWeight: "500",
+                fontSize: 14,
+              }}
+            >
               Forgot Password?
             </Text>
           </TouchableOpacity>
@@ -168,7 +171,9 @@ export default function Login() {
             <Text style={{ color: "#a0a0a0" }}>Don't have an account?</Text>
             <Link href="/(auth)/Signup" asChild>
               <TouchableOpacity>
-                <Text style={{ color: "#3a7bd5", fontWeight: "500" }}>Sign up</Text>
+                <Text style={{ color: "#3a7bd5", fontWeight: "500" }}>
+                  Sign up
+                </Text>
               </TouchableOpacity>
             </Link>
           </View>

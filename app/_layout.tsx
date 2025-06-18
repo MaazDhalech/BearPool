@@ -4,11 +4,23 @@ import { ClerkProvider } from "@clerk/clerk-expo";
 import { GluestackUIProvider } from "@gluestack-ui/themed";
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
 import { useFonts } from "expo-font";
+import * as Notifications from "expo-notifications";
 import { Stack } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
 import { Platform, StatusBar, View } from "react-native";
 import "react-native-reanimated";
+
+// ✅ Fixed: Full notification behavior for newer Expo SDKs
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY || "";
 
@@ -30,11 +42,8 @@ export default function RootLayout() {
   return (
     <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
       <GluestackUIProvider config={config}>
-        {/* Force dark theme */}
         <ThemeProvider value={DarkTheme}>
-          {/* Light-content status bar for dark background */}
           <ExpoStatusBar style="light" translucent backgroundColor="transparent" />
-
           <View
             style={{
               flex: 1,
@@ -57,10 +66,7 @@ export default function RootLayout() {
                 },
               }}
             >
-              <Stack.Screen
-                name="(tabs)"
-                options={{ headerShown: false }}
-              />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
               <Stack.Screen name="+not-found" />
             </Stack>
           </View>

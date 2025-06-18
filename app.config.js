@@ -11,7 +11,12 @@ export default {
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
     ios: {
+      bundleIdentifier: "com.rebu.bearpool",
       supportsTablet: true,
+      infoPlist: {
+        UIBackgroundModes: ["remote-notification"],
+        NSUserTrackingUsageDescription: "This identifier will be used to deliver personalized notifications."
+      }
     },
     android: {
       adaptiveIcon: {
@@ -37,6 +42,7 @@ export default {
         },
       ],
       "expo-secure-store",
+      "expo-notifications" // ✅ Added this line
     ],
     experiments: {
       typedRoutes: true,
@@ -49,8 +55,11 @@ export default {
       firebaseMessagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
       firebaseAppId: process.env.FIREBASE_APP_ID,
       firebaseMeasurementId: process.env.FIREBASE_MEASUREMENT_ID,
-      expoPublicClerkPublishableKey:
-        process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY,
+      expoPublicClerkPublishableKey: process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY,
+
+      eas: {
+        projectId: "e469f4b5-1dbf-4a1d-aa5e-0417dee7cf2c",
+      },
     },
   },
 };
