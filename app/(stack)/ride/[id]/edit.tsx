@@ -5,15 +5,15 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
 const MAX_NOTES_LENGTH = 200;
@@ -285,7 +285,7 @@ export default function EditRideScreen() {
 
           <View style={{ marginBottom: 16 }}>
             <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
-              How many people do you want in the car?
+              How many other people do you want in the car?
             </Text>
             <View
               style={{

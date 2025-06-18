@@ -257,7 +257,7 @@ export default function PostScreen() {
 
           <View style={{ marginBottom: 16 }}>
             <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
-              How many people do you want in the car?
+              How many other people do you want in the car?
             </Text>
             <View
               style={{
