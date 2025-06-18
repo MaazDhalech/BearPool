@@ -295,11 +295,11 @@ export default function PostScreen() {
 
               <TouchableOpacity
                 onPress={() =>
-                  setSeats(String(Math.min(6, getSafeSeats() + 1)))
+                  setSeats(String(Math.min(5, getSafeSeats() + 1)))
                 }
-                disabled={getSafeSeats() >= 6}
+                disabled={getSafeSeats() >= 5}
                 style={{
-                  backgroundColor: getSafeSeats() >= 6 ? "#333" : "#3a7bd5",
+                  backgroundColor: getSafeSeats() >= 5 ? "#333" : "#3a7bd5",
                   padding: 12,
                   borderRadius: 8,
                   marginLeft: 16,

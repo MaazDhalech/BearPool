@@ -98,10 +98,10 @@ export default function EditRideScreen() {
   useEffect(() => {
     const loadRideData = async () => {
       if (!id || !userId) return;
-      
+
       try {
         const rideDoc = await getDoc(doc(db, "rides", id as string));
-        
+
         if (!rideDoc.exists()) {
           Alert.alert("Error", "Ride not found");
           router.back();
@@ -109,7 +109,7 @@ export default function EditRideScreen() {
         }
 
         const rideData = rideDoc.data();
-        
+
         // Check if current user is the host
         if (rideData.hostId !== userId) {
           Alert.alert("Error", "You can only edit your own rides");
@@ -125,7 +125,6 @@ export default function EditRideScreen() {
         setSeats(String(rideData.seats || 1));
         setNotes(rideData.notes || "");
         setGenderPref(rideData.genderPref || "N");
-        
       } catch (error) {
         console.error("Error loading ride data:", error);
         Alert.alert("Error", "Failed to load ride data");
@@ -170,7 +169,7 @@ export default function EditRideScreen() {
     setLoading(true);
     try {
       const rideRef = doc(db, "rides", id as string);
-      
+
       await updateDoc(rideRef, {
         from,
         to,
@@ -184,10 +183,9 @@ export default function EditRideScreen() {
       Alert.alert("Success", "Ride updated successfully!", [
         {
           text: "OK",
-          onPress: () => router.back()
-        }
+          onPress: () => router.back(),
+        },
       ]);
-
     } catch (error) {
       console.error("Error updating ride:", error);
       Alert.alert("Error", "Failed to update ride. Please try again.");
@@ -198,14 +196,18 @@ export default function EditRideScreen() {
 
   if (initialLoading) {
     return (
-      <View style={{ 
-        flex: 1, 
-        backgroundColor: "#121212", 
-        justifyContent: "center", 
-        alignItems: "center" 
-      }}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "#121212",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
         <ActivityIndicator size="large" color="#3a7bd5" />
-        <Text style={{ color: "#ffffff", marginTop: 16 }}>Loading ride details...</Text>
+        <Text style={{ color: "#ffffff", marginTop: 16 }}>
+          Loading ride details...
+        </Text>
       </View>
     );
   }
@@ -221,24 +223,48 @@ export default function EditRideScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={{ marginTop: 60, marginBottom: 20 }}>
-          <Text style={{
-            color: "#ffffff",
-            fontSize: 28,
-            fontWeight: "600",
-            marginBottom: 30,
-            textAlign: "left"
-          }}>
+          <Text
+            style={{
+              color: "#ffffff",
+              fontSize: 28,
+              fontWeight: "600",
+              marginBottom: 30,
+              textAlign: "left",
+            }}
+          >
             Edit Ride
           </Text>
 
           {[
-            { label: "From", value: from, setter: setFrom, placeholder: "e.g. Berkeley – Unit 1" },
-            { label: "To", value: to, setter: setTo, placeholder: "e.g. SFO Terminal 2" },
-            { label: "Date", value: date, setter: setDate, placeholder: "e.g. June 20" },
-            { label: "Time", value: time, setter: setTime, placeholder: "e.g. 4:00–6:00 PM" },
+            {
+              label: "From",
+              value: from,
+              setter: setFrom,
+              placeholder: "e.g. Berkeley – Unit 1",
+            },
+            {
+              label: "To",
+              value: to,
+              setter: setTo,
+              placeholder: "e.g. SFO Terminal 2",
+            },
+            {
+              label: "Date",
+              value: date,
+              setter: setDate,
+              placeholder: "e.g. June 20",
+            },
+            {
+              label: "Time",
+              value: time,
+              setter: setTime,
+              placeholder: "e.g. 4:00–6:00 PM",
+            },
           ].map(({ label, value, setter, placeholder }) => (
             <View key={label} style={{ marginBottom: 16 }}>
-              <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>{label}</Text>
+              <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+                {label}
+              </Text>
               <TextInput
                 value={value}
                 placeholder={placeholder}
@@ -261,37 +287,50 @@ export default function EditRideScreen() {
             <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
               How many people do you want in the car?
             </Text>
-            <View style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              marginTop: 8
-            }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                marginTop: 8,
+              }}
+            >
               <TouchableOpacity
-                onPress={() => setSeats(String(Math.max(1, getSafeSeats() - 1)))}
+                onPress={() =>
+                  setSeats(String(Math.max(1, getSafeSeats() - 1)))
+                }
                 disabled={getSafeSeats() <= 1}
                 style={{
                   backgroundColor: getSafeSeats() <= 1 ? "#333" : "#3a7bd5",
                   padding: 12,
                   borderRadius: 8,
-                  marginRight: 16
+                  marginRight: 16,
                 }}
               >
                 <Text style={{ color: "white", fontSize: 18 }}>-</Text>
               </TouchableOpacity>
 
-              <Text style={{ color: "white", fontSize: 18, minWidth: 30, textAlign: "center" }}>
+              <Text
+                style={{
+                  color: "white",
+                  fontSize: 18,
+                  minWidth: 30,
+                  textAlign: "center",
+                }}
+              >
                 {seats}
               </Text>
 
               <TouchableOpacity
-                onPress={() => setSeats(String(Math.min(6, getSafeSeats() + 1)))}
-                disabled={getSafeSeats() >= 6}
+                onPress={() =>
+                  setSeats(String(Math.min(5, getSafeSeats() + 1)))
+                } // max 5 now
+                disabled={getSafeSeats() >= 5} // disable if 5 or more
                 style={{
-                  backgroundColor: getSafeSeats() >= 6 ? "#333" : "#3a7bd5",
+                  backgroundColor: getSafeSeats() >= 5 ? "#333" : "#3a7bd5",
                   padding: 12,
                   borderRadius: 8,
-                  marginLeft: 16
+                  marginLeft: 16,
                 }}
               >
                 <Text style={{ color: "white", fontSize: 18 }}>+</Text>
@@ -303,12 +342,14 @@ export default function EditRideScreen() {
             <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
               Gender Preference
             </Text>
-            <View style={{
-              flexDirection: "row",
-              flexWrap: "wrap",
-              justifyContent: "space-between",
-              marginTop: 8
-            }}>
+            <View
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                justifyContent: "space-between",
+                marginTop: 8,
+              }}
+            >
               {[
                 { value: "N", label: "No Preference" },
                 { value: "M", label: "Male" },
@@ -319,21 +360,25 @@ export default function EditRideScreen() {
                   key={option.value}
                   onPress={() => setGenderPref(option.value)}
                   style={{
-                    backgroundColor: genderPref === option.value ? "#3a7bd5" : "#1e1e1e",
+                    backgroundColor:
+                      genderPref === option.value ? "#3a7bd5" : "#1e1e1e",
                     paddingVertical: 12,
                     paddingHorizontal: 16,
                     borderRadius: 8,
                     borderWidth: 1,
-                    borderColor: genderPref === option.value ? "#3a7bd5" : "#333",
+                    borderColor:
+                      genderPref === option.value ? "#3a7bd5" : "#333",
                     marginBottom: 8,
                     width: "48%",
                   }}
                 >
-                  <Text style={{ 
-                    color: genderPref === option.value ? "white" : "#a0a0a0",
-                    textAlign: "center",
-                    fontSize: 14,
-                  }}>
+                  <Text
+                    style={{
+                      color: genderPref === option.value ? "white" : "#a0a0a0",
+                      textAlign: "center",
+                      fontSize: 14,
+                    }}
+                  >
                     {option.label}
                   </Text>
                 </TouchableOpacity>
@@ -342,7 +387,9 @@ export default function EditRideScreen() {
           </View>
 
           <View style={{ marginBottom: 24 }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>Additional Notes</Text>
+            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+              Additional Notes
+            </Text>
             <TextInput
               value={notes}
               placeholder="Optional"
@@ -394,12 +441,14 @@ export default function EditRideScreen() {
               elevation: 3,
             }}
           >
-            <Text style={{
-              color: "white",
-              textAlign: "center",
-              fontWeight: "600",
-              fontSize: 16,
-            }}>
+            <Text
+              style={{
+                color: "white",
+                textAlign: "center",
+                fontWeight: "600",
+                fontSize: 16,
+              }}
+            >
               {loading ? "Saving..." : "Save Changes"}
             </Text>
           </TouchableOpacity>
