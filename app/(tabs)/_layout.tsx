@@ -1,9 +1,9 @@
 import { HapticTab } from "@/components/HapticTab";
 import { IconSymbol } from "@/components/ui/IconSymbol";
 import TabBarBackground from "@/components/ui/TabBarBackground";
-import { Colors } from "@/constants/Colors";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useAuth } from "@clerk/clerk-expo";
+import { Ionicons } from "@expo/vector-icons";
 import { Tabs, useRouter } from "expo-router";
 import React, { useEffect } from "react";
 import { Platform } from "react-native";
@@ -28,16 +28,21 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
+        tabBarActiveTintColor: '#FFFFFF',
+        tabBarInactiveTintColor: '#888888',
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarBackground: TabBarBackground,
-        tabBarStyle: Platform.select({
-          ios: {
-            position: "absolute",
-          },
-          default: {},
-        }),
+        tabBarStyle: {
+          backgroundColor: '#000000',
+          borderTopColor: '#000000',
+          ...Platform.select({
+            ios: {
+              position: "absolute",
+            },
+            default: {},
+          }),
+        },
       }}
     >
       <Tabs.Screen
@@ -53,31 +58,40 @@ export default function TabLayout() {
         name="chats"
         options={{
           title: "Chats",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol
-              size={28}
-              name="bubble.left.and.bubble.right.fill"
-              color={color}
-            />
-          ),
+          tabBarIcon: ({ color }) => 
+            Platform.OS === 'ios' ? (
+              <IconSymbol
+                size={28}
+                name="bubble.left.and.bubble.right.fill"
+                color={color}
+              />
+            ) : (
+              <Ionicons name="chatbubbles" size={28} color={color} />
+            )
         }}
       />
       <Tabs.Screen
         name="post"
         options={{
           title: "Post",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="plus.circle.fill" color={color} />
-          ),
+          tabBarIcon: ({ color }) => 
+            Platform.OS === 'ios' ? (
+              <IconSymbol size={28} name="plus.circle.fill" color={color} />
+            ) : (
+              <Ionicons name="add-circle" size={28} color={color} />
+            )
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="person.crop.circle" color={color} />
-          ),
+          tabBarIcon: ({ color }) => 
+            Platform.OS === 'ios' ? (
+              <IconSymbol size={28} name="person.crop.circle" color={color} />
+            ) : (
+              <Ionicons name="person-circle" size={28} color={color} />
+            )
         }}
       />
     </Tabs>
