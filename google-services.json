@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:290357677941:android:23b7620d416a7eb9c1cd3c",
+        "mobilesdk_app_id": "1:290357677941:android:4127f976dd7b0401c1cd3c",
         "android_client_info": {
-          "package_name": "com.bearpool.bearpool"
+          "package_name": "com.rebu.bearpool"
         }
       },
       "oauth_client": [],
