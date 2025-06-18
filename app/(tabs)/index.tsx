@@ -154,7 +154,9 @@ export default function HomeScreen() {
         try {
           const rideData: Ride[] = snapshot.docs.map((doc) => {
             const data = doc.data();
-            return {
+            console.log('Raw ride data:', data); // Debug log
+            
+            const processedRide = {
               id: doc.id,
               from: data.from ?? "Unknown",
               to: data.to ?? "Unknown",
@@ -167,8 +169,12 @@ export default function HomeScreen() {
               genderPref: data.genderPref ?? "N",
               hostId: data.hostId ?? "",
             };
+            
+            console.log('Processed ride:', processedRide); // Debug log
+            return processedRide;
           });
 
+          console.log('All rides:', rideData); // Debug log
           setRides(rideData);
           await fetchUsersForRides(rideData);
         } catch (err) {
@@ -258,6 +264,21 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
+  const [toastMessage, setToastMessage] = useState<{type: string, title: string, description: string} | null>(null);
+
+  // Simple toast alternative
+  const showToast = (type: 'success' | 'error' | 'warning', title: string, description: string) => {
+    console.log(`${type.toUpperCase()}: ${title} - ${description}`);
+    
+    // Try the original toast, but fallback if it fails
+    try {
+      setToastMessage({type, title, description});
+      setTimeout(() => setToastMessage(null), 3000);
+    } catch (error) {
+      console.error('Toast error:', error);
+    }
+  };
+
   const handleJoinRide = async (rideId: string) => {
     if (!userId) return;
 
@@ -273,34 +294,12 @@ export default function HomeScreen() {
       const currentSeats = rideData.seats ?? 0;
 
       if (currentSeats <= 0) {
-        toast.show({
-          placement: "top",
-          duration: 3000,
-          render: () => (
-            <Box bg="$red600" px="$4" py="$3" borderRadius="$md">
-              <Text color="white" fontWeight="$bold">
-                Ride Full
-              </Text>
-              <Text color="white">No seats available for this ride.</Text>
-            </Box>
-          ),
-        });
+        showToast('error', 'Ride Full', 'No seats available for this ride.');
         return;
       }
 
       if (rideData.memberIds?.includes(userId)) {
-        toast.show({
-          placement: "top",
-          duration: 3000,
-          render: () => (
-            <Box bg="$yellow600" px="$4" py="$3" borderRadius="$md">
-              <Text color="white" fontWeight="$bold">
-                Already Joined
-              </Text>
-              <Text color="white">You're already part of this ride.</Text>
-            </Box>
-          ),
-        });
+        showToast('warning', 'Already Joined', "You're already part of this ride.");
         return;
       }
 
@@ -320,18 +319,7 @@ export default function HomeScreen() {
 
       await batch.commit();
 
-      toast.show({
-        placement: "top",
-        duration: 3000,
-        render: () => (
-          <Box bg="$green600" px="$4" py="$3" borderRadius="$md">
-            <Text color="white" fontWeight="$bold">
-              Joined Ride
-            </Text>
-            <Text color="white">You've successfully joined the ride.</Text>
-          </Box>
-        ),
-      });
+      showToast('success', 'Joined Ride', "You've successfully joined the ride.");
 
       setTimeout(() => {
         router.push({
@@ -341,18 +329,7 @@ export default function HomeScreen() {
       }, 500);
     } catch (err) {
       console.error("Error joining ride:", err);
-      toast.show({
-        placement: "top",
-        duration: 3000,
-        render: () => (
-          <Box bg="$red600" px="$4" py="$3" borderRadius="$md">
-            <Text color="white" fontWeight="$bold">
-              Join Failed
-            </Text>
-            <Text color="white">Could not join this ride. Try again.</Text>
-          </Box>
-        ),
-      });
+      showToast('error', 'Join Failed', 'Could not join this ride. Try again.');
     }
   };
 
@@ -429,6 +406,12 @@ export default function HomeScreen() {
 
       <VStack space="lg" pb="$16">
         {filteredRides.map((ride) => {
+          // Debug logging to catch any problematic data
+          if (typeof ride !== 'object' || ride === null) {
+            console.error('Invalid ride data:', ride);
+            return null;
+          }
+
           const isLocked =
             userGender &&
             ride.genderPref !== "N" &&
@@ -524,10 +507,10 @@ export default function HomeScreen() {
               </HStack>
 
               <Text color="#a0a0a0">
-                {ride.date} | {ride.time}
+                {String(ride.date)} | {String(ride.time)}
               </Text>
               <Text color="#a0a0a0">
-                {ride.seats} seat{ride.seats > 1 ? "s" : ""} available
+                {String(ride.seats)} seat{ride.seats > 1 ? "s" : ""} available
               </Text>
               <Text color="#a0a0a0" fontSize="$sm" mb="$2">
                 Gender preference:{" "}
@@ -577,7 +560,7 @@ export default function HomeScreen() {
 
               {ride.notes && (
                 <Text color="#a0a0a0" mb="$2">
-                  {ride.notes}
+                  {String(ride.notes)}
                 </Text>
               )}
 
