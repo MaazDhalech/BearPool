@@ -1,35 +1,38 @@
 import { db } from "@/services/firebaseConfig";
 import { useUser } from "@clerk/clerk-expo";
+import { Ionicons } from "@expo/vector-icons";
 import {
-    Avatar,
-    Box,
-    HStack,
-    Input,
-    InputField,
-    ScrollView,
-    Text,
-    VStack
+  Avatar,
+  Box,
+  Heading,
+  HStack,
+  Input,
+  InputField,
+  Pressable,
+  ScrollView,
+  Text,
+  VStack,
 } from "@gluestack-ui/themed";
 import { router, useLocalSearchParams } from "expo-router";
 import {
-    addDoc,
-    collection,
-    doc,
-    getDoc,
-    onSnapshot,
-    orderBy,
-    query,
-    serverTimestamp,
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
 } from "firebase/firestore";
 import { useEffect, useRef, useState } from "react";
 import {
-    Animated,
-    Keyboard,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    TouchableWithoutFeedback,
+  Animated,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
@@ -46,13 +49,14 @@ export default function RideChatScreen() {
   const { user } = useUser();
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
-  const [rideInfo, setRideInfo] = useState<{ from: string; to: string } | null>(null);
+  const [rideInfo, setRideInfo] = useState<{ from: string; to: string } | null>(
+    null
+  );
   const [userMap, setUserMap] = useState<UserMap>({});
   const scrollRef = useRef<any>(null);
+  const insets = useSafeAreaInsets();
 
   const animatedValue = useRef(new Animated.Value(0)).current;
-  const navAnim = useRef(new Animated.Value(0)).current;
-
   const prevMembersRef = useRef<string[]>([]);
 
   const animatePressIn = () => {
@@ -65,22 +69,6 @@ export default function RideChatScreen() {
 
   const animatePressOut = () => {
     Animated.timing(animatedValue, {
-      toValue: 0,
-      duration: 150,
-      useNativeDriver: false,
-    }).start();
-  };
-
-  const animateNavPressIn = () => {
-    Animated.timing(navAnim, {
-      toValue: 1,
-      duration: 150,
-      useNativeDriver: false,
-    }).start();
-  };
-
-  const animateNavPressOut = () => {
-    Animated.timing(navAnim, {
       toValue: 0,
       duration: 150,
       useNativeDriver: false,
@@ -110,8 +98,8 @@ export default function RideChatScreen() {
       }
 
       // joined and left
-      const joined = newMembers.filter(uid => !prevMembers.includes(uid));
-      const left = prevMembers.filter(uid => !newMembers.includes(uid));
+      const joined = newMembers.filter((uid) => !prevMembers.includes(uid));
+      const left = prevMembers.filter((uid) => !newMembers.includes(uid));
 
       // for each joined, post a system message
       for (const uid of joined) {
@@ -119,7 +107,9 @@ export default function RideChatScreen() {
         let name = userMap[uid]?.name;
         if (!name) {
           const uDoc = await getDoc(doc(db, "users", uid));
-          name = uDoc.exists() ? uDoc.data().username || "Anonymous" : "Unknown";
+          name = uDoc.exists()
+            ? uDoc.data().username || "Anonymous"
+            : "Unknown";
         }
         await addDoc(collection(db, "rides", String(rideId), "messages"), {
           text: `${name} has joined the ride`,
@@ -134,7 +124,9 @@ export default function RideChatScreen() {
         let name = userMap[uid]?.name;
         if (!name) {
           const uDoc = await getDoc(doc(db, "users", uid));
-          name = uDoc.exists() ? uDoc.data().username || "Anonymous" : "Unknown";
+          name = uDoc.exists()
+            ? uDoc.data().username || "Anonymous"
+            : "Unknown";
         }
         await addDoc(collection(db, "rides", String(rideId), "messages"), {
           text: `${name} has left the ride`,
@@ -159,11 +151,13 @@ export default function RideChatScreen() {
       orderBy("timestamp", "asc")
     );
     const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const msgs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       setMessages(msgs);
 
       // build userMap for avatar & name lookups
-      const uniqueIds = Array.from(new Set(msgs.map(m => m.senderId).filter(Boolean)));
+      const uniqueIds = Array.from(
+        new Set(msgs.map((m) => m.senderId).filter(Boolean))
+      );
       const newMap = { ...userMap };
       for (const uid of uniqueIds) {
         if (!newMap[uid]) {
@@ -221,184 +215,197 @@ export default function RideChatScreen() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       >
-        <Box flex={1} px="$3" py="$4" bg="#121212">
-          {rideInfo && (
-            <Pressable
-              onPressIn={animateNavPressIn}
-              onPressOut={animateNavPressOut}
-              onPress={() =>
-                router.push({
-                  pathname: "/(stack)/ride/[id]/group-settings",
-                  params: { id: rideId as string },
-                })
-              }
-            >
-              <Animated.View
-                style={{
-                  alignItems: "center",
-                  paddingVertical: 8,
-                  marginBottom: 16,
-                  backgroundColor: navAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: ["transparent", "#2a2a2a"],
-                  }),
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 18,
-                    fontWeight: "600",
-                    color: "white",
-                    textAlign: "center",
-                  }}
-                >
-                  {rideInfo.from} → {rideInfo.to}
-                </Text>
-              </Animated.View>
-            </Pressable>
-          )}
-
-          <ScrollView
-            flex={1}
-            ref={scrollRef}
-            mb="$4"
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+        <Box flex={1} bg="#121212" pt={insets.top}>
+          {/* Header with Back Button and Title */}
+          <HStack
+            alignItems="center"
+            px="$4"
+            py="$3"
+            borderBottomWidth="$1"
+            borderBottomColor="#333"
           >
-            <VStack space="sm">
-              {messages.map(msg => {
-                const isSystem = !!msg.system;
-                const isCurrentUser = msg.senderId === user?.id;
-                const sender = userMap[msg.senderId] || {
-                  name: msg.senderName || "Unknown",
-                  avatar: msg.avatar || DEFAULT_AVATAR,
-                };
+            <Pressable
+              onPress={() => router.back()}
+              p="$2"
+              borderRadius="$full"
+              mr="$3"
+            >
+              <HStack alignItems="center" space="sm">
+                <Ionicons name="arrow-back" size={24} color="white" />
+                <Heading size="sm" color="white">
+                  Back
+                </Heading>
+              </HStack>
+            </Pressable>
+          </HStack>
 
-                if (isSystem) {
-                  return (
-                    <Text
-                      key={msg.id}
-                      fontSize="$xs"
-                      color="#888"
-                      textAlign="center"
-                      my="$2"
-                    >
-                      {msg.text}
-                    </Text>
-                  );
+          <Box flex={1} px="$3" py="$4">
+            {rideInfo && (
+              <Pressable
+                onPress={() =>
+                  router.push({
+                    pathname: "/(stack)/ride/[id]/group-settings",
+                    params: { id: rideId as string },
+                  })
                 }
-
-                return (
-                  <HStack
-                    key={msg.id}
-                    space="sm"
-                    alignItems="flex-end"
-                    justifyContent={isCurrentUser ? "flex-end" : "flex-start"}
+              >
+                <Box alignItems="center" paddingVertical={8} marginBottom={16}>
+                  <Text
+                    style={{
+                      fontSize: 18,
+                      fontWeight: "600",
+                      color: "white",
+                      textAlign: "center",
+                    }}
                   >
-                    {!isCurrentUser && (
-                      <Avatar size="sm" bgColor="#1e1e1e">
-                        <Avatar.Image
-                          source={{ uri: sender.avatar }}
-                          alt="User avatar"
-                        />
-                      </Avatar>
-                    )}
+                    {rideInfo.from} → {rideInfo.to}
+                  </Text>
+                </Box>
+              </Pressable>
+            )}
 
-                    <VStack
-                      alignItems={isCurrentUser ? "flex-end" : "flex-start"}
-                      maxWidth="80%"
+            <ScrollView
+              flex={1}
+              ref={scrollRef}
+              mb="$4"
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <VStack space="sm">
+                {messages.map((msg) => {
+                  const isSystem = !!msg.system;
+                  const isCurrentUser = msg.senderId === user?.id;
+                  const sender = userMap[msg.senderId] || {
+                    name: msg.senderName || "Unknown",
+                    avatar: msg.avatar || DEFAULT_AVATAR,
+                  };
+
+                  if (isSystem) {
+                    return (
+                      <Text
+                        key={msg.id}
+                        fontSize="$xs"
+                        color="#888"
+                        textAlign="center"
+                        my="$2"
+                      >
+                        {msg.text}
+                      </Text>
+                    );
+                  }
+
+                  return (
+                    <HStack
+                      key={msg.id}
+                      space="sm"
+                      alignItems="flex-end"
+                      justifyContent={isCurrentUser ? "flex-end" : "flex-start"}
                     >
                       {!isCurrentUser && (
-                        <Text fontSize="$xs" color="#aaaaaa" mb="$1">
-                          {sender.name}
-                        </Text>
+                        <Avatar size="sm" bgColor="#1e1e1e">
+                          <Avatar.Image
+                            source={{ uri: sender.avatar }}
+                            alt="User avatar"
+                          />
+                        </Avatar>
                       )}
 
-                      <Box
-                        px="$4"
-                        py="$2"
-                        bg={isCurrentUser ? "#3a7bd5" : "#1e1e1e"}
-                        borderTopLeftRadius={isCurrentUser ? "$xl" : "$sm"}
-                        borderTopRightRadius={isCurrentUser ? "$sm" : "$xl"}
-                        borderBottomLeftRadius="$xl"
-                        borderBottomRightRadius="$xl"
+                      <VStack
+                        alignItems={isCurrentUser ? "flex-end" : "flex-start"}
+                        maxWidth="80%"
                       >
-                        <Text
-                          color={isCurrentUser ? "#ffffff" : "#e0e0e0"}
-                          fontSize="$sm"
+                        {!isCurrentUser && (
+                          <Text fontSize="$xs" color="#aaaaaa" mb="$1">
+                            {sender.name}
+                          </Text>
+                        )}
+
+                        <Box
+                          px="$4"
+                          py="$2"
+                          bg={isCurrentUser ? "#3a7bd5" : "#1e1e1e"}
+                          borderTopLeftRadius={isCurrentUser ? "$xl" : "$sm"}
+                          borderTopRightRadius={isCurrentUser ? "$sm" : "$xl"}
+                          borderBottomLeftRadius="$xl"
+                          borderBottomRightRadius="$xl"
                         >
-                          {msg.text}
-                        </Text>
-                      </Box>
+                          <Text
+                            color={isCurrentUser ? "#ffffff" : "#e0e0e0"}
+                            fontSize="$sm"
+                          >
+                            {msg.text}
+                          </Text>
+                        </Box>
 
-                      {msg.timestamp?.toDate && (
-                        <Text
-                          fontSize="$xs"
-                          color="#888888"
-                          mt="$1"
-                          mb="$1"
-                          textAlign={isCurrentUser ? "right" : "left"}
-                        >
-                          {msg.timestamp.toDate().toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </Text>
-                      )}
-                    </VStack>
-                  </HStack>
-                );
-              })}
-            </VStack>
-          </ScrollView>
+                        {msg.timestamp?.toDate && (
+                          <Text
+                            fontSize="$xs"
+                            color="#888888"
+                            mt="$1"
+                            mb="$1"
+                            textAlign={isCurrentUser ? "right" : "left"}
+                          >
+                            {msg.timestamp.toDate().toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </Text>
+                        )}
+                      </VStack>
+                    </HStack>
+                  );
+                })}
+              </VStack>
+            </ScrollView>
 
-          <Box mt="$1" mb="$4">
-            <HStack
-              space="sm"
-              alignItems="center"
-              mt="$2"
-              bg="transparent"
-              p="$2"
-              borderRadius="$xl"
-            >
-              <Input
-                flex={1}
-                size="md"
-                borderWidth={0}
-                borderRadius="$full"
-                backgroundColor="#2a2a2a"
-                px="$4"
-                py="$2"
+            <Box mt="$1" mb="$4">
+              <HStack
+                space="sm"
+                alignItems="center"
+                mt="$2"
+                bg="transparent"
+                p="$2"
+                borderRadius="$xl"
               >
-                <InputField
-                  placeholder="Message..."
-                  placeholderTextColor="#777"
-                  color="white"
-                  value={input}
-                  onChangeText={setInput}
-                  multiline
-                  textAlignVertical="top"
-                  style={{ maxHeight: 100 }}
-                />
-              </Input>
-
-              <TouchableWithoutFeedback
-                onPressIn={animatePressIn}
-                onPressOut={animatePressOut}
-                onPress={handleSend}
-              >
-                <Animated.View
-                  style={{
-                    backgroundColor: interpolatedColor,
-                    borderRadius: 999,
-                    paddingHorizontal: 16,
-                    paddingVertical: 8,
-                  }}
+                <Input
+                  flex={1}
+                  size="md"
+                  borderWidth={0}
+                  borderRadius="$full"
+                  backgroundColor="#2a2a2a"
+                  px="$4"
+                  py="$2"
                 >
-                  <Text color="white">Send</Text>
-                </Animated.View>
-              </TouchableWithoutFeedback>
-            </HStack>
+                  <InputField
+                    placeholder="Message..."
+                    placeholderTextColor="#777"
+                    color="white"
+                    value={input}
+                    onChangeText={setInput}
+                    multiline
+                    textAlignVertical="top"
+                    style={{ maxHeight: 100 }}
+                  />
+                </Input>
+
+                <TouchableWithoutFeedback
+                  onPressIn={animatePressIn}
+                  onPressOut={animatePressOut}
+                  onPress={handleSend}
+                >
+                  <Animated.View
+                    style={{
+                      backgroundColor: interpolatedColor,
+                      borderRadius: 999,
+                      paddingHorizontal: 16,
+                      paddingVertical: 8,
+                    }}
+                  >
+                    <Text color="white">Send</Text>
+                  </Animated.View>
+                </TouchableWithoutFeedback>
+              </HStack>
+            </Box>
           </Box>
         </Box>
       </KeyboardAvoidingView>
