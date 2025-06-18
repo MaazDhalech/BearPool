@@ -276,7 +276,7 @@ export default function HomeScreen() {
         toast.show({
           placement: "top",
           duration: 3000,
-          render: () => (
+          render: ({ id }) => (
             <Box bg="$red600" px="$4" py="$3" borderRadius="$md">
               <Text color="white" fontWeight="$bold">
                 Ride Full
@@ -284,7 +284,7 @@ export default function HomeScreen() {
               <Text color="white">No seats available for this ride.</Text>
             </Box>
           ),
-        });
+        });        
         return;
       }
 
@@ -292,14 +292,14 @@ export default function HomeScreen() {
         toast.show({
           placement: "top",
           duration: 3000,
-          render: () => (
+          render: ({ id }) => (
             <Box bg="$yellow600" px="$4" py="$3" borderRadius="$md">
               <Text color="white" fontWeight="$bold">
                 Already Joined
               </Text>
               <Text color="white">You're already part of this ride.</Text>
             </Box>
-          ),
+          ),        
         });
         return;
       }
@@ -323,14 +323,14 @@ export default function HomeScreen() {
       toast.show({
         placement: "top",
         duration: 3000,
-        render: () => (
+        render: ({ id }) => (
           <Box bg="$green600" px="$4" py="$3" borderRadius="$md">
             <Text color="white" fontWeight="$bold">
               Joined Ride
             </Text>
             <Text color="white">You've successfully joined the ride.</Text>
           </Box>
-        ),
+        ),      
       });
 
       setTimeout(() => {
@@ -344,16 +344,18 @@ export default function HomeScreen() {
       toast.show({
         placement: "top",
         duration: 3000,
-        render: () => (
+        render: ({ id }) => (
           <Box bg="$red600" px="$4" py="$3" borderRadius="$md">
             <Text color="white" fontWeight="$bold">
               Join Failed
             </Text>
-            <Text color="white">Could not join this ride. Try again.</Text>
+            <Text color="white">
+              {String(err) || "Could not join this ride. Try again."}
+            </Text>
           </Box>
         ),
       });
-    }
+    }    
   };
 
   const handleEditPress = (rideId: string) => {
@@ -586,8 +588,23 @@ export default function HomeScreen() {
               </Text>
 
               <HStack space="md" justifyContent="flex-end">
+                {/* View Details on the left */}
+                <Button
+                  size="sm"
+                  backgroundColor={isLocked ? "#444" : "#3a7bd5"}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/(stack)/ride/[id]",
+                      params: { id: ride.id },
+                    })
+                  }
+                >
+                  <Text color={isLocked ? "#888" : "white"}>View Details</Text>
+                </Button>
+
+                {/* Join Group (or View Chat) on the right */}
                 {isLocked ? (
-                  <Button size="sm" backgroundColor="#444" disabled={true}>
+                  <Button size="sm" backgroundColor="#444" disabled>
                     <Text color="#888">Join Group</Text>
                   </Button>
                 ) : ride.memberIds.includes(userId!) ? (
@@ -619,19 +636,6 @@ export default function HomeScreen() {
                     </Text>
                   </Button>
                 )}
-
-                <Button
-                  size="sm"
-                  backgroundColor={isLocked ? "#444" : "#3a7bd5"}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/(stack)/ride/[id]",
-                      params: { id: ride.id },
-                    })
-                  }
-                >
-                  <Text color={isLocked ? "#888" : "white"}>View Details</Text>
-                </Button>
               </HStack>
 
               {openDropdown === ride.id && (

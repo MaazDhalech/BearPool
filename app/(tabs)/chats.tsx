@@ -41,7 +41,7 @@ export default function ChatsScreen() {
   const { userId } = useAuth();
   const router = useRouter();
 
-  const unsubRidesRef = useRef<() => void>();
+  const unsubRidesRef = useRef<(() => void) | null>(null);
   const unsubMsgsRef = useRef<Array<() => void>>([]);
 
   const setupListeners = async () => {
