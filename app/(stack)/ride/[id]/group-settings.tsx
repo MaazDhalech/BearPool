@@ -1,20 +1,21 @@
 import { db } from "@/services/firebaseConfig";
 import { useUser } from "@clerk/clerk-expo";
 import {
-    Avatar,
-    AvatarImage,
-    Button,
-    HStack,
-    ScrollView,
-    Text,
-    VStack
+  Avatar,
+  AvatarImage,
+  Button,
+  HStack,
+  ScrollView,
+  Text,
+  VStack,
 } from "@gluestack-ui/themed";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
-    arrayRemove,
-    doc,
-    getDoc,
-    updateDoc,
+  arrayRemove,
+  doc,
+  getDoc,
+  increment,
+  updateDoc,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { Alert } from "react-native";
@@ -88,10 +89,30 @@ export default function GroupSettings() {
         text: "Remove",
         style: "destructive",
         onPress: async () => {
-          await updateDoc(doc(db, "rides", String(rideId)), {
-            memberIds: arrayRemove(uid),
-          });
-          setUsers((prev) => prev.filter((u) => u.id !== uid));
+          try {
+            const rideRef = doc(db, "rides", String(rideId));
+
+            // First get current ride data
+            const rideSnap = await getDoc(rideRef);
+            if (!rideSnap.exists()) throw new Error("Ride not found");
+
+            const currentSeats = rideSnap.data().seats || 0;
+            console.log("Current seats before update:", currentSeats);
+
+            await updateDoc(rideRef, {
+              memberIds: arrayRemove(uid),
+              seats: increment(1),
+            });
+
+            // Verify update
+            const updatedSnap = await getDoc(rideRef);
+            console.log("Seats after update:", updatedSnap.data()?.seats);
+
+            setUsers((prev) => prev.filter((u) => u.id !== uid));
+          } catch (error) {
+            console.error("Error removing member:", error);
+            Alert.alert("Error", "Failed to remove member");
+          }
         },
       },
     ]);
@@ -99,10 +120,40 @@ export default function GroupSettings() {
 
   const handleLeaveGroup = async () => {
     if (!rideId || !user?.id) return;
-    await updateDoc(doc(db, "rides", String(rideId)), {
-      memberIds: arrayRemove(user.id),
-    });
-    router.replace("/(tabs)/chats");
+
+    Alert.alert("Leave Group", "Are you sure you want to leave this ride?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Leave",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            const rideRef = doc(db, "rides", String(rideId));
+
+            // First get current ride data
+            const rideSnap = await getDoc(rideRef);
+            if (!rideSnap.exists()) throw new Error("Ride not found");
+
+            const currentSeats = rideSnap.data().seats || 0;
+            console.log("Current seats before update:", currentSeats);
+
+            await updateDoc(rideRef, {
+              memberIds: arrayRemove(user.id),
+              seats: increment(1),
+            });
+
+            // Verify update
+            const updatedSnap = await getDoc(rideRef);
+            console.log("Seats after update:", updatedSnap.data()?.seats);
+
+            router.replace("/(tabs)/chats");
+          } catch (error) {
+            console.error("Error leaving group:", error);
+            Alert.alert("Error", "Failed to leave group");
+          }
+        },
+      },
+    ]);
   };
 
   if (!ride) return null;
@@ -112,7 +163,12 @@ export default function GroupSettings() {
   return (
     <ScrollView bg="#121212" px="$4" pt="$8">
       <VStack space="lg">
-        <Text fontSize="$xl" fontWeight="$bold" color="white" textAlign="center">
+        <Text
+          fontSize="$xl"
+          fontWeight="$bold"
+          color="white"
+          textAlign="center"
+        >
           Group Settings
         </Text>
 

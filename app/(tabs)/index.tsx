@@ -13,7 +13,7 @@ import {
   ScrollView,
   Text,
   VStack,
-  useToast
+  useToast,
 } from "@gluestack-ui/themed";
 import { useRouter } from "expo-router";
 import {
@@ -22,9 +22,12 @@ import {
   collection,
   doc,
   getDoc,
-  getDocs, increment, onSnapshot,
+  getDocs,
+  increment,
+  onSnapshot,
   orderBy,
-  query, writeBatch
+  query,
+  writeBatch,
 } from "firebase/firestore";
 import { useEffect, useRef, useState } from "react";
 import { AppState, AppStateStatus, RefreshControl } from "react-native";
@@ -99,10 +102,10 @@ export default function HomeScreen() {
 
   const fetchUsersForRides = async (rideData: Ride[]) => {
     const usersData: Record<string, User> = {};
-    
+
     const allUserIds = new Set<string>();
-    rideData.forEach(ride => {
-      ride.memberIds.forEach(uid => allUserIds.add(uid));
+    rideData.forEach((ride) => {
+      ride.memberIds.forEach((uid) => allUserIds.add(uid));
     });
 
     for (const uid of allUserIds) {
@@ -132,7 +135,7 @@ export default function HomeScreen() {
       }
     }
 
-    setUsers(prev => ({ ...prev, ...usersData }));
+    setUsers((prev) => ({ ...prev, ...usersData }));
   };
 
   const setupRealTimeListener = () => {
@@ -233,15 +236,18 @@ export default function HomeScreen() {
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (
         appStateRef.current.match(/inactive|background/) &&
-        nextAppState === 'active'
+        nextAppState === "active"
       ) {
         setupRealTimeListener();
       }
       appStateRef.current = nextAppState;
     };
 
-    const subscription = AppState.addEventListener('change', handleAppStateChange);
-    
+    const subscription = AppState.addEventListener(
+      "change",
+      handleAppStateChange
+    );
+
     return () => subscription?.remove();
   }, [sortOrder]);
 
@@ -254,18 +260,64 @@ export default function HomeScreen() {
 
   const handleJoinRide = async (rideId: string) => {
     if (!userId) return;
+
     try {
       const rideRef = doc(db, "rides", rideId);
+      const rideSnap = await getDoc(rideRef);
+
+      if (!rideSnap.exists()) {
+        throw new Error("Ride doesn't exist");
+      }
+
+      const rideData = rideSnap.data();
+      const currentSeats = rideData.seats ?? 0;
+
+      if (currentSeats <= 0) {
+        toast.show({
+          placement: "top",
+          duration: 3000,
+          render: () => (
+            <Box bg="$red600" px="$4" py="$3" borderRadius="$md">
+              <Text color="white" fontWeight="$bold">
+                Ride Full
+              </Text>
+              <Text color="white">No seats available for this ride.</Text>
+            </Box>
+          ),
+        });
+        return;
+      }
+
+      if (rideData.memberIds?.includes(userId)) {
+        toast.show({
+          placement: "top",
+          duration: 3000,
+          render: () => (
+            <Box bg="$yellow600" px="$4" py="$3" borderRadius="$md">
+              <Text color="white" fontWeight="$bold">
+                Already Joined
+              </Text>
+              <Text color="white">You're already part of this ride.</Text>
+            </Box>
+          ),
+        });
+        return;
+      }
+
+      if (currentSeats <= 0) {
+        throw new Error("No seats available");
+      }
+
       const userRef = doc(db, "users", userId);
-      
       const batch = writeBatch(db);
       batch.update(rideRef, {
         memberIds: arrayUnion(userId),
+        seats: increment(-1),
       });
       batch.update(userRef, {
         ridesJoined: increment(1),
       });
-      
+
       await batch.commit();
 
       toast.show({
@@ -273,14 +325,19 @@ export default function HomeScreen() {
         duration: 3000,
         render: () => (
           <Box bg="$green600" px="$4" py="$3" borderRadius="$md">
-            <Text color="white" fontWeight="$bold">Joined Group</Text>
+            <Text color="white" fontWeight="$bold">
+              Joined Ride
+            </Text>
             <Text color="white">You've successfully joined the ride.</Text>
           </Box>
         ),
       });
-      
+
       setTimeout(() => {
-        router.push({ pathname: "/(stack)/ride/[id]/chat", params: { id: rideId } });
+        router.push({
+          pathname: "/(stack)/ride/[id]/chat",
+          params: { id: rideId },
+        });
       }, 500);
     } catch (err) {
       console.error("Error joining ride:", err);
@@ -289,7 +346,9 @@ export default function HomeScreen() {
         duration: 3000,
         render: () => (
           <Box bg="$red600" px="$4" py="$3" borderRadius="$md">
-            <Text color="white" fontWeight="$bold">Join Failed</Text>
+            <Text color="white" fontWeight="$bold">
+              Join Failed
+            </Text>
             <Text color="white">Could not join this ride. Try again.</Text>
           </Box>
         ),
@@ -307,18 +366,19 @@ export default function HomeScreen() {
 
   const filteredRides = rides.filter((ride) => {
     const qs = searchQuery.toLowerCase();
-    const matchesSearch = ride.from.toLowerCase().includes(qs) || 
-                         ride.to.toLowerCase().includes(qs);
-    
+    const matchesSearch =
+      ride.from.toLowerCase().includes(qs) ||
+      ride.to.toLowerCase().includes(qs);
+
     // If user hasn't set a gender, show all rides
     if (!userGender) {
       return matchesSearch;
     }
-    
+
     // If user has set a gender, only show rides that match their gender or have no preference
-    const matchesGender = ride.genderPref === "N" || 
-                         ride.genderPref === userGender;
-    
+    const matchesGender =
+      ride.genderPref === "N" || ride.genderPref === userGender;
+
     return matchesSearch && matchesGender;
   });
 
@@ -344,12 +404,7 @@ export default function HomeScreen() {
       </Heading>
 
       <HStack alignItems="center" space="md" mb="$6">
-        <Input
-          flex={1}
-          size="md"
-          borderColor="#333"
-          backgroundColor="#1e1e1e"
-        >
+        <Input flex={1} size="md" borderColor="#333" backgroundColor="#1e1e1e">
           <InputField
             placeholder="Search by location or destination..."
             placeholderTextColor="#666"
@@ -374,8 +429,11 @@ export default function HomeScreen() {
 
       <VStack space="lg" pb="$16">
         {filteredRides.map((ride) => {
-          const isLocked = userGender && ride.genderPref !== "N" && ride.genderPref !== userGender;
-          
+          const isLocked =
+            userGender &&
+            ride.genderPref !== "N" &&
+            ride.genderPref !== userGender;
+
           return (
             <Box
               key={ride.id}
@@ -402,26 +460,40 @@ export default function HomeScreen() {
                   borderRadius="$lg"
                 >
                   <Text color="white" fontWeight="$bold">
-                    This room is for {ride.genderPref === "M" ? "men" : 
-                                    ride.genderPref === "F" ? "women" : 
-                                    "non-binary people"} only
+                    This room is for{" "}
+                    {ride.genderPref === "M"
+                      ? "men"
+                      : ride.genderPref === "F"
+                      ? "women"
+                      : "non-binary people"}{" "}
+                    only
                   </Text>
                 </Box>
               )}
-              
-              <HStack justifyContent="space-between" alignItems="center" mb="$2">
+
+              <HStack
+                justifyContent="space-between"
+                alignItems="center"
+                mb="$2"
+              >
                 <Text fontWeight="$bold" fontSize="$md" color="white">
                   {ride.from} → {ride.to}
                 </Text>
                 {ride.hostId === userId && (
                   <Box position="relative">
                     <Pressable
-                      onPress={() => setOpenDropdown(openDropdown === ride.id ? null : ride.id)}
+                      onPress={() =>
+                        setOpenDropdown(
+                          openDropdown === ride.id ? null : ride.id
+                        )
+                      }
                       p="$2"
                     >
-                      <Text color="#a0a0a0" fontSize="$lg">⋮</Text>
+                      <Text color="#a0a0a0" fontSize="$lg">
+                        ⋮
+                      </Text>
                     </Pressable>
-                    
+
                     {openDropdown === ride.id && (
                       <Box
                         position="absolute"
@@ -441,10 +513,12 @@ export default function HomeScreen() {
                           borderRadius="$sm"
                           $pressed={{ bg: "#3a3a3a" }}
                         >
-                          <Text color="white" fontSize="$sm">Edit Post</Text>
+                          <Text color="white" fontSize="$sm">
+                            Edit Post
+                          </Text>
                         </Pressable>
                       </Box>
-                    )}  
+                    )}
                   </Box>
                 )}
               </HStack>
@@ -476,7 +550,10 @@ export default function HomeScreen() {
                       const u = users[uid] || { avatar: DEFAULT_AVATAR };
                       return (
                         <Avatar key={uid} size="sm" bgColor="#1e1e1e">
-                          <AvatarImage source={{ uri: u.avatar }} alt="User avatar" />
+                          <AvatarImage
+                            source={{ uri: u.avatar }}
+                            alt="User avatar"
+                          />
                         </Avatar>
                       );
                     })}
@@ -510,11 +587,7 @@ export default function HomeScreen() {
 
               <HStack space="md" justifyContent="flex-end">
                 {isLocked ? (
-                  <Button
-                    size="sm"
-                    backgroundColor="#444"
-                    disabled={true}
-                  >
+                  <Button size="sm" backgroundColor="#444" disabled={true}>
                     <Text color="#888">Join Group</Text>
                   </Button>
                 ) : ride.memberIds.includes(userId!) ? (
@@ -539,11 +612,14 @@ export default function HomeScreen() {
                     borderColor="#3a7bd5"
                     backgroundColor="transparent"
                     onPress={() => handleJoinRide(ride.id)}
+                    isDisabled={ride.seats <= 0}
                   >
-                    <Text color="#3a7bd5">Join Group</Text>
+                    <Text color={ride.seats <= 0 ? "#888" : "#3a7bd5"}>
+                      {ride.seats <= 0 ? "Full" : "Join Group"}
+                    </Text>
                   </Button>
                 )}
-                
+
                 <Button
                   size="sm"
                   backgroundColor={isLocked ? "#444" : "#3a7bd5"}
