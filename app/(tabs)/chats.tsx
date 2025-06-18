@@ -107,7 +107,7 @@ export default function ChatsScreen() {
           const data = docSnap.data() as any;
 
           // lastRead timestamp for this user
-          const lr = data.lastRead?.[userId] as Timestamp | null;
+          const lr = userId && data.lastRead ? (data.lastRead[userId] as Timestamp | undefined) : undefined;
           const lastReadTs = lr instanceof Timestamp
             ? lr
             : Timestamp.fromMillis(0);
