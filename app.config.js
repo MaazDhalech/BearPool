@@ -19,7 +19,7 @@ export default {
       }
     },
     android: {
-      bundleIdentifier: "com.rebu.bearpool",
+      package: "com.rebu.bearpool",
       adaptiveIcon: {
         foregroundImage: "./assets/images/adaptive-icon.png",
         backgroundColor: "#ffffff",
