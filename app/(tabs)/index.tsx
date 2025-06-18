@@ -13,7 +13,7 @@ import {
   ScrollView,
   Text,
   VStack,
-  useToast
+  useToast,
 } from "@gluestack-ui/themed";
 import { useRouter } from "expo-router";
 import {
@@ -23,13 +23,14 @@ import {
   doc,
   getDoc,
   getDocs,
+  increment,
   onSnapshot,
   orderBy,
   query,
-  updateDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { useEffect, useRef, useState } from "react";
-import { AppState, RefreshControl } from "react-native";
+import { AppState, AppStateStatus, RefreshControl } from "react-native";
 
 const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
@@ -51,7 +52,7 @@ type Ride = {
 type User = {
   id: string;
   avatar?: string;
-  genderPref?: string;
+  gender?: string;
 };
 
 const getRelativeTime = (timestamp: Timestamp) => {
@@ -80,36 +81,33 @@ export default function HomeScreen() {
   const [users, setUsers] = useState<Record<string, User>>({});
   const [refreshing, setRefreshing] = useState(false);
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
-  const [userGenderPref, setUserGenderPref] = useState<string>("N");
+  const [userGender, setUserGender] = useState<string | null>(null);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
 
-  // Refs to track listeners and prevent memory leaks
   const ridesUnsubscribeRef = useRef<(() => void) | null>(null);
-  const appStateRef = useRef(AppState.currentState);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
-  const fetchUserGenderPref = async () => {
+  const fetchUserGender = async () => {
     if (!userId) return;
     try {
       const userDoc = await getDoc(doc(db, "users", userId));
       if (userDoc.exists()) {
         const data = userDoc.data();
-        setUserGenderPref(data.pref || "N");
+        setUserGender(data.gender || null);
       }
     } catch (err) {
-      console.error("Error fetching user gender pref:", err);
+      console.error("Error fetching user gender:", err);
     }
   };
 
   const fetchUsersForRides = async (rideData: Ride[]) => {
     const usersData: Record<string, User> = {};
-    
-    // Get all unique user IDs from all rides
+
     const allUserIds = new Set<string>();
-    rideData.forEach(ride => {
-      ride.memberIds.forEach(uid => allUserIds.add(uid));
+    rideData.forEach((ride) => {
+      ride.memberIds.forEach((uid) => allUserIds.add(uid));
     });
 
-    // Fetch user data for all unique user IDs
     for (const uid of allUserIds) {
       try {
         const userDoc = await getDoc(doc(db, "users", uid));
@@ -118,13 +116,13 @@ export default function HomeScreen() {
           usersData[uid] = {
             id: uid,
             avatar: data.avatar || data.profileImage || DEFAULT_AVATAR,
-            genderPref: data.pref || "N",
+            gender: data.gender || undefined,
           };
         } else {
           usersData[uid] = {
             id: uid,
             avatar: DEFAULT_AVATAR,
-            genderPref: "N",
+            gender: undefined,
           };
         }
       } catch (err) {
@@ -132,16 +130,15 @@ export default function HomeScreen() {
         usersData[uid] = {
           id: uid,
           avatar: DEFAULT_AVATAR,
-          genderPref: "N",
+          gender: undefined,
         };
       }
     }
 
-    setUsers(prev => ({ ...prev, ...usersData }));
+    setUsers((prev) => ({ ...prev, ...usersData }));
   };
 
   const setupRealTimeListener = () => {
-    // Clean up existing listener
     if (ridesUnsubscribeRef.current) {
       ridesUnsubscribeRef.current();
     }
@@ -151,7 +148,6 @@ export default function HomeScreen() {
       orderBy("createdAt", sortOrder === "newest" ? "desc" : "asc")
     );
 
-    // Set up real-time listener
     const unsubscribe = onSnapshot(
       rideQuery,
       async (snapshot) => {
@@ -174,17 +170,14 @@ export default function HomeScreen() {
           });
 
           setRides(rideData);
-          
-          // Fetch user data for new rides
           await fetchUsersForRides(rideData);
-          
         } catch (err) {
           console.error("Error processing real-time update:", err);
+          fetchRidesManually();
         }
       },
       (error) => {
         console.error("Real-time listener error:", error);
-        // Fall back to manual fetch if real-time fails
         fetchRidesManually();
       }
     );
@@ -224,67 +217,127 @@ export default function HomeScreen() {
     }
   };
 
-  // Initialize data and set up listeners
   useEffect(() => {
     const initializeData = async () => {
-      await fetchUserGenderPref();
+      await fetchUserGender();
       setupRealTimeListener();
     };
 
     initializeData();
 
-    // Clean up listener on unmount
     return () => {
       if (ridesUnsubscribeRef.current) {
         ridesUnsubscribeRef.current();
       }
     };
-  }, [sortOrder]); // Re-setup when sort order changes
+  }, [sortOrder]);
 
-  // Handle app state changes (foreground/background)
   useEffect(() => {
-    const handleAppStateChange = (nextAppState: string) => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (
         appStateRef.current.match(/inactive|background/) &&
-        nextAppState === 'active'
+        nextAppState === "active"
       ) {
-        // App came to foreground, refresh data
         setupRealTimeListener();
       }
       appStateRef.current = nextAppState;
     };
 
-    const subscription = AppState.addEventListener('change', handleAppStateChange);
-    
+    const subscription = AppState.addEventListener(
+      "change",
+      handleAppStateChange
+    );
+
     return () => subscription?.remove();
   }, [sortOrder]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchUserGenderPref();
+    await fetchUserGender();
     await fetchRidesManually();
     setRefreshing(false);
   };
 
   const handleJoinRide = async (rideId: string) => {
     if (!userId) return;
+
     try {
       const rideRef = doc(db, "rides", rideId);
-      await updateDoc(rideRef, {
+      const rideSnap = await getDoc(rideRef);
+
+      if (!rideSnap.exists()) {
+        throw new Error("Ride doesn't exist");
+      }
+
+      const rideData = rideSnap.data();
+      const currentSeats = rideData.seats ?? 0;
+
+      if (currentSeats <= 0) {
+        toast.show({
+          placement: "top",
+          duration: 3000,
+          render: () => (
+            <Box bg="$red600" px="$4" py="$3" borderRadius="$md">
+              <Text color="white" fontWeight="$bold">
+                Ride Full
+              </Text>
+              <Text color="white">No seats available for this ride.</Text>
+            </Box>
+          ),
+        });
+        return;
+      }
+
+      if (rideData.memberIds?.includes(userId)) {
+        toast.show({
+          placement: "top",
+          duration: 3000,
+          render: () => (
+            <Box bg="$yellow600" px="$4" py="$3" borderRadius="$md">
+              <Text color="white" fontWeight="$bold">
+                Already Joined
+              </Text>
+              <Text color="white">You're already part of this ride.</Text>
+            </Box>
+          ),
+        });
+        return;
+      }
+
+      if (currentSeats <= 0) {
+        throw new Error("No seats available");
+      }
+
+      const userRef = doc(db, "users", userId);
+      const batch = writeBatch(db);
+      batch.update(rideRef, {
         memberIds: arrayUnion(userId),
+        seats: increment(-1),
       });
+      batch.update(userRef, {
+        ridesJoined: increment(1),
+      });
+
+      await batch.commit();
+
       toast.show({
         placement: "top",
         duration: 3000,
         render: () => (
           <Box bg="$green600" px="$4" py="$3" borderRadius="$md">
-            <Text color="white" fontWeight="$bold">Joined Group</Text>
+            <Text color="white" fontWeight="$bold">
+              Joined Ride
+            </Text>
             <Text color="white">You've successfully joined the ride.</Text>
           </Box>
         ),
       });
+
       setTimeout(() => {
-        router.push({ pathname: "/(stack)/ride/[id]/chat", params: { id: rideId } });
+        router.push({
+          pathname: "/(stack)/ride/[id]/chat",
+          params: { id: rideId },
+        });
       }, 500);
     } catch (err) {
       console.error("Error joining ride:", err);
@@ -293,7 +346,9 @@ export default function HomeScreen() {
         duration: 3000,
         render: () => (
           <Box bg="$red600" px="$4" py="$3" borderRadius="$md">
-            <Text color="white" fontWeight="$bold">Join Failed</Text>
+            <Text color="white" fontWeight="$bold">
+              Join Failed
+            </Text>
             <Text color="white">Could not join this ride. Try again.</Text>
           </Box>
         ),
@@ -302,7 +357,7 @@ export default function HomeScreen() {
   };
 
   const handleEditPress = (rideId: string) => {
-    setOpenDropdown(null); // Close dropdown
+    setOpenDropdown(null);
     router.push({
       pathname: "/(stack)/ride/[id]/edit",
       params: { id: rideId },
@@ -311,13 +366,20 @@ export default function HomeScreen() {
 
   const filteredRides = rides.filter((ride) => {
     const qs = searchQuery.toLowerCase();
-    return (
-      (ride.from.toLowerCase().includes(qs) ||
-       ride.to.toLowerCase().includes(qs)) &&
-      (ride.genderPref === "N" ||
-       ride.genderPref === userGenderPref ||
-       userGenderPref === "N")
-    );
+    const matchesSearch =
+      ride.from.toLowerCase().includes(qs) ||
+      ride.to.toLowerCase().includes(qs);
+
+    // If user hasn't set a gender, show all rides
+    if (!userGender) {
+      return matchesSearch;
+    }
+
+    // If user has set a gender, only show rides that match their gender or have no preference
+    const matchesGender =
+      ride.genderPref === "N" || ride.genderPref === userGender;
+
+    return matchesSearch && matchesGender;
   });
 
   const toggleSortOrder = () =>
@@ -342,12 +404,7 @@ export default function HomeScreen() {
       </Heading>
 
       <HStack alignItems="center" space="md" mb="$6">
-        <Input
-          flex={1}
-          size="md"
-          borderColor="#333"
-          backgroundColor="#1e1e1e"
-        >
+        <Input flex={1} size="md" borderColor="#333" backgroundColor="#1e1e1e">
           <InputField
             placeholder="Search by location or destination..."
             placeholderTextColor="#666"
@@ -371,172 +428,226 @@ export default function HomeScreen() {
       </HStack>
 
       <VStack space="lg" pb="$16">
-        {filteredRides.map((ride) => (
-          <Box
-            key={ride.id}
-            p="$4"
-            mb="$4"
-            bg="#1e1e1e"
-            borderWidth={1}
-            borderColor="#333"
-            borderRadius="$lg"
-            position="relative"
-          >
-            <HStack justifyContent="space-between" alignItems="center" mb="$2">
-              <Text fontWeight="$bold" fontSize="$md" color="white">
-                {ride.from} → {ride.to}
-              </Text>
-              {ride.hostId === userId && (
-                <Box position="relative">
-                  <Pressable
-                    onPress={() => setOpenDropdown(openDropdown === ride.id ? null : ride.id)}
-                    p="$2"
-                  >
-                    <Text color="#a0a0a0" fontSize="$lg">⋮</Text>
-                  </Pressable>
-                  
-                  {openDropdown === ride.id && (
-                    <Box
-                      position="absolute"
-                      top="$8"
-                      right="$0"
-                      bg="#2a2a2a"
-                      borderWidth={1}
-                      borderColor="#333"
-                      borderRadius="$md"
-                      p="$2"
-                      minWidth="$24"
-                      zIndex={10}
-                    >
-                      <Pressable
-                        onPress={() => handleEditPress(ride.id)}
-                        p="$2"
-                        borderRadius="$sm"
-                        _pressed={{ bg: "#3a3a3a" }}
-                      >
-                        <Text color="white" fontSize="$sm">Edit Post</Text>
-                      </Pressable>
-                    </Box>
-                  )}
+        {filteredRides.map((ride) => {
+          const isLocked =
+            userGender &&
+            ride.genderPref !== "N" &&
+            ride.genderPref !== userGender;
+
+          return (
+            <Box
+              key={ride.id}
+              p="$4"
+              mb="$4"
+              bg={isLocked ? "#2a2a2a" : "#1e1e1e"}
+              borderWidth={1}
+              borderColor={isLocked ? "#444" : "#333"}
+              borderRadius="$lg"
+              position="relative"
+              opacity={isLocked ? 0.7 : 1}
+            >
+              {isLocked && (
+                <Box
+                  position="absolute"
+                  top={0}
+                  left={0}
+                  right={0}
+                  bottom={0}
+                  bg="rgba(0,0,0,0.5)"
+                  justifyContent="center"
+                  alignItems="center"
+                  zIndex={1}
+                  borderRadius="$lg"
+                >
+                  <Text color="white" fontWeight="$bold">
+                    This room is for{" "}
+                    {ride.genderPref === "M"
+                      ? "men"
+                      : ride.genderPref === "F"
+                      ? "women"
+                      : "non-binary people"}{" "}
+                    only
+                  </Text>
                 </Box>
               )}
-            </HStack>
 
-            <Text color="#a0a0a0">
-              {ride.date}, {ride.time}
-            </Text>
-            <Text color="#a0a0a0">
-              {ride.seats} seat{ride.seats > 1 ? "s" : ""} available
-            </Text>
-            <Text color="#a0a0a0" fontSize="$sm" mb="$2">
-              Gender preference:{" "}
-              {ride.genderPref === "M"
-                ? "Male"
-                : ride.genderPref === "F"
-                ? "Female"
-                : ride.genderPref === "NB"
-                ? "Non-binary"
-                : "No preference"}
-            </Text>
-
-            {ride.memberIds.length > 0 && (
-              <HStack space="sm" mt="$2" alignItems="center" mb="$2">
-                <Text color="#a0a0a0" mr="$2" fontSize="$sm">
-                  Members:
-                </Text>
-                <HStack space="sm">
-                  {ride.memberIds.slice(0, 5).map((uid) => {
-                    const u = users[uid] || { avatar: DEFAULT_AVATAR };
-                    return (
-                      <Avatar key={uid} size="sm" bgColor="#1e1e1e">
-                        <AvatarImage source={{ uri: u.avatar }} alt="User avatar" />
-                      </Avatar>
-                    );
-                  })}
-                  {ride.memberIds.length > 5 && (
-                    <Box
-                      bg="#3a7bd5"
-                      borderRadius="$full"
-                      w="$6"
-                      h="$6"
-                      alignItems="center"
-                      justifyContent="center"
-                    >
-                      <Text color="white" fontSize="$xs">
-                        +{ride.memberIds.length - 5}
-                      </Text>
-                    </Box>
-                  )}
-                </HStack>
-              </HStack>
-            )}
-
-            {ride.notes && (
-              <Text color="#a0a0a0" mb="$2">
-                {ride.notes}
-              </Text>
-            )}
-
-            <Text fontSize="$xs" color="#666" mb="$4">
-              Posted {getRelativeTime(ride.createdAt)}
-            </Text>
-
-            <HStack space="md" justifyContent="flex-end">
-              <Button
-                size="sm"
-                backgroundColor="#3a7bd5"
-                onPress={() =>
-                  router.push({
-                    pathname: "/(stack)/ride/[id]",
-                    params: { id: ride.id },
-                  })
-                }
+              <HStack
+                justifyContent="space-between"
+                alignItems="center"
+                mb="$2"
               >
-                <Text color="white">View Details</Text>
-              </Button>
+                <Text fontWeight="$bold" fontSize="$md" color="white">
+                  {ride.from} → {ride.to}
+                </Text>
+                {ride.hostId === userId && (
+                  <Box position="relative">
+                    <Pressable
+                      onPress={() =>
+                        setOpenDropdown(
+                          openDropdown === ride.id ? null : ride.id
+                        )
+                      }
+                      p="$2"
+                    >
+                      <Text color="#a0a0a0" fontSize="$lg">
+                        ⋮
+                      </Text>
+                    </Pressable>
 
-              {ride.memberIds.includes(userId!) ? (
+                    {openDropdown === ride.id && (
+                      <Box
+                        position="absolute"
+                        top="$8"
+                        right="$0"
+                        bg="#2a2a2a"
+                        borderWidth={1}
+                        borderColor="#333"
+                        borderRadius="$md"
+                        p="$2"
+                        minWidth="$24"
+                        zIndex={10}
+                      >
+                        <Pressable
+                          onPress={() => handleEditPress(ride.id)}
+                          p="$2"
+                          borderRadius="$sm"
+                          $pressed={{ bg: "#3a3a3a" }}
+                        >
+                          <Text color="white" fontSize="$sm">
+                            Edit Post
+                          </Text>
+                        </Pressable>
+                      </Box>
+                    )}
+                  </Box>
+                )}
+              </HStack>
+
+              <Text color="#a0a0a0">
+                {ride.date} | {ride.time}
+              </Text>
+              <Text color="#a0a0a0">
+                {ride.seats} seat{ride.seats > 1 ? "s" : ""} available
+              </Text>
+              <Text color="#a0a0a0" fontSize="$sm" mb="$2">
+                Gender preference:{" "}
+                {ride.genderPref === "M"
+                  ? "Male"
+                  : ride.genderPref === "F"
+                  ? "Female"
+                  : ride.genderPref === "NB"
+                  ? "Non-binary"
+                  : "No preference"}
+              </Text>
+
+              {ride.memberIds.length > 0 && (
+                <HStack space="sm" mt="$2" alignItems="center" mb="$2">
+                  <Text color="#a0a0a0" mr="$2" fontSize="$sm">
+                    Members:
+                  </Text>
+                  <HStack space="sm">
+                    {ride.memberIds.slice(0, 5).map((uid) => {
+                      const u = users[uid] || { avatar: DEFAULT_AVATAR };
+                      return (
+                        <Avatar key={uid} size="sm" bgColor="#1e1e1e">
+                          <AvatarImage
+                            source={{ uri: u.avatar }}
+                            alt="User avatar"
+                          />
+                        </Avatar>
+                      );
+                    })}
+                    {ride.memberIds.length > 5 && (
+                      <Box
+                        bg="#3a7bd5"
+                        borderRadius="$full"
+                        w="$6"
+                        h="$6"
+                        alignItems="center"
+                        justifyContent="center"
+                      >
+                        <Text color="white" fontSize="$xs">
+                          +{ride.memberIds.length - 5}
+                        </Text>
+                      </Box>
+                    )}
+                  </HStack>
+                </HStack>
+              )}
+
+              {ride.notes && (
+                <Text color="#a0a0a0" mb="$2">
+                  {ride.notes}
+                </Text>
+              )}
+
+              <Text fontSize="$xs" color="#666" mb="$4">
+                Posted {getRelativeTime(ride.createdAt)}
+              </Text>
+
+              <HStack space="md" justifyContent="flex-end">
+                {isLocked ? (
+                  <Button size="sm" backgroundColor="#444" disabled={true}>
+                    <Text color="#888">Join Group</Text>
+                  </Button>
+                ) : ride.memberIds.includes(userId!) ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    borderColor="#3a7bd5"
+                    backgroundColor="transparent"
+                    onPress={() =>
+                      router.push({
+                        pathname: "/(stack)/ride/[id]/chat",
+                        params: { id: ride.id },
+                      })
+                    }
+                  >
+                    <Text color="#3a7bd5">View Chat</Text>
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    borderColor="#3a7bd5"
+                    backgroundColor="transparent"
+                    onPress={() => handleJoinRide(ride.id)}
+                    isDisabled={ride.seats <= 0}
+                  >
+                    <Text color={ride.seats <= 0 ? "#888" : "#3a7bd5"}>
+                      {ride.seats <= 0 ? "Full" : "Join Group"}
+                    </Text>
+                  </Button>
+                )}
+
                 <Button
                   size="sm"
-                  variant="outline"
-                  borderColor="#3a7bd5"
-                  backgroundColor="transparent"
+                  backgroundColor={isLocked ? "#444" : "#3a7bd5"}
                   onPress={() =>
                     router.push({
-                      pathname: "/(stack)/ride/[id]/chat",
+                      pathname: "/(stack)/ride/[id]",
                       params: { id: ride.id },
                     })
                   }
                 >
-                  <Text color="#3a7bd5">View Chat</Text>
+                  <Text color={isLocked ? "#888" : "white"}>View Details</Text>
                 </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  borderColor="#3a7bd5"
-                  backgroundColor="transparent"
-                  onPress={() => handleJoinRide(ride.id)}
-                >
-                  <Text color="#3a7bd5">Join Group</Text>
-                </Button>
-              )}
-            </HStack>
+              </HStack>
 
-            {/* Overlay to close dropdown when clicking outside */}
-            {openDropdown === ride.id && (
-              <Pressable
-                position="absolute"
-                top="$0"
-                left="$0"
-                right="$0"
-                bottom="$0"
-                onPress={() => setOpenDropdown(null)}
-                zIndex={5}
-              />
-            )}
-          </Box>
-        ))}
+              {openDropdown === ride.id && (
+                <Pressable
+                  position="absolute"
+                  top="$0"
+                  left="$0"
+                  right="$0"
+                  bottom="$0"
+                  onPress={() => setOpenDropdown(null)}
+                  zIndex={5}
+                />
+              )}
+            </Box>
+          );
+        })}
 
         {filteredRides.length === 0 && (
           <Text color="#a0a0a0" textAlign="center" mt="$6">
