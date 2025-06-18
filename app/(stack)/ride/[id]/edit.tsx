@@ -1,20 +1,22 @@
 import { db } from "@/services/firebaseConfig";
 import { useAuth, useUser } from "@clerk/clerk-expo";
+import { Ionicons } from "@expo/vector-icons";
 import { format, isValid, parse } from "date-fns";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const MAX_NOTES_LENGTH = 200;
 
@@ -23,6 +25,7 @@ export default function EditRideScreen() {
   const { user } = useUser();
   const router = useRouter();
   const { id } = useLocalSearchParams();
+  const insets = useSafeAreaInsets();
 
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -218,23 +221,45 @@ export default function EditRideScreen() {
       style={{ flex: 1, backgroundColor: "#121212" }}
       keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}
     >
+      {/* Header with Back Button */}
+      <View
+        style={{
+          paddingTop: insets.top,
+          paddingHorizontal: 20,
+          paddingBottom: 16,
+          borderBottomWidth: 1,
+          borderBottomColor: "#333",
+          flexDirection: "row",
+          alignItems: "center",
+        }}
+      >
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={{
+            padding: 8,
+            borderRadius: 20,
+            marginRight: 12,
+          }}
+        >
+          <Ionicons name="arrow-back" size={24} color="white" />
+        </TouchableOpacity>
+        <Text
+          style={{
+            color: "#ffffff",
+            fontSize: 20,
+            fontWeight: "600",
+            flex: 1,
+          }}
+        >
+          Edit Ride
+        </Text>
+      </View>
+
       <ScrollView
         contentContainerStyle={{ flexGrow: 1, padding: 20, paddingBottom: 120 }}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={{ marginTop: 60, marginBottom: 20 }}>
-          <Text
-            style={{
-              color: "#ffffff",
-              fontSize: 28,
-              fontWeight: "600",
-              marginBottom: 30,
-              textAlign: "left",
-            }}
-          >
-            Edit Ride
-          </Text>
-
+        <View style={{ marginBottom: 20 }}>
           {[
             {
               label: "From",

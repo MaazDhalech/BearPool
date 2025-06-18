@@ -1,13 +1,17 @@
 import { db } from "@/services/firebaseConfig";
 import { useUser } from "@clerk/clerk-expo";
+import { Ionicons } from "@expo/vector-icons";
 import {
   Avatar,
   AvatarImage,
+  Box,
   Button,
+  Heading,
   HStack,
+  Pressable,
   ScrollView,
   Text,
-  VStack,
+  VStack
 } from "@gluestack-ui/themed";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
@@ -19,6 +23,7 @@ import {
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { Alert } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
@@ -34,6 +39,7 @@ export default function GroupSettings() {
   const { id: rideId } = useLocalSearchParams();
   const { user } = useUser();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [ride, setRide] = useState<any>(null);
   const [users, setUsers] = useState<User[]>([]);
@@ -161,70 +167,84 @@ export default function GroupSettings() {
   const isHost = user?.id === ride.hostId;
 
   return (
-    <ScrollView bg="#121212" px="$4" pt="$8">
-      <VStack space="lg">
-        <Text
-          fontSize="$xl"
-          fontWeight="$bold"
-          color="white"
-          textAlign="center"
+    <Box flex={1} bg="#121212" pt={insets.top}>
+      {/* Header with Back Button and Title */}
+      <HStack
+        alignItems="center"
+        px="$4"
+        py="$3"
+        borderBottomWidth="$1"
+        borderBottomColor="#333"
+      >
+        <Pressable
+          onPress={() => router.back()}
+          p="$2"
+          borderRadius="$full"
+          mr="$3"
         >
+          <Ionicons name="arrow-back" size={24} color="white" />
+        </Pressable>
+        <Heading size="lg" color="white" flex={1}>
           Group Settings
-        </Text>
+        </Heading>
+      </HStack>
 
-        {users.map((u) => (
-          <HStack
-            key={u.id}
-            alignItems="center"
-            justifyContent="space-between"
-            bg="#1e1e1e"
-            p="$4"
-            borderRadius="$lg"
-          >
-            <HStack space="sm" alignItems="center">
-              <Avatar size="md">
-                <AvatarImage source={{ uri: u.avatar }} />
-              </Avatar>
-              <VStack>
-                <HStack alignItems="center" space="xs">
-                  <Text color="white" fontWeight="$medium">
-                    {u.name}
-                  </Text>
-                  {u.id === ride.hostId && (
-                    <Text color="#00cc88" fontSize="$xs" fontWeight="$bold">
-                      (Host)
+      <ScrollView px="$4" py="$4">
+        <VStack space="lg">
+          {users.map((u) => (
+            <HStack
+              key={u.id}
+              alignItems="center"
+              justifyContent="space-between"
+              bg="#1e1e1e"
+              p="$4"
+              borderRadius="$lg"
+            >
+              <HStack space="sm" alignItems="center">
+                <Avatar size="md">
+                  <AvatarImage source={{ uri: u.avatar }} />
+                </Avatar>
+                <VStack>
+                  <HStack alignItems="center" space="xs">
+                    <Text color="white" fontWeight="$medium">
+                      {u.name}
                     </Text>
-                  )}
-                </HStack>
-                <Text color="#aaaaaa" fontSize="$sm">
-                  {u.email}
-                </Text>
-              </VStack>
+                    {u.id === ride.hostId && (
+                      <Text color="#00cc88" fontSize="$xs" fontWeight="$bold">
+                        (Host)
+                      </Text>
+                    )}
+                  </HStack>
+                  <Text color="#aaaaaa" fontSize="$sm">
+                    {u.email}
+                  </Text>
+                </VStack>
+              </HStack>
+              {isHost && u.id !== user?.id && (
+                <Button
+                  size="sm"
+                  backgroundColor="#ff5555"
+                  onPress={() => handleKick(u.id)}
+                >
+                  <Text color="white">Remove</Text>
+                </Button>
+              )}
             </HStack>
-            {isHost && u.id !== user?.id && (
-              <Button
-                size="sm"
-                backgroundColor="#ff5555"
-                onPress={() => handleKick(u.id)}
-              >
-                <Text color="white">Remove</Text>
-              </Button>
-            )}
-          </HStack>
-        ))}
+          ))}
 
-        {!isHost && (
-          <Button
-            mt="$6"
-            size="md"
-            variant="outline"
-            borderColor="#ff5555"
-            onPress={handleLeaveGroup}
-          >
-            <Text color="#ff5555">Leave Group</Text>
-          </Button>
-        )}
-      </VStack>
-    </ScrollView>
+          {!isHost && (
+            <Button
+              mt="$6"
+              size="md"
+              variant="outline"
+              borderColor="#ff5555"
+              onPress={handleLeaveGroup}
+            >
+              <Text color="#ff5555">Leave Group</Text>
+            </Button>
+          )}
+        </VStack>
+      </ScrollView>
+    </Box>
   );
 }
