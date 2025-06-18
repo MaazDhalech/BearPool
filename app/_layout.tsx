@@ -1,6 +1,5 @@
 import "@/global.css";
 import { config } from "@/gluestack-ui.config";
-import { useColorScheme } from "@/hooks/useColorScheme";
 import { ClerkProvider } from "@clerk/clerk-expo";
 import { GluestackUIProvider } from "@gluestack-ui/themed";
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
@@ -20,7 +19,6 @@ const tokenCache = {
 };
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
   const [loaded] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
@@ -32,22 +30,16 @@ export default function RootLayout() {
   return (
     <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
       <GluestackUIProvider config={config}>
-        {/* Always use the dark theme for navigation */}
+        {/* Force dark theme */}
         <ThemeProvider value={DarkTheme}>
-          {/* Instagram-style status bar */}
-          <ExpoStatusBar
-            style="light"
-            translucent
-            backgroundColor="transparent"
-          />
+          {/* Light-content status bar for dark background */}
+          <ExpoStatusBar style="light" translucent backgroundColor="transparent" />
 
-          {/* Main container with dynamic padding */}
           <View
             style={{
               flex: 1,
-              backgroundColor: colorScheme === "dark" ? "#000000" : "#ffffff",
-              paddingTop:
-                Platform.OS === "android" ? StatusBar.currentHeight ?? 0 : 0,
+              backgroundColor: "#000000",
+              paddingTop: Platform.OS === "android" ? StatusBar.currentHeight ?? 0 : 0,
             }}
           >
             <Stack
@@ -59,7 +51,7 @@ export default function RootLayout() {
                 headerTitleStyle: {
                   fontWeight: "bold",
                 },
-                headerShadowVisible: false, // Remove header bottom border
+                headerShadowVisible: false,
                 contentStyle: {
                   backgroundColor: "#000000",
                 },
@@ -67,9 +59,7 @@ export default function RootLayout() {
             >
               <Stack.Screen
                 name="(tabs)"
-                options={{
-                  headerShown: false,
-                }}
+                options={{ headerShown: false }}
               />
               <Stack.Screen name="+not-found" />
             </Stack>
