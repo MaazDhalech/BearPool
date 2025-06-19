@@ -154,7 +154,6 @@ export default function HomeScreen() {
         try {
           const rideData: Ride[] = snapshot.docs.map((doc) => {
             const data = doc.data();
-            console.log('Raw ride data:', data); // Debug log
             
             const processedRide = {
               id: doc.id,
@@ -170,11 +169,9 @@ export default function HomeScreen() {
               hostId: data.hostId ?? "",
             };
             
-            console.log('Processed ride:', processedRide); // Debug log
             return processedRide;
           });
 
-          console.log('All rides:', rideData); // Debug log
           setRides(rideData);
           await fetchUsersForRides(rideData);
         } catch (err) {
