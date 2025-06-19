@@ -51,6 +51,7 @@
     "expo-web-browser": "~14.1.6",
     "firebase": "^11.9.1",
     "gluestack": "^0.1.1",
+    "inline-style-prefixer": "^7.0.1",
     "nativewind": "^4.1.23",
     "react": "19.0.0",
     "react-dom": "19.0.0",

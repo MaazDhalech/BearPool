@@ -19,7 +19,7 @@ export default {
       }
     },
     android: {
-      bundleIdentifier: "com.rebu.bearpool",
+      package: "com.rebu.bearpool", // ✅ FIXED key here
       adaptiveIcon: {
         foregroundImage: "./assets/images/adaptive-icon.png",
         backgroundColor: "#ffffff",
@@ -43,7 +43,7 @@ export default {
         },
       ],
       "expo-secure-store",
-      "expo-notifications" // ✅ Added this line
+      "expo-notifications"
     ],
     experiments: {
       typedRoutes: true,

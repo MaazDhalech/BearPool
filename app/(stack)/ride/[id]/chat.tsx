@@ -91,19 +91,15 @@ export default function RideChatScreen() {
       const newMembers: string[] = data.memberIds || [];
       const prevMembers = prevMembersRef.current;
 
-      // initial load: just set prevMembers
       if (prevMembers.length === 0) {
         prevMembersRef.current = newMembers;
         return;
       }
 
-      // joined and left
       const joined = newMembers.filter((uid) => !prevMembers.includes(uid));
       const left = prevMembers.filter((uid) => !newMembers.includes(uid));
 
-      // for each joined, post a system message
-      for (const uid of joined) {
-        // get username
+      for (const uid of [...joined, ...left]) {
         let name = userMap[uid]?.name;
         if (!name) {
           const uDoc = await getDoc(doc(db, "users", uid));
@@ -112,24 +108,7 @@ export default function RideChatScreen() {
             : "Unknown";
         }
         await addDoc(collection(db, "rides", String(rideId), "messages"), {
-          text: `${name} has joined the ride`,
-          senderId: null,
-          timestamp: serverTimestamp(),
-          system: true,
-        });
-      }
-
-      // for each left, post a system message
-      for (const uid of left) {
-        let name = userMap[uid]?.name;
-        if (!name) {
-          const uDoc = await getDoc(doc(db, "users", uid));
-          name = uDoc.exists()
-            ? uDoc.data().username || "Anonymous"
-            : "Unknown";
-        }
-        await addDoc(collection(db, "rides", String(rideId), "messages"), {
-          text: `${name} has left the ride`,
+          text: `${name} has ${joined.includes(uid) ? "joined" : "left"} the ride`,
           senderId: null,
           timestamp: serverTimestamp(),
           system: true,
@@ -142,7 +121,6 @@ export default function RideChatScreen() {
     return () => unsubRide();
   }, [rideId, userMap]);
 
-  // Listen for incoming messages
   useEffect(() => {
     if (!rideId) return;
 
@@ -154,7 +132,6 @@ export default function RideChatScreen() {
       const msgs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       setMessages(msgs);
 
-      // build userMap for avatar & name lookups
       const uniqueIds = Array.from(
         new Set(msgs.map((m) => m.senderId).filter(Boolean))
       );
@@ -172,14 +149,12 @@ export default function RideChatScreen() {
         }
       }
       setUserMap(newMap);
-
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
     });
 
     return () => unsubscribe();
   }, [rideId, userMap]);
 
-  // Load ride info
   useEffect(() => {
     if (!rideId) return;
     (async () => {
@@ -198,13 +173,14 @@ export default function RideChatScreen() {
       await addDoc(collection(db, "rides", String(rideId), "messages"), {
         text: input.trim(),
         senderId: user.id,
-        senderName: user.username || user.fullName || "Anonymous",
+        senderName: user.fullName || user.primaryEmailAddress || "Anonymous",
         avatar: user.imageUrl || DEFAULT_AVATAR,
         timestamp: serverTimestamp(),
       });
+
       setInput("");
     } catch (err) {
-      console.error("Failed to send message:", err);
+      console.error("❌ Error sending message:", err);
     }
   };
 
@@ -216,7 +192,6 @@ export default function RideChatScreen() {
         keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       >
         <Box flex={1} bg="#121212" pt={insets.top}>
-          {/* Header with Back Button and Title */}
           <HStack
             alignItems="center"
             px="$4"

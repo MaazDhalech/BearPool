@@ -15,13 +15,10 @@ import {
 } from "@gluestack-ui/themed";
 import { useRouter } from "expo-router";
 import {
-  Timestamp,
   collection,
   doc,
   getDoc,
-  limit,
   onSnapshot,
-  orderBy,
   query,
   serverTimestamp,
   updateDoc,
@@ -34,7 +31,7 @@ const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
 
 export default function ChatsScreen() {
-  const { expoPushToken } = usePushNotifications(); // ✅ Correct usage
+  const { expoPushToken } = usePushNotifications();
   const [chatGroups, setChatGroups] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -44,9 +41,7 @@ export default function ChatsScreen() {
   const router = useRouter();
 
   const unsubRidesRef = useRef<(() => void) | null>(null);
-  const unsubMsgsRef = useRef<Array<() => void>>([]);
 
-  // ✅ Save push token to Firestore if new
   useEffect(() => {
     if (!userId || !expoPushToken?.data) return;
 
@@ -61,8 +56,6 @@ export default function ChatsScreen() {
             expoPushToken: expoPushToken.data,
           });
           console.log("✅ Push token saved to Firestore from ChatsScreen");
-        } else {
-          console.log("ℹ️ Push token already up-to-date (ChatsScreen)");
         }
       } catch (err) {
         console.error("❌ Error saving push token:", err);
@@ -79,14 +72,11 @@ export default function ChatsScreen() {
 
     return () => {
       unsubRidesRef.current?.();
-      unsubMsgsRef.current.forEach(u => u());
     };
   }, [userId]);
 
   const setupListeners = async () => {
     unsubRidesRef.current?.();
-    unsubMsgsRef.current.forEach(unsub => unsub());
-    unsubMsgsRef.current = [];
 
     setError(null);
     setLoading(true);
@@ -137,63 +127,6 @@ export default function ChatsScreen() {
         setChatGroups(groups);
         setLoading(false);
         setRefreshing(false);
-
-        rideSnap.docs.forEach(docSnap => {
-          const rideId = docSnap.id;
-          const data = docSnap.data() as any;
-          const lr = userId && data.lastRead ? (data.lastRead[userId] as Timestamp | undefined) : undefined;
-          const lastReadTs = lr instanceof Timestamp
-            ? lr
-            : Timestamp.fromMillis(0);
-
-          const msgQ = query(
-            collection(db, "rides", rideId, "messages"),
-            orderBy("timestamp", "desc"),
-            limit(1)
-          );
-          const unsubLatest = onSnapshot(msgQ, msgSnap => {
-            const latest = msgSnap.docs[0]?.data();
-            setChatGroups(prev =>
-              prev
-                .map(g => {
-                  if (g.id !== rideId) return g;
-                  return {
-                    ...g,
-                    preview: latest?.text ?? "No messages yet",
-                    time:
-                      latest?.timestamp
-                        ?.toDate()
-                        .toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit"
-                        }) ?? "—",
-                    lastMessageTs:
-                      (latest?.timestamp as any)?.toMillis() || 0
-                  };
-                })
-                .sort((a, b) => {
-                  const aKey = a.lastMessageTs || a.joinedAt;
-                  const bKey = b.lastMessageTs || b.joinedAt;
-                  return bKey - aKey;
-                })
-            );
-          });
-          unsubMsgsRef.current.push(unsubLatest);
-
-          const unreadQ = query(
-            collection(db, "rides", rideId, "messages"),
-            where("timestamp", ">", lastReadTs)
-          );
-          const unsubUnread = onSnapshot(unreadQ, snap => {
-            const count = snap.docs.length;
-            setChatGroups(prev =>
-              prev.map(g =>
-                g.id === rideId ? { ...g, unreadCount: count } : g
-              )
-            );
-          });
-          unsubMsgsRef.current.push(unsubUnread);
-        });
       },
       err => {
         console.error("rides listener error", err);
@@ -265,13 +198,6 @@ export default function ChatsScreen() {
                     <Text fontWeight="$bold" fontSize="$md" color="white">
                       {grp.title}
                     </Text>
-                    {grp.unreadCount > 0 && (
-                      <Box bg="$red600" px="$2" py="$1" borderRadius="$sm">
-                        <Text color="white" fontSize="$2xs">
-                          {grp.unreadCount} new
-                        </Text>
-                      </Box>
-                    )}
                   </HStack>
                   <HStack justifyContent="space-between">
                     <Text color="#aaa" numberOfLines={1} flex={1}>
