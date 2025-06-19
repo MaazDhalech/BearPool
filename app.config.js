@@ -6,7 +6,7 @@ export default {
     slug: "BearPool",
     version: "1.0.0",
     orientation: "portrait",
-    icon: "./assets/images/icon.png",
+    icon: "./assets/images/newicon.png",
     scheme: "bearpool",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
@@ -36,7 +36,7 @@ export default {
       [
         "expo-splash-screen",
         {
-          image: "./assets/images/splash-icon.png",
+          image: "./assets/images/newsplash-icon.png",
           imageWidth: 200,
           resizeMode: "contain",
           backgroundColor: "#ffffff",
