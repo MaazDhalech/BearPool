@@ -1,4 +1,3 @@
-import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { db } from "@/services/firebaseConfig";
 import { useAuth } from "@clerk/clerk-expo";
 import {
@@ -20,8 +19,6 @@ import {
   getDoc,
   onSnapshot,
   query,
-  serverTimestamp,
-  updateDoc,
   where
 } from "firebase/firestore";
 import { useEffect, useRef, useState } from "react";
@@ -31,7 +28,6 @@ const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
 
 export default function ChatsScreen() {
-  const { expoPushToken } = usePushNotifications();
   const [chatGroups, setChatGroups] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -43,29 +39,6 @@ export default function ChatsScreen() {
   const unsubRidesRef = useRef<(() => void) | null>(null);
   const userCache = useRef<{ [uid: string]: { id: string; avatar: string } }>({});
   let readCounter = 0;
-
-  useEffect(() => {
-    if (!userId || !expoPushToken?.data) return;
-
-    const saveTokenToFirestore = async () => {
-      try {
-        const userRef = doc(db, "users", userId);
-        const userSnap = await getDoc(userRef);
-        const existingToken = userSnap.exists() ? userSnap.data()?.expoPushToken : null;
-
-        if (existingToken !== expoPushToken.data) {
-          await updateDoc(userRef, {
-            expoPushToken: expoPushToken.data,
-          });
-          console.log("✅ Push token saved to Firestore from ChatsScreen");
-        }
-      } catch (err) {
-        console.error("❌ Error saving push token:", err);
-      }
-    };
-
-    saveTokenToFirestore();
-  }, [expoPushToken, userId]);
 
   useEffect(() => {
     if (!userId) return;
@@ -97,7 +70,6 @@ export default function ChatsScreen() {
 
   const setupListeners = async () => {
     unsubRidesRef.current?.();
-
     setError(null);
     setLoading(true);
 
@@ -109,30 +81,25 @@ export default function ChatsScreen() {
     unsubRidesRef.current = onSnapshot(
       ridesQ,
       async rideSnap => {
-        console.log("🚨 onSnapshot triggered for rides");
         const groups: any[] = [];
+
         for (const docSnap of rideSnap.docs) {
           const ride = docSnap.data();
-          groups.push({
-            id: docSnap.id,
-            title: `${ride.from} → ${ride.to}`,
-            preview: "No messages yet",
-            time: "—",
-            members: [] as any[],
-            joinedAt: (ride.createdAt as any)?.toMillis() || 0,
-            lastMessageTs: 0,
-            unreadCount: 0,
-          });
-        }
+          const rideId = docSnap.id;
 
-        await Promise.all(
-          groups.map(async g => {
-            const rideDoc = rideSnap.docs.find(d => d.id === g.id)!;
-            const ids: string[] = rideDoc.data().memberIds || [];
-            const members = await Promise.all(ids.map(uid => getUserData(uid)));
-            g.members = members.filter(Boolean);
-          })
-        );
+          const group: any = {
+            id: rideId,
+            title: `${ride.from} → ${ride.to}`,
+            members: [] as any[],
+            joinedAt: (ride.createdAt as any)?.toMillis() || 0
+          };
+
+          const ids: string[] = ride.memberIds || [];
+          const members = await Promise.all(ids.map(uid => getUserData(uid)));
+          group.members = members.filter(Boolean);
+
+          groups.push(group);
+        }
 
         setChatGroups(groups);
         setLoading(false);
@@ -153,9 +120,6 @@ export default function ChatsScreen() {
   };
 
   const handlePress = async (rideId: string) => {
-    await updateDoc(doc(db, "rides", rideId), {
-      [`lastRead.${userId}`]: serverTimestamp()
-    });
     router.push({
       pathname: "/(stack)/ride/[id]/chat",
       params: { id: rideId }
@@ -207,14 +171,6 @@ export default function ChatsScreen() {
                   <HStack justifyContent="space-between" alignItems="center">
                     <Text fontWeight="$bold" fontSize="$md" color="white">
                       {grp.title}
-                    </Text>
-                  </HStack>
-                  <HStack justifyContent="space-between">
-                    <Text color="#aaa" numberOfLines={1} flex={1}>
-                      {grp.preview}
-                    </Text>
-                    <Text fontSize="$xs" color="#999">
-                      {grp.time}
                     </Text>
                   </HStack>
                   <Text color="#666" fontSize="$xs" italic>
