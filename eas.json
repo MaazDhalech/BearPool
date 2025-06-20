@@ -18,7 +18,12 @@
       }
     },
     "production": {
-      "autoIncrement": true
+      "distribution": "store",
+      "autoIncrement": true,
+      "ios": {
+        "simulator": false,
+        "buildConfiguration": "Release"
+      }
     }
   },
   "submit": {

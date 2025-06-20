@@ -4,8 +4,8 @@ import { Ionicons } from "@expo/vector-icons";
 import {
   Avatar,
   Box,
-  Heading,
   HStack,
+  Heading,
   Input,
   InputField,
   Pressable,
@@ -27,10 +27,9 @@ import {
 import { useEffect, useRef, useState } from "react";
 import {
   Animated,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  TouchableWithoutFeedback,
+  InteractionManager,
+  Keyboard, KeyboardAvoidingView, Platform,
+  TouchableWithoutFeedback
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -79,6 +78,21 @@ export default function RideChatScreen() {
     inputRange: [0, 1],
     outputRange: ["#3a7bd5", "#122a58"],
   });
+
+  const fetchUserDetails = async (uid: string) => {
+    if (userMap[uid]) return; // Prevent refetching
+    const uDoc = await getDoc(doc(db, "users", uid));
+    if (uDoc.exists()) {
+      const d = uDoc.data();
+      setUserMap((prev) => ({
+        ...prev,
+        [uid]: {
+          name: d.username || "Anonymous",
+          avatar: d.avatar || DEFAULT_AVATAR,
+        },
+      }));
+    }
+  };
 
   // Listen for membership changes to post system messages
   useEffect(() => {
@@ -149,7 +163,9 @@ export default function RideChatScreen() {
         }
       }
       setUserMap(newMap);
-      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+      InteractionManager.runAfterInteractions(() => {
+        scrollRef.current?.scrollToEnd({ animated: true });
+      });
     });
 
     return () => unsubscribe();
@@ -167,173 +183,203 @@ export default function RideChatScreen() {
   }, [rideId]);
 
   const handleSend = async () => {
-    if (!input.trim() || !user?.id) return;
+    console.log("📨 handleSend triggered");
 
+    const trimmed = input.trim();
+  
+    if (!trimmed) {
+      console.warn("✋ Empty input. Aborting send.");
+      return;
+    }
+  
+    if (!rideId) {
+      console.error("❌ rideId is undefined.");
+      return;
+    }
+  
+    if (!user?.id) {
+      console.error("❌ Clerk user is not available.");
+      return;
+    }
+  
     try {
+      console.log("📤 Sending message:", {
+        text: trimmed,
+        senderId: user.id,
+        senderName: user.fullName || user.primaryEmailAddress || "Anonymous",
+        avatar: user.imageUrl || DEFAULT_AVATAR,
+      });
+  
       await addDoc(collection(db, "rides", String(rideId), "messages"), {
-        text: input.trim(),
+        text: trimmed,
         senderId: user.id,
         senderName: user.fullName || user.primaryEmailAddress || "Anonymous",
         avatar: user.imageUrl || DEFAULT_AVATAR,
         timestamp: serverTimestamp(),
       });
-
+  
       setInput("");
     } catch (err) {
-      console.error("❌ Error sending message:", err);
+      console.error("❌ Failed to send message:", JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
     }
   };
+  
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
-      >
-        <Box flex={1} bg="#121212" pt={insets.top}>
-          <HStack
-            alignItems="center"
-            px="$4"
-            py="$3"
-            borderBottomWidth="$1"
-            borderBottomColor="#333"
-          >
-            <Pressable
-              onPress={() => router.back()}
-              p="$2"
-              borderRadius="$full"
-              mr="$3"
+      <Box flex={1}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          keyboardVerticalOffset={0}
+        >
+          <Box flex={1} bg="#121212" pt={insets.top}>
+            {/* Header */}
+            <HStack
+              alignItems="center"
+              px="$4"
+              py="$3"
+              borderBottomWidth="$1"
+              borderBottomColor="#333"
             >
-              <HStack alignItems="center" space="sm">
-                <Ionicons name="arrow-back" size={24} color="white" />
-                <Heading size="sm" color="white">
-                  Back
-                </Heading>
-              </HStack>
-            </Pressable>
-          </HStack>
-
-          <Box flex={1} px="$3" py="$4">
-            {rideInfo && (
               <Pressable
-                onPress={() =>
-                  router.push({
-                    pathname: "/(stack)/ride/[id]/group-settings",
-                    params: { id: rideId as string },
-                  })
-                }
+                onPress={() => router.back()}
+                p="$2"
+                borderRadius="$full"
+                mr="$3"
               >
-                <Box alignItems="center" paddingVertical={8} marginBottom={16}>
-                  <Text
-                    style={{
-                      fontSize: 18,
-                      fontWeight: "600",
-                      color: "white",
-                      textAlign: "center",
-                    }}
-                  >
-                    {rideInfo.from} → {rideInfo.to}
-                  </Text>
-                </Box>
+                <HStack alignItems="center" space="sm">
+                  <Ionicons name="arrow-back" size={24} color="white" />
+                  <Heading size="sm" color="white">
+                    Back
+                  </Heading>
+                </HStack>
               </Pressable>
-            )}
+            </HStack>
 
-            <ScrollView
-              flex={1}
-              ref={scrollRef}
-              mb="$4"
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-            >
-              <VStack space="sm">
-                {messages.map((msg) => {
-                  const isSystem = !!msg.system;
-                  const isCurrentUser = msg.senderId === user?.id;
-                  const sender = userMap[msg.senderId] || {
-                    name: msg.senderName || "Unknown",
-                    avatar: msg.avatar || DEFAULT_AVATAR,
-                  };
-
-                  if (isSystem) {
-                    return (
-                      <Text
-                        key={msg.id}
-                        fontSize="$xs"
-                        color="#888"
-                        textAlign="center"
-                        my="$2"
-                      >
-                        {msg.text}
-                      </Text>
-                    );
+            <Box flex={1} px="$3" py="$4">
+              {/* Ride Info */}
+              {rideInfo && (
+                <Pressable
+                  onPress={() =>
+                    router.push({
+                      pathname: "/(stack)/ride/[id]/group-settings",
+                      params: { id: rideId as string },
+                    })
                   }
-
-                  return (
-                    <HStack
-                      key={msg.id}
-                      space="sm"
-                      alignItems="flex-end"
-                      justifyContent={isCurrentUser ? "flex-end" : "flex-start"}
+                >
+                  <Box alignItems="center" paddingVertical={8} marginBottom={16}>
+                    <Text
+                      style={{
+                        fontSize: 18,
+                        fontWeight: "600",
+                        color: "white",
+                        textAlign: "center",
+                      }}
                     >
-                      {!isCurrentUser && (
-                        <Avatar size="sm" bgColor="#1e1e1e">
-                          <Avatar.Image
-                            source={{ uri: sender.avatar }}
-                            alt="User avatar"
-                          />
-                        </Avatar>
-                      )}
+                      {rideInfo.from} → {rideInfo.to}
+                    </Text>
+                  </Box>
+                </Pressable>
+              )}
 
-                      <VStack
-                        alignItems={isCurrentUser ? "flex-end" : "flex-start"}
-                        maxWidth="80%"
+              {/* Messages */}
+              <ScrollView
+                ref={scrollRef}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ flexGrow: 1, paddingBottom: 90 }}
+              >
+
+                <VStack space="sm">
+                  {messages.map((msg) => {
+                    const isSystem = !!msg.system;
+                    const isCurrentUser = msg.senderId === user?.id;
+                    const sender = userMap[msg.senderId] || {
+                      name: msg.senderName || "Unknown",
+                      avatar: msg.avatar || DEFAULT_AVATAR,
+                    };
+
+                    if (isSystem) {
+                      return (
+                        <Text
+                          key={msg.id}
+                          fontSize="$xs"
+                          color="#888"
+                          textAlign="center"
+                          my="$2"
+                        >
+                          {msg.text}
+                        </Text>
+                      );
+                    }
+
+                    return (
+                      <HStack
+                        key={msg.id}
+                        space="sm"
+                        alignItems="flex-end"
+                        justifyContent={isCurrentUser ? "flex-end" : "flex-start"}
                       >
                         {!isCurrentUser && (
-                          <Text fontSize="$xs" color="#aaaaaa" mb="$1">
-                            {sender.name}
-                          </Text>
+                          <Avatar size="sm" bgColor="#1e1e1e">
+                            <Avatar.Image
+                              source={{ uri: sender.avatar }}
+                              alt="User avatar"
+                            />
+                          </Avatar>
                         )}
 
-                        <Box
-                          px="$4"
-                          py="$2"
-                          bg={isCurrentUser ? "#3a7bd5" : "#1e1e1e"}
-                          borderTopLeftRadius={isCurrentUser ? "$xl" : "$sm"}
-                          borderTopRightRadius={isCurrentUser ? "$sm" : "$xl"}
-                          borderBottomLeftRadius="$xl"
-                          borderBottomRightRadius="$xl"
+                        <VStack
+                          alignItems={isCurrentUser ? "flex-end" : "flex-start"}
+                          maxWidth="80%"
                         >
-                          <Text
-                            color={isCurrentUser ? "#ffffff" : "#e0e0e0"}
-                            fontSize="$sm"
-                          >
-                            {msg.text}
-                          </Text>
-                        </Box>
+                          {!isCurrentUser && (
+                            <Text fontSize="$xs" color="#aaaaaa" mb="$1">
+                              {sender.name}
+                            </Text>
+                          )}
 
-                        {msg.timestamp?.toDate && (
-                          <Text
-                            fontSize="$xs"
-                            color="#888888"
-                            mt="$1"
-                            mb="$1"
-                            textAlign={isCurrentUser ? "right" : "left"}
+                          <Box
+                            px="$4"
+                            py="$2"
+                            bg={isCurrentUser ? "#3a7bd5" : "#1e1e1e"}
+                            borderTopLeftRadius={isCurrentUser ? "$xl" : "$sm"}
+                            borderTopRightRadius={isCurrentUser ? "$sm" : "$xl"}
+                            borderBottomLeftRadius="$xl"
+                            borderBottomRightRadius="$xl"
                           >
-                            {msg.timestamp.toDate().toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </Text>
-                        )}
-                      </VStack>
-                    </HStack>
-                  );
-                })}
-              </VStack>
-            </ScrollView>
+                            <Text
+                              color={isCurrentUser ? "#ffffff" : "#e0e0e0"}
+                              fontSize="$sm"
+                            >
+                              {msg.text}
+                            </Text>
+                          </Box>
 
-            <Box mt="$1" mb="$4">
+                          {msg.timestamp?.toDate && (
+                            <Text
+                              fontSize="$xs"
+                              color="#888888"
+                              mt="$1"
+                              mb="$1"
+                              textAlign={isCurrentUser ? "right" : "left"}
+                            >
+                              {msg.timestamp.toDate().toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </Text>
+                          )}
+                        </VStack>
+                      </HStack>
+                    );
+                  })}
+                </VStack>
+              </ScrollView>
+
+              {/* Message Input + Send Button */}
               <HStack
                 space="sm"
                 alignItems="center"
@@ -341,6 +387,7 @@ export default function RideChatScreen() {
                 bg="transparent"
                 p="$2"
                 borderRadius="$xl"
+                pb={Platform.OS === "android" ? "$6" : "$2"}
               >
                 <Input
                   flex={1}
@@ -363,7 +410,7 @@ export default function RideChatScreen() {
                   />
                 </Input>
 
-                <TouchableWithoutFeedback
+                <Pressable
                   onPressIn={animatePressIn}
                   onPressOut={animatePressOut}
                   onPress={handleSend}
@@ -378,12 +425,12 @@ export default function RideChatScreen() {
                   >
                     <Text color="white">Send</Text>
                   </Animated.View>
-                </TouchableWithoutFeedback>
+                </Pressable>
               </HStack>
             </Box>
           </Box>
-        </Box>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </Box>
     </TouchableWithoutFeedback>
   );
 }

@@ -3,6 +3,7 @@ import { config } from "@/gluestack-ui.config";
 import { ClerkProvider } from "@clerk/clerk-expo";
 import { GluestackUIProvider } from "@gluestack-ui/themed";
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
+import Constants from "expo-constants"; // ✅ For runtime secrets
 import { useFonts } from "expo-font";
 import * as Notifications from "expo-notifications";
 import { Stack } from "expo-router";
@@ -11,7 +12,7 @@ import { StatusBar as ExpoStatusBar } from "expo-status-bar";
 import { Platform, StatusBar, View } from "react-native";
 import "react-native-reanimated";
 
-// ✅ Fixed: Full notification behavior for newer Expo SDKs
+// ✅ Set full notification behavior
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -22,7 +23,8 @@ Notifications.setNotificationHandler({
   }),
 });
 
-const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY || "";
+// ✅ Access Clerk publishable key via correct env variable
+const publishableKey = Constants.expoConfig?.extra?.clerkPublishableKey || "";
 
 const tokenCache = {
   getToken: (key: string) => SecureStore.getItemAsync(key),
@@ -35,7 +37,10 @@ export default function RootLayout() {
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
 
-  if (!loaded) {
+  if (!loaded || !publishableKey) {
+    if (!publishableKey) {
+      console.error("❌ Clerk publishable key is missing! App may crash.");
+    }
     return null;
   }
 
