@@ -107,8 +107,16 @@ export default function HomeScreen() {
     rideData.forEach((ride) => {
       ride.memberIds.forEach((uid) => allUserIds.add(uid));
     });
-
-    for (const uid of allUserIds) {
+    const newUsersData: Record<string, User> = {};
+    const uidsToFetch: string[] = [];
+    
+    allUserIds.forEach((uid) => {
+      if (!users[uid]) {
+        uidsToFetch.push(uid);
+      }
+    });
+    
+    for (const uid of uidsToFetch) {
       try {
         const userDoc = await getDoc(doc(db, "users", uid));
         if (userDoc.exists()) {

@@ -41,6 +41,8 @@ export default function ChatsScreen() {
   const router = useRouter();
 
   const unsubRidesRef = useRef<(() => void) | null>(null);
+  const userCache = useRef<{ [uid: string]: { id: string; avatar: string } }>({});
+  let readCounter = 0;
 
   useEffect(() => {
     if (!userId || !expoPushToken?.data) return;
@@ -75,6 +77,24 @@ export default function ChatsScreen() {
     };
   }, [userId]);
 
+  const getUserData = async (uid: string) => {
+    if (userCache.current[uid]) return userCache.current[uid];
+    try {
+      const udoc = await getDoc(doc(db, "users", uid));
+      readCounter++;
+      console.log(`📚 Firestore user read #${readCounter} for ${uid}`);
+      if (udoc.exists()) {
+        const d = udoc.data();
+        const user = { id: uid, avatar: d.avatar || DEFAULT_AVATAR };
+        userCache.current[uid] = user;
+        return user;
+      }
+    } catch (err) {
+      console.error("❌ Error fetching user:", err);
+    }
+    return null;
+  };
+
   const setupListeners = async () => {
     unsubRidesRef.current?.();
 
@@ -89,6 +109,7 @@ export default function ChatsScreen() {
     unsubRidesRef.current = onSnapshot(
       ridesQ,
       async rideSnap => {
+        console.log("🚨 onSnapshot triggered for rides");
         const groups: any[] = [];
         for (const docSnap of rideSnap.docs) {
           const ride = docSnap.data();
@@ -108,18 +129,7 @@ export default function ChatsScreen() {
           groups.map(async g => {
             const rideDoc = rideSnap.docs.find(d => d.id === g.id)!;
             const ids: string[] = rideDoc.data().memberIds || [];
-            const members = await Promise.all(
-              ids.map(async uid => {
-                try {
-                  const udoc = await getDoc(doc(db, "users", uid));
-                  if (udoc.exists()) {
-                    const d = udoc.data();
-                    return { id: uid, avatar: d.avatar || DEFAULT_AVATAR };
-                  }
-                } catch {}
-                return null;
-              })
-            );
+            const members = await Promise.all(ids.map(uid => getUserData(uid)));
             g.members = members.filter(Boolean);
           })
         );
