@@ -63,8 +63,6 @@
     <array>
       <string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>
     </array>
-    <key>NSUserTrackingUsageDescription</key>
-    <string>This identifier will be used to deliver personalized notifications.</string>
     <key>UIBackgroundModes</key>
     <array>
       <string>remote-notification</string>

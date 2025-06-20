@@ -15,8 +15,6 @@ export default {
       supportsTablet: true,
       infoPlist: {
         UIBackgroundModes: ["remote-notification"],
-        NSUserTrackingUsageDescription:
-          "This identifier will be used to deliver personalized notifications.",
       },
     },
     android: {
