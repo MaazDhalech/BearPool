@@ -12,7 +12,7 @@ export default {
     newArchEnabled: true,
     ios: {
       bundleIdentifier: "com.rebu.bearpool",
-      supportsTablet: false,
+      supportsTablet: true,
       infoPlist: {
         UIBackgroundModes: ["remote-notification"],
       },
