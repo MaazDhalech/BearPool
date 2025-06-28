@@ -13,6 +13,7 @@ import {
   Text,
   VStack,
 } from "@gluestack-ui/themed";
+import { Filter } from 'bad-words';
 import { router, useLocalSearchParams } from "expo-router";
 import {
   addDoc,
@@ -26,9 +27,12 @@ import {
 } from "firebase/firestore";
 import { useEffect, useRef, useState } from "react";
 import {
+  Alert,
   Animated,
   InteractionManager,
-  Keyboard, KeyboardAvoidingView, Platform,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   TouchableWithoutFeedback
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -55,8 +59,23 @@ export default function RideChatScreen() {
   const scrollRef = useRef<any>(null);
   const insets = useSafeAreaInsets();
 
+  // Initialize content filter
+  const filter = useRef(new Filter()).current;
+
   const animatedValue = useRef(new Animated.Value(0)).current;
   const prevMembersRef = useRef<string[]>([]);
+
+  // Configure filter settings (optional customization)
+  useEffect(() => {
+    // You can add custom words to the filter
+    // filter.addWords('customword1', 'customword2');
+    
+    // You can remove words if needed
+    // filter.removeWords('word1', 'word2');
+    
+    // Set placeholder character (default is '*')
+    filter.placeHolder = '*';
+  }, []);
 
   const animatePressIn = () => {
     Animated.timing(animatedValue, {
@@ -78,6 +97,13 @@ export default function RideChatScreen() {
     inputRange: [0, 1],
     outputRange: ["#3a7bd5", "#122a58"],
   });
+
+  // Content filtering function
+  const filterContent = (text: string): { filtered: string; containsProfanity: boolean } => {
+    const containsProfanity = filter.isProfane(text);
+    const filtered = filter.clean(text);
+    return { filtered, containsProfanity };
+  };
 
   const fetchUserDetails = async (uid: string) => {
     if (userMap[uid]) return; // Prevent refetching
@@ -182,6 +208,30 @@ export default function RideChatScreen() {
     })();
   }, [rideId]);
 
+  const sendMessage = async (messageText: string) => {
+    try {
+      console.log("📤 Sending message:", {
+        text: messageText,
+        senderId: user?.id,
+        senderName: user?.fullName || user?.primaryEmailAddress || "Anonymous",
+        avatar: user?.imageUrl || DEFAULT_AVATAR,
+      });
+
+      await addDoc(collection(db, "rides", String(rideId), "messages"), {
+        text: messageText,
+        senderId: user?.id,
+        senderName: user?.fullName || user?.primaryEmailAddress || "Anonymous",
+        avatar: user?.imageUrl || DEFAULT_AVATAR,
+        timestamp: serverTimestamp(),
+      });
+
+      setInput("");
+    } catch (err) {
+      console.error("❌ Failed to send message:", JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
+      Alert.alert("Error", "Failed to send message. Please try again.");
+    }
+  };
+
   const handleSend = async () => {
     console.log("📨 handleSend triggered");
 
@@ -201,29 +251,54 @@ export default function RideChatScreen() {
       console.error("❌ Clerk user is not available.");
       return;
     }
-  
-    try {
-      console.log("📤 Sending message:", {
-        text: trimmed,
-        senderId: user.id,
-        senderName: user.fullName || user.primaryEmailAddress || "Anonymous",
-        avatar: user.imageUrl || DEFAULT_AVATAR,
-      });
-  
-      await addDoc(collection(db, "rides", String(rideId), "messages"), {
-        text: trimmed,
-        senderId: user.id,
-        senderName: user.fullName || user.primaryEmailAddress || "Anonymous",
-        avatar: user.imageUrl || DEFAULT_AVATAR,
-        timestamp: serverTimestamp(),
-      });
-  
-      setInput("");
-    } catch (err) {
-      console.error("❌ Failed to send message:", JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
+
+    const { filtered, containsProfanity } = filterContent(trimmed);
+
+    // Option 1: Block messages with profanity entirely
+    if (containsProfanity) {
+      Alert.alert(
+        "Message Not Sent",
+        "Your message contains inappropriate language and cannot be sent. Please revise your message.",
+        [{ text: "OK" }]
+      );
+      return;
     }
+
+    // Option 2: Send filtered message (uncomment this and comment out the above if you prefer filtering)
+    /*
+    if (containsProfanity) {
+      Alert.alert(
+        "Message Filtered",
+        "Your message contained inappropriate language and has been filtered.",
+        [
+          {
+            text: "Cancel",
+            style: "cancel"
+          },
+          {
+            text: "Send Anyway",
+            onPress: async () => {
+              await sendMessage(filtered);
+            }
+          }
+        ]
+      );
+      return;
+    }
+    */
+
+    await sendMessage(filtered);
   };
-  
+
+  // Real-time input validation (optional - shows warning as user types)
+  const handleInputChange = (text: string) => {
+    setInput(text);
+    
+    // Optional: Show real-time feedback
+    // if (filter.isProfane(text)) {
+    //   // Could show a warning indicator here
+    // }
+  };
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -291,7 +366,6 @@ export default function RideChatScreen() {
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ flexGrow: 1, paddingBottom: 90 }}
               >
-
                 <VStack space="sm">
                   {messages.map((msg) => {
                     const isSystem = !!msg.system;
@@ -403,7 +477,7 @@ export default function RideChatScreen() {
                     placeholderTextColor="#777"
                     color="white"
                     value={input}
-                    onChangeText={setInput}
+                    onChangeText={handleInputChange}
                     multiline
                     textAlignVertical="top"
                     style={{ maxHeight: 100 }}

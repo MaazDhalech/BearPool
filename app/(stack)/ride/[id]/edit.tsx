@@ -1,6 +1,7 @@
 import { db } from "@/services/firebaseConfig";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
+import { Filter } from "bad-words";
 import { format, isValid, parse } from "date-fns";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
@@ -37,9 +38,29 @@ export default function EditRideScreen() {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
 
+  // Initialize content filter
+  const filter = new Filter();
+
   const getSafeSeats = () => {
     const parsed = parseInt(seats, 10);
     return isNaN(parsed) ? 1 : parsed;
+  };
+
+  // Content filtering function
+  const validateContent = (text: string, fieldName: string): boolean => {
+    if (filter.isProfane(text)) {
+      Alert.alert(
+        "Inappropriate Content",
+        `Please remove inappropriate language from the ${fieldName} field.`
+      );
+      return false;
+    }
+    return true;
+  };
+
+  // Clean content function (alternative approach)
+  const cleanContent = (text: string): string => {
+    return filter.clean(text);
   };
 
   function validateAndFormatDate(dateStr: string): string | null {
@@ -97,6 +118,28 @@ export default function EditRideScreen() {
     return null;
   }
 
+  // Handler for real-time content filtering in text inputs
+  const handleTextChange = (text: string, setter: (value: string) => void, maxLength?: number) => {
+    if (maxLength && text.length > maxLength) {
+      return;
+    }
+    
+    // Option 1: Block inappropriate content immediately
+    if (filter.isProfane(text)) {
+      Alert.alert(
+        "Inappropriate Content",
+        "Please avoid using inappropriate language."
+      );
+      return;
+    }
+    
+    // Option 2: Auto-clean content (comment out the above if using this)
+    // const cleanedText = filter.clean(text);
+    // setter(cleanedText);
+    
+    setter(text);
+  };
+
   // Load existing ride data
   useEffect(() => {
     const loadRideData = async () => {
@@ -146,6 +189,11 @@ export default function EditRideScreen() {
       return;
     }
 
+    // Validate content for inappropriate language
+    if (!validateContent(from, "From")) return;
+    if (!validateContent(to, "To")) return;
+    if (!validateContent(notes, "Additional Notes")) return;
+
     const formattedDate = validateAndFormatDate(date);
     if (!formattedDate) {
       Alert.alert(
@@ -173,13 +221,18 @@ export default function EditRideScreen() {
     try {
       const rideRef = doc(db, "rides", id as string);
 
+      // Clean content before saving (optional: use either validation or cleaning)
+      const cleanedFrom = cleanContent(from);
+      const cleanedTo = cleanContent(to);
+      const cleanedNotes = cleanContent(notes);
+
       await updateDoc(rideRef, {
-        from,
-        to,
+        from: cleanedFrom,
+        to: cleanedTo,
         date: formattedDate,
         time: formattedTime,
         seats: Number(getSafeSeats()),
-        notes,
+        notes: cleanedNotes,
         genderPref,
       });
 
@@ -294,7 +347,7 @@ export default function EditRideScreen() {
                 value={value}
                 placeholder={placeholder}
                 placeholderTextColor="#666"
-                onChangeText={setter}
+                onChangeText={(text) => handleTextChange(text, setter)}
                 style={{
                   backgroundColor: "#1e1e1e",
                   color: "#ffffff",
@@ -349,8 +402,8 @@ export default function EditRideScreen() {
               <TouchableOpacity
                 onPress={() =>
                   setSeats(String(Math.min(5, getSafeSeats() + 1)))
-                } // max 5 now
-                disabled={getSafeSeats() >= 5} // disable if 5 or more
+                }
+                disabled={getSafeSeats() >= 5}
                 style={{
                   backgroundColor: getSafeSeats() >= 5 ? "#333" : "#3a7bd5",
                   padding: 12,
@@ -419,11 +472,7 @@ export default function EditRideScreen() {
               value={notes}
               placeholder="Optional"
               placeholderTextColor="#666"
-              onChangeText={(text) => {
-                if (text.length <= MAX_NOTES_LENGTH) {
-                  setNotes(text);
-                }
-              }}
+              onChangeText={(text) => handleTextChange(text, setNotes, MAX_NOTES_LENGTH)}
               maxLength={MAX_NOTES_LENGTH}
               multiline={true}
               style={{

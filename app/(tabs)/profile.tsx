@@ -24,7 +24,46 @@ import {
   updateDoc
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { Platform, TouchableOpacity } from "react-native";
+import { Alert, Platform, TouchableOpacity } from "react-native";
+
+// Import bad-words with error handling
+let Filter: any = null;
+let filter: any = null;
+
+try {
+  // Try to import bad-words
+  const BadWordsModule = require("bad-words");
+  Filter = BadWordsModule.default || BadWordsModule;
+  filter = new Filter();
+} catch (error) {
+  console.warn("Bad-words library not available, using fallback filter:", error);
+  
+  // Fallback implementation with basic profanity list
+  const basicProfanityList = [
+    'damn', 'hell', 'shit', 'fuck', 'bitch', 'ass', 'crap', 'piss'
+    // Add more words as needed
+  ];
+  
+  filter = {
+    isProfane: (text: string) => {
+      const lowerText = text.toLowerCase();
+      return basicProfanityList.some(word => lowerText.includes(word));
+    },
+    clean: (text: string) => {
+      let cleanText = text;
+      basicProfanityList.forEach(word => {
+        const regex = new RegExp(word, 'gi');
+        cleanText = cleanText.replace(regex, '*'.repeat(word.length));
+      });
+      return cleanText;
+    }
+  };
+}
+
+// Add custom words if the library is available
+if (filter && typeof filter.addWords === 'function') {
+  // filter.addWords(['customword1', 'customword2']);
+}
 
 // Default avatar image (can be a placeholder image URL or base64 string)
 const DEFAULT_AVATAR =
@@ -38,15 +77,57 @@ export default function ProfileScreen() {
   const [profileData, setProfileData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
+  const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
+  
   type Gender = "M" | "F" | "NB" | null;
   
-    const [formData, setFormData] = useState({
-      firstName: "",
-      lastName: "",
-      username: "",
-      gender: null as Gender,
-      genderPref: "N",
-    });
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    username: "",
+    gender: null as Gender,
+    genderPref: "N",
+  });
+
+  // Single validation function that handles both checking and user feedback
+  const validateAndCleanText = (text: string, fieldName: string): { isValid: boolean; cleanedText: string; error?: string } => {
+    if (!text.trim()) {
+      return { isValid: true, cleanedText: text };
+    }
+    
+    if (filter.isProfane(text)) {
+      const cleanedText = filter.clean(text);
+      return {
+        isValid: false,
+        cleanedText,
+        error: `The ${fieldName} contains inappropriate content.`
+      };
+    }
+    
+    return { isValid: true, cleanedText: text };
+  };
+
+  // Real-time validation with user feedback
+  const handleTextChange = (field: keyof typeof formData, value: string) => {
+    // Update form data immediately for responsive UI
+    setFormData({ ...formData, [field]: value });
+    
+    // Clear previous error for this field
+    if (formErrors[field]) {
+      setFormErrors({ ...formErrors, [field]: '' });
+    }
+    
+    // Validate and show immediate feedback if needed
+    if (value.trim()) {
+      const validation = validateAndCleanText(value, field);
+      if (!validation.isValid) {
+        setFormErrors({ 
+          ...formErrors, 
+          [field]: validation.error || `${field} contains inappropriate content` 
+        });
+      }
+    }
+  };
 
   useEffect(() => {
     if (!isLoaded || !clerkUserId || !user) return;
@@ -103,40 +184,84 @@ export default function ProfileScreen() {
 
   const handleUpdateProfile = async () => {
     if (!clerkUserId || !user) return;
+    
+    // Validate all fields
+    const validations = {
+      firstName: validateAndCleanText(formData.firstName, "first name"),
+      lastName: validateAndCleanText(formData.lastName, "last name"),
+      username: validateAndCleanText(formData.username, "username"),
+    };
+
+    // Check if any validation failed
+    const hasErrors = Object.values(validations).some(v => !v.isValid);
+    
+    if (hasErrors) {
+      // Show which fields have issues
+      const errorMessages = Object.entries(validations)
+        .filter(([_, validation]) => !validation.isValid)
+        .map(([field, validation]) => `${field}: ${validation.error}`)
+        .join('\n');
+      
+      Alert.alert(
+        "Content Issues Found",
+        `Please fix the following issues:\n\n${errorMessages}`,
+        [
+          { text: "Edit", style: "cancel" }
+        ]
+      );
+      return;
+    }
+
     try {
-      // update Clerk
+      // Use the already validated data (which is clean)
+      const cleanedData = {
+        firstName: validations.firstName.cleanedText,
+        lastName: validations.lastName.cleanedText,
+        username: validations.username.cleanedText,
+        gender: formData.gender,
+        genderPref: formData.genderPref,
+      };
+
+      // Update Clerk
       await user.update({
-        firstName: formData.firstName,
-        lastName: formData.lastName,
+        firstName: cleanedData.firstName,
+        lastName: cleanedData.lastName,
       });
 
-      // update Firestore
+      // Update Firestore
       const updatedData = {
-        username: formData.username,
-        pref: formData.genderPref,
-        gender: formData.gender,
+        username: cleanedData.username,
+        pref: cleanedData.genderPref,
+        gender: cleanedData.gender,
         email: user.primaryEmailAddress?.emailAddress || "",
-        first_name: formData.firstName,
-        last_name: formData.lastName,
+        first_name: cleanedData.firstName,
+        last_name: cleanedData.lastName,
         avatar: profileData.firebaseData.avatar,
         createdAt: profileData.firebaseData.createdAt,
         ridesJoined: profileData.firebaseData.ridesJoined,
         ridesHosted: profileData.firebaseData.ridesHosted,
       };
+      
       await setDoc(doc(db, "users", clerkUserId), updatedData);
 
       setProfileData({
         clerkData: {
           ...profileData.clerkData,
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          username: formData.username,
+          firstName: cleanedData.firstName,
+          lastName: cleanedData.lastName,
+          username: cleanedData.username,
         },
         firebaseData: updatedData,
       });
+      
+      setFormData(cleanedData);
+      setFormErrors({});
       setIsEditing(false);
+      
+      Alert.alert("Success", "Profile updated successfully!", [{ text: "OK" }]);
     } catch (error) {
       console.error("Error saving profile:", error);
+      Alert.alert("Error", "Failed to update profile. Please try again.", [{ text: "OK" }]);
     }
   };
 
@@ -144,7 +269,7 @@ export default function ProfileScreen() {
     if (!clerkUserId) return;
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      alert("Camera roll permissions required");
+      Alert.alert("Permission Required", "Camera roll permissions are required to change your avatar.");
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -161,12 +286,12 @@ export default function ProfileScreen() {
       { compress: 0.4, format: ImageManipulator.SaveFormat.JPEG, base64: true }
     );
     if (!compressed.base64) {
-      alert("Image compression failed");
+      Alert.alert("Error", "Image compression failed. Please try again.");
       return;
     }
     const base64 = `data:image/jpeg;base64,${compressed.base64}`;
     if (base64.length > 900000) {
-      alert("Image too large, choose a smaller one");
+      Alert.alert("Error", "Image too large, please choose a smaller one.");
       return;
     }
     await updateDoc(doc(db, "users", clerkUserId), { avatar: base64 });
@@ -184,6 +309,7 @@ export default function ProfileScreen() {
       router.replace("/(auth)/Login");
     } catch (err) {
       console.error("Error signing out:", err);
+      Alert.alert("Error", "Failed to sign out. Please try again.");
     }
   };
 
@@ -280,37 +406,46 @@ export default function ProfileScreen() {
               {isEditing ? (
                 <>
                   <Text color="#a0a0a0">First Name</Text>
-                  <Input bg="#1e1e1e" borderColor="#333">
+                  <Input bg="#1e1e1e" borderColor={formErrors.firstName ? "#ff6b6b" : "#333"}>
                     <InputField
                       color="white"
                       value={formData.firstName}
-                      onChangeText={(t) =>
-                        setFormData({ ...formData, firstName: t })
-                      }
+                      onChangeText={(t) => handleTextChange('firstName', t)}
                     />
                   </Input>
+                  {formErrors.firstName && (
+                    <Text color="#ff6b6b" fontSize="$sm" mt="$1">
+                      {formErrors.firstName}
+                    </Text>
+                  )}
 
-                  <Text color="#a0a0a0">Last Name</Text>
-                  <Input bg="#1e1e1e" borderColor="#333">
+                  <Text color="#a0a0a0" mt="$4">Last Name</Text>
+                  <Input bg="#1e1e1e" borderColor={formErrors.lastName ? "#ff6b6b" : "#333"}>
                     <InputField
                       color="white"
                       value={formData.lastName}
-                      onChangeText={(t) =>
-                        setFormData({ ...formData, lastName: t })
-                      }
+                      onChangeText={(t) => handleTextChange('lastName', t)}
                     />
                   </Input>
+                  {formErrors.lastName && (
+                    <Text color="#ff6b6b" fontSize="$sm" mt="$1">
+                      {formErrors.lastName}
+                    </Text>
+                  )}
 
-                  <Text color="#a0a0a0">Username</Text>
-                  <Input bg="#1e1e1e" borderColor="#333">
+                  <Text color="#a0a0a0" mt="$4">Username</Text>
+                  <Input bg="#1e1e1e" borderColor={formErrors.username ? "#ff6b6b" : "#333"}>
                     <InputField
                       color="white"
                       value={formData.username}
-                      onChangeText={(t) =>
-                        setFormData({ ...formData, username: t })
-                      }
+                      onChangeText={(t) => handleTextChange('username', t)}
                     />
                   </Input>
+                  {formErrors.username && (
+                    <Text color="#ff6b6b" fontSize="$sm" mt="$1">
+                      {formErrors.username}
+                    </Text>
+                  )}
 
                   <Text color="#a0a0a0" mt="$4">
                     Gender
@@ -499,7 +634,10 @@ export default function ProfileScreen() {
                   <Button
                     variant="outline"
                     borderColor="#333"
-                    onPress={() => setIsEditing(false)}
+                    onPress={() => {
+                      setIsEditing(false);
+                      setFormErrors({});
+                    }}
                   >
                     <Text color="white">Cancel</Text>
                   </Button>
