@@ -31,7 +31,7 @@ const DEFAULT_AVATAR =
 type User = {
   id: string;
   name?: string;
-  email?: string;
+  username?: string;
   avatar?: string;
 };
 
@@ -68,14 +68,14 @@ export default function GroupSettings() {
               [data.first_name, data.last_name].filter(Boolean).join(" ") ||
               data.username ||
               "Anonymous",
-            email: data.email || "No email",
+            username: data.username || "No username",
             avatar: data.avatar || DEFAULT_AVATAR,
           });
         } else {
           usersData.push({
             id: uid,
             name: "Unknown",
-            email: "Unavailable",
+            username: "Unavailable",
             avatar: DEFAULT_AVATAR,
           });
         }
@@ -162,6 +162,14 @@ export default function GroupSettings() {
     ]);
   };
 
+  const handleAvatarPress = (userId: string) => {
+    if (userId === user?.id) {
+      router.push("/(tabs)/profile");
+    } else {
+      router.push(`/(stack)/ride/${rideId}/viewProfile?userId=${userId}`);
+    }
+  };
+
   if (!ride) return null;
 
   const isHost = user?.id === ride.hostId;
@@ -201,9 +209,11 @@ export default function GroupSettings() {
               borderRadius="$lg"
             >
               <HStack space="sm" alignItems="center">
-                <Avatar size="md">
-                  <AvatarImage source={{ uri: u.avatar }} />
-                </Avatar>
+                <Pressable onPress={() => handleAvatarPress(u.id)}>
+                  <Avatar size="md">
+                    <AvatarImage source={{ uri: u.avatar }} />
+                  </Avatar>
+                </Pressable>
                 <VStack>
                   <HStack alignItems="center" space="xs">
                     <Text color="white" fontWeight="$medium">
@@ -216,7 +226,7 @@ export default function GroupSettings() {
                     )}
                   </HStack>
                   <Text color="#aaaaaa" fontSize="$sm">
-                    {u.email}
+                    @{u.username}
                   </Text>
                 </VStack>
               </HStack>

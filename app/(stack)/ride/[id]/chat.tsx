@@ -33,6 +33,7 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
+  TouchableOpacity,
   TouchableWithoutFeedback
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -117,6 +118,20 @@ export default function RideChatScreen() {
           avatar: d.avatar || DEFAULT_AVATAR,
         },
       }));
+    }
+  };
+
+  // Navigate to user profile
+  const handleUserPress = (userId: string) => {
+    if (userId === user?.id) {
+      // If it's the current user, go to their own profile
+      router.push("/(tabs)/profile");
+    } else {
+      // Navigate to other user's profile
+      router.push({
+        pathname: "/(stack)/ride/[id]/viewProfile",
+        params: { id: rideId as string, userId }
+      });
     }
   };
 
@@ -397,12 +412,17 @@ export default function RideChatScreen() {
                         justifyContent={isCurrentUser ? "flex-end" : "flex-start"}
                       >
                         {!isCurrentUser && (
-                          <Avatar size="sm" bgColor="#1e1e1e">
-                            <Avatar.Image
-                              source={{ uri: sender.avatar }}
-                              alt="User avatar"
-                            />
-                          </Avatar>
+                          <TouchableOpacity
+                            onPress={() => handleUserPress(msg.senderId)}
+                            activeOpacity={0.7}
+                          >
+                            <Avatar size="sm" bgColor="#1e1e1e">
+                              <Avatar.Image
+                                source={{ uri: sender.avatar }}
+                                alt="User avatar"
+                              />
+                            </Avatar>
+                          </TouchableOpacity>
                         )}
 
                         <VStack
@@ -410,9 +430,14 @@ export default function RideChatScreen() {
                           maxWidth="80%"
                         >
                           {!isCurrentUser && (
-                            <Text fontSize="$xs" color="#aaaaaa" mb="$1">
-                              {sender.name}
-                            </Text>
+                            <TouchableOpacity
+                              onPress={() => handleUserPress(msg.senderId)}
+                              activeOpacity={0.7}
+                            >
+                              <Text fontSize="$xs" color="#aaaaaa" mb="$1">
+                                {sender.name}
+                              </Text>
+                            </TouchableOpacity>
                           )}
 
                           <Box
