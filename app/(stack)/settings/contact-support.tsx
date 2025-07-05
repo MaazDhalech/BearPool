@@ -1,0 +1,288 @@
+import { db } from "@/services/firebaseConfig";
+import { useAuth } from "@clerk/clerk-expo";
+import {
+    Box,
+    Button,
+    ButtonText,
+    HStack,
+    Heading,
+    Icon,
+    Input,
+    InputField,
+    ScrollView,
+    Spinner,
+    Text,
+    Textarea,
+    TextareaInput,
+    VStack,
+} from "@gluestack-ui/themed";
+import Constants from "expo-constants";
+import { useRouter } from "expo-router";
+import { doc, getDoc } from "firebase/firestore";
+import { ChevronLeft } from "lucide-react-native";
+import { useEffect, useState } from "react";
+import {
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    TouchableOpacity,
+} from "react-native";
+
+export default function ContactSupportScreen() {
+  const { userId: clerkUserId } = useAuth();
+  const router = useRouter();
+
+  const [supportForm, setSupportForm] = useState({
+    name: "",
+    email: "",
+    subject: "",
+    message: "",
+  });
+  const [submitingSupport, setSubmitingSupport] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch user data to pre-fill form
+  useEffect(() => {
+    if (!clerkUserId) return;
+
+    const fetchUserData = async () => {
+      try {
+        const userDocRef = doc(db, "users", clerkUserId);
+        const userSnap = await getDoc(userDocRef);
+
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+          setSupportForm((prev) => ({
+            ...prev,
+            name: `${userData.first_name || ""} ${
+              userData.last_name || ""
+            }`.trim(),
+            email: userData.email || "",
+          }));
+        }
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserData();
+  }, [clerkUserId]);
+
+  const handleGoBack = () => {
+    router.back();
+  };
+
+  const handleSupportSubmit = async () => {
+    if (
+      !supportForm.name ||
+      !supportForm.email ||
+      !supportForm.subject ||
+      !supportForm.message
+    ) {
+      Alert.alert("Error", "Please fill in all fields.");
+      return;
+    }
+
+    setSubmitingSupport(true);
+    try {
+      const web3formsApiKey = Constants.expoConfig?.extra?.web3formsApiKey;
+
+      if (!web3formsApiKey) {
+        Alert.alert(
+          "Error",
+          "Support service is not configured. Please contact the administrator."
+        );
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("access_key", web3formsApiKey);
+      formData.append("name", supportForm.name);
+      formData.append("email", supportForm.email);
+      formData.append("subject", `App Support - ${supportForm.subject}`);
+      formData.append("message", supportForm.message);
+      formData.append("from_name", "App Support System");
+      formData.append("replyto", supportForm.email);
+
+      const response = await fetch("https://api.web3forms.com/submit", {
+        method: "POST",
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        Alert.alert(
+          "Success!",
+          "Your support request has been submitted successfully. We'll get back to you soon!",
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                router.back();
+              },
+            },
+          ]
+        );
+      } else {
+        throw new Error(result.message || "Failed to submit support request");
+      }
+    } catch (error) {
+      console.error("Error submitting support request:", error);
+      Alert.alert(
+        "Error",
+        "Failed to submit your support request. Please try again later."
+      );
+    } finally {
+      setSubmitingSupport(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Box flex={1} bg="#121212" justifyContent="center" alignItems="center">
+        <Text color="#a0a0a0">Loading...</Text>
+      </Box>
+    );
+  }
+
+  return (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+    >
+      <Box flex={1} bg="#121212">
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{
+            paddingBottom: 60,
+            flexGrow: 1,
+          }}
+        >
+          <Box px="$4" py="$6">
+            {/* Header */}
+            <HStack alignItems="center" mb="$6" mt="$8">
+              <TouchableOpacity onPress={handleGoBack}>
+                <Icon as={ChevronLeft} size="xl" color="white" />
+              </TouchableOpacity>
+              <Heading size="xl" color="white" ml="$3">
+                Contact Support
+              </Heading>
+            </HStack>
+
+            {/* Description */}
+            <Text color="#a0a0a0" fontSize="$sm" mb="$6" lineHeight="$md">
+              We're here to help! Please fill out the form below and we'll get
+              back to you as soon as possible. Our support team typically
+              responds within 24 hours.
+            </Text>
+
+            {/* Support Form */}
+            <VStack space="lg">
+              <VStack space="sm">
+                <Text color="white" fontSize="$sm" fontWeight="$semibold">
+                  Name
+                </Text>
+                <Input bg="#2a2a2a" borderColor="#333">
+                  <InputField
+                    placeholder="Your full name"
+                    color="white"
+                    placeholderTextColor="#a0a0a0"
+                    value={supportForm.name}
+                    onChangeText={(text) =>
+                      setSupportForm((prev) => ({ ...prev, name: text }))
+                    }
+                  />
+                </Input>
+              </VStack>
+
+              <VStack space="sm">
+                <Text color="white" fontSize="$sm" fontWeight="$semibold">
+                  Email
+                </Text>
+                <Input bg="#2a2a2a" borderColor="#333">
+                  <InputField
+                    placeholder="your.email@example.com"
+                    color="white"
+                    placeholderTextColor="#a0a0a0"
+                    value={supportForm.email}
+                    onChangeText={(text) =>
+                      setSupportForm((prev) => ({ ...prev, email: text }))
+                    }
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                </Input>
+              </VStack>
+
+              <VStack space="sm">
+                <Text color="white" fontSize="$sm" fontWeight="$semibold">
+                  Subject
+                </Text>
+                <Input bg="#2a2a2a" borderColor="#333">
+                  <InputField
+                    placeholder="Brief description of your issue"
+                    color="white"
+                    placeholderTextColor="#a0a0a0"
+                    value={supportForm.subject}
+                    onChangeText={(text) =>
+                      setSupportForm((prev) => ({
+                        ...prev,
+                        subject: text,
+                      }))
+                    }
+                  />
+                </Input>
+              </VStack>
+
+              <VStack space="sm">
+                <Text color="white" fontSize="$sm" fontWeight="$semibold">
+                  Message
+                </Text>
+                <Textarea bg="#2a2a2a" borderColor="#333" minHeight="$32">
+                  <TextareaInput
+                    placeholder="Please describe your issue or question in detail. Include any relevant information that might help us assist you better."
+                    color="white"
+                    placeholderTextColor="#a0a0a0"
+                    value={supportForm.message}
+                    onChangeText={(text) =>
+                      setSupportForm((prev) => ({
+                        ...prev,
+                        message: text,
+                      }))
+                    }
+                    multiline
+                    textAlignVertical="top"
+                  />
+                </Textarea>
+              </VStack>
+
+              <Button
+                bg="#9C27B0"
+                onPress={handleSupportSubmit}
+                disabled={submitingSupport}
+                mt="$4"
+                size="lg"
+              >
+                {submitingSupport ? (
+                  <HStack space="sm" alignItems="center">
+                    <Spinner size="small" color="white" />
+                    <ButtonText color="white">Submitting...</ButtonText>
+                  </HStack>
+                ) : (
+                  <ButtonText color="white" fontSize="$md" fontWeight="$semibold">
+                    Submit Support Request
+                  </ButtonText>
+                )}
+              </Button>
+            </VStack>
+          </Box>
+        </ScrollView>
+      </Box>
+    </KeyboardAvoidingView>
+  );
+}

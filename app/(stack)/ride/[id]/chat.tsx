@@ -367,7 +367,7 @@ export default function RideChatScreen() {
                         textAlign: "center",
                       }}
                     >
-                      {rideInfo.from} → {rideInfo.to}
+                      {rideInfo.from} TO {rideInfo.to}
                     </Text>
                   </Box>
                 </Pressable>

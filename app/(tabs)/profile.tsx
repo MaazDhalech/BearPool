@@ -5,19 +5,12 @@ import {
   AvatarImage,
   Box,
   Button,
-  CloseIcon,
   HStack,
   Heading,
   Icon,
   Input,
   InputField,
   KeyboardAvoidingView,
-  Modal,
-  ModalBackdrop,
-  ModalBody,
-  ModalCloseButton,
-  ModalContent,
-  ModalHeader,
   ScrollView,
   Text,
   VStack
@@ -26,16 +19,12 @@ import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import {
-  arrayRemove,
-  collection,
   doc,
   getDoc,
-  getDocs,
-  query,
   setDoc,
-  updateDoc,
-  where
+  updateDoc
 } from "firebase/firestore";
+import { Menu } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { Alert, Platform, TouchableOpacity } from "react-native";
 
@@ -82,16 +71,8 @@ if (filter && typeof filter.addWords === 'function') {
 const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
 
-interface BlockedUser {
-  id: string;
-  username: string;
-  first_name: string;
-  last_name: string;
-  avatar: string;
-}
-
 export default function ProfileScreen() {
-  const { isLoaded, userId: clerkUserId, signOut } = useAuth();
+  const { isLoaded, userId: clerkUserId } = useAuth();
   const { user } = useUser();
   const router = useRouter();
 
@@ -99,9 +80,6 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
-  const [showBlockedUsers, setShowBlockedUsers] = useState(false);
-  const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
-  const [loadingBlockedUsers, setLoadingBlockedUsers] = useState(false);
   
   type Gender = "M" | "F" | "NB" | null;
   
@@ -151,91 +129,6 @@ export default function ProfileScreen() {
         });
       }
     }
-  };
-
-  // Fetch blocked users data
-  const fetchBlockedUsers = async () => {
-    if (!clerkUserId || !profileData?.firebaseData?.blockedUsers) return;
-    
-    setLoadingBlockedUsers(true);
-    try {
-      const blockedUserIds = profileData.firebaseData.blockedUsers;
-      if (blockedUserIds.length === 0) {
-        setBlockedUsers([]);
-        return;
-      }
-
-      // Fetch blocked users data in batches (Firestore 'in' query limit is 10)
-      const blockedUsersData: BlockedUser[] = [];
-      const batchSize = 10;
-      
-      for (let i = 0; i < blockedUserIds.length; i += batchSize) {
-        const batch = blockedUserIds.slice(i, i + batchSize);
-        const q = query(
-          collection(db, "users"),
-          where("__name__", "in", batch)
-        );
-        
-        const querySnapshot = await getDocs(q);
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          blockedUsersData.push({
-            id: doc.id,
-            username: data.username || "Unknown",
-            first_name: data.first_name || "",
-            last_name: data.last_name || "",
-            avatar: data.avatar || DEFAULT_AVATAR,
-          });
-        });
-      }
-      
-      setBlockedUsers(blockedUsersData);
-    } catch (error) {
-      console.error("Error fetching blocked users:", error);
-      Alert.alert("Error", "Failed to load blocked users.");
-    } finally {
-      setLoadingBlockedUsers(false);
-    }
-  };
-
-  // Unblock a user
-  const handleUnblockUser = async (userId: string, username: string) => {
-    if (!clerkUserId) return;
-
-    Alert.alert(
-      "Unblock User",
-      `Are you sure you want to unblock ${username}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Unblock",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              // Remove user from blockedUsers array
-              await updateDoc(doc(db, "users", clerkUserId), {
-                blockedUsers: arrayRemove(userId)
-              });
-
-              // Update local state
-              setBlockedUsers(prev => prev.filter(user => user.id !== userId));
-              setProfileData((prev: any) => ({
-                ...prev,
-                firebaseData: {
-                  ...prev.firebaseData,
-                  blockedUsers: prev.firebaseData.blockedUsers?.filter((id: string) => id !== userId) || []
-                }
-              }));
-
-              Alert.alert("Success", `${username} has been unblocked.`);
-            } catch (error) {
-              console.error("Error unblocking user:", error);
-              Alert.alert("Error", "Failed to unblock user. Please try again.");
-            }
-          }
-        }
-      ]
-    );
   };
 
   useEffect(() => {
@@ -292,13 +185,6 @@ export default function ProfileScreen() {
 
     fetchUserData();
   }, [isLoaded, clerkUserId, user]);
-
-  // Fetch blocked users when modal opens
-  useEffect(() => {
-    if (showBlockedUsers && profileData) {
-      fetchBlockedUsers();
-    }
-  }, [showBlockedUsers, profileData]);
 
   const handleUpdateProfile = async () => {
     if (!clerkUserId || !user) return;
@@ -420,18 +306,6 @@ export default function ProfileScreen() {
     }));
   };
 
-  const handleLogout = async () => {
-    if (!isLoaded) return;
-
-    try {
-      await signOut();
-      router.replace("/(auth)/Login");
-    } catch (err) {
-      console.error("Error signing out:", err);
-      Alert.alert("Error", "Failed to sign out. Please try again.");
-    }
-  };
-
   if (!isLoaded || loading) {
     return (
       <Box flex={1} bg="#121212" justifyContent="center" alignItems="center">
@@ -475,295 +349,315 @@ export default function ProfileScreen() {
     (display.firstName?.[0] || "") + (display.lastName?.[0] || "") || "U";
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={{ flex: 1 }}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
-    >
-      <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: 120 }}>
-        <Box flex={1} bg="#121212" px="$4" py="$6">
-          <Heading size="xl" color="white" mb="$6" mt="$8">
-            {isEditing ? "Edit Profile" : "Your Profile"}
-          </Heading>
-
-          <VStack space="lg" alignItems="center">
-            <TouchableOpacity
-              onPress={isEditing ? handleChangeAvatar : undefined}
-              style={{ marginBottom: 24 }}
-            >
-              <Avatar size="2xl" bg="#1e1e1e" borderRadius="$full">
-                {display.avatar ? (
-                  <AvatarImage source={{ uri: display.avatar }} alt="Avatar" />
-                ) : (
-                  <Avatar.FallbackText color="white">
-                    {initials}
-                  </Avatar.FallbackText>
-                )}
-              </Avatar>
-              {isEditing && (
-                <Text mt="$2" color="#3a7bd5">
-                  Tap to change photo
-                </Text>
+    <Box flex={1} bg="#121212">
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+      >
+        <ScrollView 
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
+          showsVerticalScrollIndicator={false}
+        >
+          <Box px="$4" py="$6">
+            {/* Header with Settings Button */}
+            <HStack justifyContent="space-between" alignItems="center" mb="$6" mt="$8">
+              <Heading size="xl" color="white">
+                {isEditing ? "Edit Profile" : "Your Profile"}
+              </Heading>
+              {!isEditing && (
+                <TouchableOpacity
+                  onPress={() => router.push("/(stack)/settings/settings")}
+                  style={{
+                    padding: 8,
+                    backgroundColor: "#1e1e1e",
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: "#333",
+                  }}
+                >
+                  <Icon as={Menu} size="xl" color="white" />
+                </TouchableOpacity>
               )}
-            </TouchableOpacity>
-
-            <HStack space="xl" w="100%" justifyContent="space-evenly">
-              <VStack alignItems="center">
-                <Text color="#a0a0a0">Rides Joined</Text>
-                <Text color="white" fontWeight="$bold" fontSize="$xl">
-                  {display.ridesJoined}
-                </Text>
-              </VStack>
-              <VStack alignItems="center">
-                <Text color="#a0a0a0">Rides Hosted</Text>
-                <Text color="white" fontWeight="$bold" fontSize="$xl">
-                  {display.ridesHosted}
-                </Text>
-              </VStack>
             </HStack>
 
-            <VStack space="sm" w="100%" mt="$6">
-              {isEditing ? (
-                <>
-                  <Text color="#a0a0a0">First Name</Text>
-                  <Input bg="#1e1e1e" borderColor={formErrors.firstName ? "#ff6b6b" : "#333"}>
-                    <InputField
-                      color="white"
-                      value={formData.firstName}
-                      onChangeText={(t) => handleTextChange('firstName', t)}
-                    />
-                  </Input>
-                  {formErrors.firstName && (
-                    <Text color="#ff6b6b" fontSize="$sm" mt="$1">
-                      {formErrors.firstName}
-                    </Text>
+            <VStack space="lg" alignItems="center">
+              <TouchableOpacity
+                onPress={isEditing ? handleChangeAvatar : undefined}
+                style={{ marginBottom: 24 }}
+              >
+                <Avatar size="2xl" bg="#1e1e1e" borderRadius="$full">
+                  {display.avatar ? (
+                    <AvatarImage source={{ uri: display.avatar }} alt="Avatar" />
+                  ) : (
+                    <Avatar.FallbackText color="white">
+                      {initials}
+                    </Avatar.FallbackText>
                   )}
-
-                  <Text color="#a0a0a0" mt="$4">Last Name</Text>
-                  <Input bg="#1e1e1e" borderColor={formErrors.lastName ? "#ff6b6b" : "#333"}>
-                    <InputField
-                      color="white"
-                      value={formData.lastName}
-                      onChangeText={(t) => handleTextChange('lastName', t)}
-                    />
-                  </Input>
-                  {formErrors.lastName && (
-                    <Text color="#ff6b6b" fontSize="$sm" mt="$1">
-                      {formErrors.lastName}
-                    </Text>
-                  )}
-
-                  <Text color="#a0a0a0" mt="$4">Username</Text>
-                  <Input bg="#1e1e1e" borderColor={formErrors.username ? "#ff6b6b" : "#333"}>
-                    <InputField
-                      color="white"
-                      value={formData.username}
-                      onChangeText={(t) => handleTextChange('username', t)}
-                    />
-                  </Input>
-                  {formErrors.username && (
-                    <Text color="#ff6b6b" fontSize="$sm" mt="$1">
-                      {formErrors.username}
-                    </Text>
-                  )}
-
-                  <Text color="#a0a0a0" mt="$4">
-                    Gender
+                </Avatar>
+                {isEditing && (
+                  <Text mt="$2" color="#3a7bd5">
+                    Tap to change photo
                   </Text>
-                  <HStack space="sm" w="100%">
-                    {(["M", "F", "NB"] as Gender[]).map((option) => (
-                      <TouchableOpacity
-                        key={option}
-                        onPress={() =>
-                          setFormData({ ...formData, gender: option })
-                        }
-                        style={{
-                          flex: 1,
-                          padding: 12,
-                          borderRadius: 8,
-                          borderWidth: 1,
-                          borderColor:
-                            formData.gender === option ? "#3a7bd5" : "#333",
-                          backgroundColor:
-                            formData.gender === option ? "#1a3a7b" : "#1e1e1e",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            color:
-                              formData.gender === option
-                                ? "#ffffff"
-                                : "#a0a0a0",
-                            fontSize: 14,
-                            fontWeight:
-                              formData.gender === option ? "600" : "400",
-                          }}
-                        >
-                          {option === "M"
-                            ? "Male"
-                            : option === "F"
-                            ? "Female"
-                            : "Non-binary"}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </HStack>
-                </>
-              ) : (
-                <>
-                  <Text color="#a0a0a0">Name</Text>
-                  <Text color="white" fontSize="$lg" fontWeight="$semibold">
-                    {display.firstName} {display.lastName}
-                  </Text>
+                )}
+              </TouchableOpacity>
 
-                  <Text color="#a0a0a0" mt="$4">
-                    Username
+              <HStack space="xl" w="100%" justifyContent="space-evenly">
+                <VStack alignItems="center">
+                  <Text color="#a0a0a0">Rides Joined</Text>
+                  <Text color="white" fontWeight="$bold" fontSize="$xl">
+                    {display.ridesJoined}
                   </Text>
-                  <Text color="white" fontSize="$lg" fontWeight="$semibold">
-                    {display.username || "Not set"}
-                  </Text>
-
-                  <Text color="#a0a0a0" mt="$4">
-                    Gender
-                  </Text>
-                  <Text color="white" fontSize="$lg" fontWeight="$semibold">
-                    {display.gender === "M"
-                      ? "Male"
-                      : display.gender === "F"
-                      ? "Female"
-                      : display.gender === "NB"
-                      ? "Non-binary"
-                      : "Not specified"}
-                  </Text>
-                </>
-              )}
-              <Text color="#a0a0a0" mt="$4">
-                Email
-              </Text>
-              <Text color="white" fontSize="$lg" fontWeight="$semibold">
-                {display.email}
-              </Text>
-              <Text color="#a0a0a0" mt="$4">
-                Gender Preference
-              </Text>
-              {isEditing ? (
-                <VStack space="sm" w="100%">
-                  {/* First row */}
-                  <HStack space="sm" w="100%">
-                    {(["N", "M"] as const).map((option) => (
-                      <TouchableOpacity
-                        key={option}
-                        onPress={() =>
-                          setFormData({ ...formData, genderPref: option })
-                        }
-                        style={{
-                          flex: 1,
-                          padding: 12,
-                          borderRadius: 8,
-                          borderWidth: 1,
-                          borderColor:
-                            formData.genderPref === option ? "#3a7bd5" : "#333",
-                          backgroundColor:
-                            formData.genderPref === option
-                              ? "#1a3a7b"
-                              : "#1e1e1e",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            color:
-                              formData.genderPref === option
-                                ? "#ffffff"
-                                : "#a0a0a0",
-                            fontSize: 14,
-                            fontWeight:
-                              formData.genderPref === option ? "600" : "400",
-                          }}
-                        >
-                          {option === "N" ? "No Preference" : "Male Only"}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </HStack>
-
-                  {/* Second row */}
-                  <HStack space="sm" w="100%">
-                    {(["F", "NB"] as const).map((option) => (
-                      <TouchableOpacity
-                        key={option}
-                        onPress={() =>
-                          setFormData({ ...formData, genderPref: option })
-                        }
-                        style={{
-                          flex: 1,
-                          padding: 12,
-                          borderRadius: 8,
-                          borderWidth: 1,
-                          borderColor:
-                            formData.genderPref === option ? "#3a7bd5" : "#333",
-                          backgroundColor:
-                            formData.genderPref === option
-                              ? "#1a3a7b"
-                              : "#1e1e1e",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            color:
-                              formData.genderPref === option
-                                ? "#ffffff"
-                                : "#a0a0a0",
-                            fontSize: 14,
-                            fontWeight:
-                              formData.genderPref === option ? "600" : "400",
-                          }}
-                        >
-                          {option === "F" ? "Female Only" : "Non-binary Only"}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </HStack>
                 </VStack>
-              ) : (
-                <Text color="white" fontSize="$lg" fontWeight="$semibold">
-                  {display.genderPref === "N"
-                    ? "No Preference"
-                    : display.genderPref === "M"
-                    ? "Male Only"
-                    : display.genderPref === "F"
-                    ? "Female Only"
-                    : "Non-binary Only"}
-                </Text>
-              )}
-            </VStack>
+                <VStack alignItems="center">
+                  <Text color="#a0a0a0">Rides Hosted</Text>
+                  <Text color="white" fontWeight="$bold" fontSize="$xl">
+                    {display.ridesHosted}
+                  </Text>
+                </VStack>
+              </HStack>
 
-            <VStack space="md" mt="$8" w="100%">
-              {isEditing ? (
-                <>
-                  <Button bg="#3a7bd5" onPress={handleUpdateProfile}>
-                    <Text color="white" fontWeight="$semibold">
-                      Save Changes
+              <VStack space="sm" w="100%" mt="$6">
+                {isEditing ? (
+                  <>
+                    <Text color="#a0a0a0">First Name</Text>
+                    <Input bg="#1e1e1e" borderColor={formErrors.firstName ? "#ff6b6b" : "#333"}>
+                      <InputField
+                        color="white"
+                        value={formData.firstName}
+                        onChangeText={(t) => handleTextChange('firstName', t)}
+                      />
+                    </Input>
+                    {formErrors.firstName && (
+                      <Text color="#ff6b6b" fontSize="$sm" mt="$1">
+                        {formErrors.firstName}
+                      </Text>
+                    )}
+
+                    <Text color="#a0a0a0" mt="$4">Last Name</Text>
+                    <Input bg="#1e1e1e" borderColor={formErrors.lastName ? "#ff6b6b" : "#333"}>
+                      <InputField
+                        color="white"
+                        value={formData.lastName}
+                        onChangeText={(t) => handleTextChange('lastName', t)}
+                      />
+                    </Input>
+                    {formErrors.lastName && (
+                      <Text color="#ff6b6b" fontSize="$sm" mt="$1">
+                        {formErrors.lastName}
+                      </Text>
+                    )}
+
+                    <Text color="#a0a0a0" mt="$4">Username</Text>
+                    <Input bg="#1e1e1e" borderColor={formErrors.username ? "#ff6b6b" : "#333"}>
+                      <InputField
+                        color="white"
+                        value={formData.username}
+                        onChangeText={(t) => handleTextChange('username', t)}
+                      />
+                    </Input>
+                    {formErrors.username && (
+                      <Text color="#ff6b6b" fontSize="$sm" mt="$1">
+                        {formErrors.username}
+                      </Text>
+                    )}
+
+                    <Text color="#a0a0a0" mt="$4">
+                      Gender
                     </Text>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    borderColor="#333"
-                    onPress={() => {
-                      setIsEditing(false);
-                      setFormErrors({});
-                    }}
-                  >
-                    <Text color="white">Cancel</Text>
-                  </Button>
-                </>
-              ) : (
-                <>
+                    <HStack space="sm" w="100%">
+                      {(["M", "F", "NB"] as Gender[]).map((option) => (
+                        <TouchableOpacity
+                          key={option}
+                          onPress={() =>
+                            setFormData({ ...formData, gender: option })
+                          }
+                          style={{
+                            flex: 1,
+                            padding: 12,
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor:
+                              formData.gender === option ? "#3a7bd5" : "#333",
+                            backgroundColor:
+                              formData.gender === option ? "#1a3a7b" : "#1e1e1e",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color:
+                                formData.gender === option
+                                  ? "#ffffff"
+                                  : "#a0a0a0",
+                              fontSize: 14,
+                              fontWeight:
+                                formData.gender === option ? "600" : "400",
+                            }}
+                          >
+                            {option === "M"
+                              ? "Male"
+                              : option === "F"
+                              ? "Female"
+                              : "Non-binary"}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </HStack>
+                  </>
+                ) : (
+                  <>
+                    <Text color="#a0a0a0">Name</Text>
+                    <Text color="white" fontSize="$lg" fontWeight="$semibold">
+                      {display.firstName} {display.lastName}
+                    </Text>
+
+                    <Text color="#a0a0a0" mt="$4">
+                      Username
+                    </Text>
+                    <Text color="white" fontSize="$lg" fontWeight="$semibold">
+                      {display.username || "Not set"}
+                    </Text>
+
+                    <Text color="#a0a0a0" mt="$4">
+                      Gender
+                    </Text>
+                    <Text color="white" fontSize="$lg" fontWeight="$semibold">
+                      {display.gender === "M"
+                        ? "Male"
+                        : display.gender === "F"
+                        ? "Female"
+                        : display.gender === "NB"
+                        ? "Non-binary"
+                        : "Not specified"}
+                    </Text>
+                  </>
+                )}
+                <Text color="#a0a0a0" mt="$4">
+                  Email
+                </Text>
+                <Text color="white" fontSize="$lg" fontWeight="$semibold">
+                  {display.email}
+                </Text>
+                <Text color="#a0a0a0" mt="$4">
+                  Gender Preference
+                </Text>
+                {isEditing ? (
+                  <VStack space="sm" w="100%">
+                    {/* First row */}
+                    <HStack space="sm" w="100%">
+                      {(["N", "M"] as const).map((option) => (
+                        <TouchableOpacity
+                          key={option}
+                          onPress={() =>
+                            setFormData({ ...formData, genderPref: option })
+                          }
+                          style={{
+                            flex: 1,
+                            padding: 12,
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor:
+                              formData.genderPref === option ? "#3a7bd5" : "#333",
+                            backgroundColor:
+                              formData.genderPref === option
+                                ? "#1a3a7b"
+                                : "#1e1e1e",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color:
+                                formData.genderPref === option
+                                  ? "#ffffff"
+                                  : "#a0a0a0",
+                              fontSize: 14,
+                              fontWeight:
+                                formData.genderPref === option ? "600" : "400",
+                            }}
+                          >
+                            {option === "N" ? "No Preference" : "Male Only"}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </HStack>
+
+                    {/* Second row */}
+                    <HStack space="sm" w="100%">
+                      {(["F", "NB"] as const).map((option) => (
+                        <TouchableOpacity
+                          key={option}
+                          onPress={() =>
+                            setFormData({ ...formData, genderPref: option })
+                          }
+                          style={{
+                            flex: 1,
+                            padding: 12,
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor:
+                              formData.genderPref === option ? "#3a7bd5" : "#333",
+                            backgroundColor:
+                              formData.genderPref === option
+                                ? "#1a3a7b"
+                                : "#1e1e1e",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color:
+                                formData.genderPref === option
+                                  ? "#ffffff"
+                                  : "#a0a0a0",
+                              fontSize: 14,
+                              fontWeight:
+                                formData.genderPref === option ? "600" : "400",
+                            }}
+                          >
+                            {option === "F" ? "Female Only" : "Non-binary Only"}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </HStack>
+                  </VStack>
+                ) : (
+                  <Text color="white" fontSize="$lg" fontWeight="$semibold">
+                    {display.genderPref === "N"
+                      ? "No Preference"
+                      : display.genderPref === "M"
+                      ? "Male Only"
+                      : display.genderPref === "F"
+                      ? "Female Only"
+                      : "Non-binary Only"}
+                  </Text>
+                )}
+              </VStack>
+
+              <VStack space="md" mt="$8" w="100%" pb="$6">
+                {isEditing ? (
+                  <>
+                    <Button bg="#3a7bd5" onPress={handleUpdateProfile}>
+                      <Text color="white" fontWeight="$semibold">
+                        Save Changes
+                      </Text>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      borderColor="#333"
+                      onPress={() => {
+                        setIsEditing(false);
+                        setFormErrors({});
+                      }}
+                    >
+                      <Text color="white">Cancel</Text>
+                    </Button>
+                  </>
+                ) : (
                   <Button
                     variant="outline"
                     borderColor="#333"
@@ -771,107 +665,12 @@ export default function ProfileScreen() {
                   >
                     <Text color="white">Edit Profile</Text>
                   </Button>
-                  
-                  {/* Unblock Users Button */}
-                  <Button
-                    variant="outline"
-                    borderColor="#ff6b6b"
-                    onPress={() => setShowBlockedUsers(true)}
-                  >
-                    <Text color="#ff6b6b">
-                      Unblock Users ({display.blockedUsers.length})
-                    </Text>
-                  </Button>
-                  
-                  <Button bg="#3a7bd5" onPress={handleLogout}>
-                    <Text color="white" fontWeight="$semibold">
-                      Log Out
-                    </Text>
-                  </Button>
-                </>
-              )}
+                )}
+              </VStack>
             </VStack>
-          </VStack>
-        </Box>
-      </ScrollView>
-
-      {/* Blocked Users Modal */}
-      <Modal
-        isOpen={showBlockedUsers}
-        onClose={() => setShowBlockedUsers(false)}
-        finalFocusRef={undefined}
-      >
-        <ModalBackdrop />
-        <ModalContent bg="#1e1e1e" maxWidth="$96" maxHeight="$3/4">
-          <ModalHeader>
-            <Heading size="lg" color="white">
-              Blocked Users
-            </Heading>
-            <ModalCloseButton>
-              <Icon as={CloseIcon} color="white" />
-            </ModalCloseButton>
-          </ModalHeader>
-          <ModalBody>
-            {loadingBlockedUsers ? (
-              <Box py="$4" alignItems="center">
-                <Text color="#a0a0a0">Loading blocked users...</Text>
-              </Box>
-            ) : blockedUsers.length === 0 ? (
-              <Box py="$4" alignItems="center">
-                <Text color="#a0a0a0">No blocked users</Text>
-              </Box>
-            ) : (
-              <ScrollView showsVerticalScrollIndicator={false}>
-                <VStack space="md" py="$2">
-                  {blockedUsers.map((blockedUser) => (
-                    <HStack
-                      key={blockedUser.id}
-                      space="md"
-                      alignItems="center"
-                      bg="#2a2a2a"
-                      p="$3"
-                      borderRadius="$md"
-                    >
-                      <Avatar size="md" bg="#333">
-                        {blockedUser.avatar ? (
-                          <AvatarImage
-                            source={{ uri: blockedUser.avatar }}
-                            alt="Avatar"
-                          />
-                        ) : (
-                          <Avatar.FallbackText color="white">
-                            {((blockedUser.first_name?.[0] || "") + 
-                              (blockedUser.last_name?.[0] || "")) || "U"}
-                          </Avatar.FallbackText>
-                        )}
-                      </Avatar>
-                      
-                      <VStack flex={1}>
-                        <Text color="white" fontWeight="$semibold">
-                          {blockedUser.username}
-                        </Text>
-                        <Text color="#a0a0a0" fontSize="$sm">
-                          {blockedUser.first_name} {blockedUser.last_name}
-                        </Text>
-                      </VStack>
-                      
-                      <Button
-                        size="sm"
-                        bg="#ff6b6b"
-                        onPress={() => handleUnblockUser(blockedUser.id, blockedUser.username)}
-                      >
-                        <Text color="white" fontSize="$sm">
-                          Unblock
-                        </Text>
-                      </Button>
-                    </HStack>
-                  ))}
-                </VStack>
-              </ScrollView>
-            )}
-          </ModalBody>
-        </ModalContent>
-      </Modal>
-    </KeyboardAvoidingView>
+          </Box>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Box>
   );
 }
