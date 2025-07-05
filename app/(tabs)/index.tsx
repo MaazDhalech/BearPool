@@ -83,6 +83,7 @@ export default function HomeScreen() {
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
   const [userGender, setUserGender] = useState<string | null>(null);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [blockedUsers, setBlockedUsers] = useState<string[]>([]);
 
   const ridesUnsubscribeRef = useRef<(() => void) | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
@@ -97,6 +98,19 @@ export default function HomeScreen() {
       }
     } catch (err) {
       console.error("Error fetching user gender:", err);
+    }
+  };
+
+  const fetchBlockedUsers = async () => {
+    if (!userId) return;
+    try {
+      const userDoc = await getDoc(doc(db, "users", userId));
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        setBlockedUsers(data.blockedUsers || []);
+      }
+    } catch (err) {
+      console.error("Error fetching blocked users:", err);
     }
   };
 
@@ -146,6 +160,16 @@ export default function HomeScreen() {
     setUsers((prev) => ({ ...prev, ...usersData }));
   };
 
+  const filterRidesWithBlockedUsers = (rideData: Ride[]) => {
+    return rideData.filter(ride => {
+      // Check if any member in the ride is in the blocked users list
+      const hasBlockedUser = ride.memberIds.some(memberId => 
+        blockedUsers.includes(memberId)
+      );
+      return !hasBlockedUser;
+    });
+  };
+
   const setupRealTimeListener = () => {
     if (ridesUnsubscribeRef.current) {
       ridesUnsubscribeRef.current();
@@ -180,8 +204,11 @@ export default function HomeScreen() {
             return processedRide;
           });
 
-          setRides(rideData);
-          await fetchUsersForRides(rideData);
+          // Filter out rides with blocked users
+          const filteredRideData = filterRidesWithBlockedUsers(rideData);
+          
+          setRides(filteredRideData);
+          await fetchUsersForRides(filteredRideData);
         } catch (err) {
           console.error("Error processing real-time update:", err);
           fetchRidesManually();
@@ -221,8 +248,11 @@ export default function HomeScreen() {
         };
       });
 
-      setRides(rideData);
-      await fetchUsersForRides(rideData);
+      // Filter out rides with blocked users
+      const filteredRideData = filterRidesWithBlockedUsers(rideData);
+
+      setRides(filteredRideData);
+      await fetchUsersForRides(filteredRideData);
     } catch (err) {
       console.error("Error fetching rides manually:", err);
     }
@@ -231,6 +261,7 @@ export default function HomeScreen() {
   useEffect(() => {
     const initializeData = async () => {
       await fetchUserGender();
+      await fetchBlockedUsers();
       setupRealTimeListener();
     };
 
@@ -242,6 +273,13 @@ export default function HomeScreen() {
       }
     };
   }, [sortOrder]);
+
+  // Re-filter rides when blocked users list changes
+  useEffect(() => {
+    if (blockedUsers.length > 0) {
+      setupRealTimeListener();
+    }
+  }, [blockedUsers]);
 
   useEffect(() => {
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
@@ -265,6 +303,7 @@ export default function HomeScreen() {
   const handleRefresh = async () => {
     setRefreshing(true);
     await fetchUserGender();
+    await fetchBlockedUsers();
     await fetchRidesManually();
     setRefreshing(false);
   };

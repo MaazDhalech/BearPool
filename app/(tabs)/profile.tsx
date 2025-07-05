@@ -5,11 +5,19 @@ import {
   AvatarImage,
   Box,
   Button,
+  CloseIcon,
   HStack,
   Heading,
+  Icon,
   Input,
   InputField,
   KeyboardAvoidingView,
+  Modal,
+  ModalBackdrop,
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalHeader,
   ScrollView,
   Text,
   VStack
@@ -18,17 +26,69 @@ import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import {
+  arrayRemove,
+  collection,
   doc,
   getDoc,
+  getDocs,
+  query,
   setDoc,
-  updateDoc
+  updateDoc,
+  where
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { Platform, TouchableOpacity } from "react-native";
+import { Alert, Platform, TouchableOpacity } from "react-native";
+
+// Import bad-words with error handling
+let Filter: any = null;
+let filter: any = null;
+
+try {
+  // Try to import bad-words
+  const BadWordsModule = require("bad-words");
+  Filter = BadWordsModule.default || BadWordsModule;
+  filter = new Filter();
+} catch (error) {
+  console.warn("Bad-words library not available, using fallback filter:", error);
+  
+  // Fallback implementation with basic profanity list
+  const basicProfanityList = [
+    'damn', 'hell', 'shit', 'fuck', 'bitch', 'ass', 'crap', 'piss'
+    // Add more words as needed
+  ];
+  
+  filter = {
+    isProfane: (text: string) => {
+      const lowerText = text.toLowerCase();
+      return basicProfanityList.some(word => lowerText.includes(word));
+    },
+    clean: (text: string) => {
+      let cleanText = text;
+      basicProfanityList.forEach(word => {
+        const regex = new RegExp(word, 'gi');
+        cleanText = cleanText.replace(regex, '*'.repeat(word.length));
+      });
+      return cleanText;
+    }
+  };
+}
+
+// Add custom words if the library is available
+if (filter && typeof filter.addWords === 'function') {
+  // filter.addWords(['customword1', 'customword2']);
+}
 
 // Default avatar image (can be a placeholder image URL or base64 string)
 const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
+
+interface BlockedUser {
+  id: string;
+  username: string;
+  first_name: string;
+  last_name: string;
+  avatar: string;
+}
 
 export default function ProfileScreen() {
   const { isLoaded, userId: clerkUserId, signOut } = useAuth();
@@ -38,15 +98,145 @@ export default function ProfileScreen() {
   const [profileData, setProfileData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
+  const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
+  const [showBlockedUsers, setShowBlockedUsers] = useState(false);
+  const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
+  const [loadingBlockedUsers, setLoadingBlockedUsers] = useState(false);
+  
   type Gender = "M" | "F" | "NB" | null;
   
-    const [formData, setFormData] = useState({
-      firstName: "",
-      lastName: "",
-      username: "",
-      gender: null as Gender,
-      genderPref: "N",
-    });
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    username: "",
+    gender: null as Gender,
+    genderPref: "N",
+  });
+
+  // Single validation function that handles both checking and user feedback
+  const validateAndCleanText = (text: string, fieldName: string): { isValid: boolean; cleanedText: string; error?: string } => {
+    if (!text.trim()) {
+      return { isValid: true, cleanedText: text };
+    }
+    
+    if (filter.isProfane(text)) {
+      const cleanedText = filter.clean(text);
+      return {
+        isValid: false,
+        cleanedText,
+        error: `The ${fieldName} contains inappropriate content.`
+      };
+    }
+    
+    return { isValid: true, cleanedText: text };
+  };
+
+  // Real-time validation with user feedback
+  const handleTextChange = (field: keyof typeof formData, value: string) => {
+    // Update form data immediately for responsive UI
+    setFormData({ ...formData, [field]: value });
+    
+    // Clear previous error for this field
+    if (formErrors[field]) {
+      setFormErrors({ ...formErrors, [field]: '' });
+    }
+    
+    // Validate and show immediate feedback if needed
+    if (value.trim()) {
+      const validation = validateAndCleanText(value, field);
+      if (!validation.isValid) {
+        setFormErrors({ 
+          ...formErrors, 
+          [field]: validation.error || `${field} contains inappropriate content` 
+        });
+      }
+    }
+  };
+
+  // Fetch blocked users data
+  const fetchBlockedUsers = async () => {
+    if (!clerkUserId || !profileData?.firebaseData?.blockedUsers) return;
+    
+    setLoadingBlockedUsers(true);
+    try {
+      const blockedUserIds = profileData.firebaseData.blockedUsers;
+      if (blockedUserIds.length === 0) {
+        setBlockedUsers([]);
+        return;
+      }
+
+      // Fetch blocked users data in batches (Firestore 'in' query limit is 10)
+      const blockedUsersData: BlockedUser[] = [];
+      const batchSize = 10;
+      
+      for (let i = 0; i < blockedUserIds.length; i += batchSize) {
+        const batch = blockedUserIds.slice(i, i + batchSize);
+        const q = query(
+          collection(db, "users"),
+          where("__name__", "in", batch)
+        );
+        
+        const querySnapshot = await getDocs(q);
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          blockedUsersData.push({
+            id: doc.id,
+            username: data.username || "Unknown",
+            first_name: data.first_name || "",
+            last_name: data.last_name || "",
+            avatar: data.avatar || DEFAULT_AVATAR,
+          });
+        });
+      }
+      
+      setBlockedUsers(blockedUsersData);
+    } catch (error) {
+      console.error("Error fetching blocked users:", error);
+      Alert.alert("Error", "Failed to load blocked users.");
+    } finally {
+      setLoadingBlockedUsers(false);
+    }
+  };
+
+  // Unblock a user
+  const handleUnblockUser = async (userId: string, username: string) => {
+    if (!clerkUserId) return;
+
+    Alert.alert(
+      "Unblock User",
+      `Are you sure you want to unblock ${username}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Unblock",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // Remove user from blockedUsers array
+              await updateDoc(doc(db, "users", clerkUserId), {
+                blockedUsers: arrayRemove(userId)
+              });
+
+              // Update local state
+              setBlockedUsers(prev => prev.filter(user => user.id !== userId));
+              setProfileData((prev: any) => ({
+                ...prev,
+                firebaseData: {
+                  ...prev.firebaseData,
+                  blockedUsers: prev.firebaseData.blockedUsers?.filter((id: string) => id !== userId) || []
+                }
+              }));
+
+              Alert.alert("Success", `${username} has been unblocked.`);
+            } catch (error) {
+              console.error("Error unblocking user:", error);
+              Alert.alert("Error", "Failed to unblock user. Please try again.");
+            }
+          }
+        }
+      ]
+    );
+  };
 
   useEffect(() => {
     if (!isLoaded || !clerkUserId || !user) return;
@@ -63,6 +253,7 @@ export default function ProfileScreen() {
                 typeof userSnap.data().avatar === "string"
                   ? userSnap.data().avatar
                   : DEFAULT_AVATAR,
+              blockedUsers: userSnap.data().blockedUsers || [], // Ensure blockedUsers exists
             }
           : {
               avatar: DEFAULT_AVATAR,
@@ -72,6 +263,7 @@ export default function ProfileScreen() {
               ridesHosted: 0,
               createdAt: new Date(),
               gender: null,
+              blockedUsers: [],
             };
 
         setProfileData({
@@ -101,42 +293,94 @@ export default function ProfileScreen() {
     fetchUserData();
   }, [isLoaded, clerkUserId, user]);
 
+  // Fetch blocked users when modal opens
+  useEffect(() => {
+    if (showBlockedUsers && profileData) {
+      fetchBlockedUsers();
+    }
+  }, [showBlockedUsers, profileData]);
+
   const handleUpdateProfile = async () => {
     if (!clerkUserId || !user) return;
+    
+    // Validate all fields
+    const validations = {
+      firstName: validateAndCleanText(formData.firstName, "first name"),
+      lastName: validateAndCleanText(formData.lastName, "last name"),
+      username: validateAndCleanText(formData.username, "username"),
+    };
+
+    // Check if any validation failed
+    const hasErrors = Object.values(validations).some(v => !v.isValid);
+    
+    if (hasErrors) {
+      // Show which fields have issues
+      const errorMessages = Object.entries(validations)
+        .filter(([_, validation]) => !validation.isValid)
+        .map(([field, validation]) => `${field}: ${validation.error}`)
+        .join('\n');
+      
+      Alert.alert(
+        "Content Issues Found",
+        `Please fix the following issues:\n\n${errorMessages}`,
+        [
+          { text: "Edit", style: "cancel" }
+        ]
+      );
+      return;
+    }
+
     try {
-      // update Clerk
+      // Use the already validated data (which is clean)
+      const cleanedData = {
+        firstName: validations.firstName.cleanedText,
+        lastName: validations.lastName.cleanedText,
+        username: validations.username.cleanedText,
+        gender: formData.gender,
+        genderPref: formData.genderPref,
+      };
+
+      // Update Clerk
       await user.update({
-        firstName: formData.firstName,
-        lastName: formData.lastName,
+        firstName: cleanedData.firstName,
+        lastName: cleanedData.lastName,
       });
 
-      // update Firestore
+      // Update Firestore
       const updatedData = {
-        username: formData.username,
-        pref: formData.genderPref,
-        gender: formData.gender,
+        username: cleanedData.username,
+        pref: cleanedData.genderPref,
+        gender: cleanedData.gender,
         email: user.primaryEmailAddress?.emailAddress || "",
-        first_name: formData.firstName,
-        last_name: formData.lastName,
+        first_name: cleanedData.firstName,
+        last_name: cleanedData.lastName,
         avatar: profileData.firebaseData.avatar,
         createdAt: profileData.firebaseData.createdAt,
         ridesJoined: profileData.firebaseData.ridesJoined,
         ridesHosted: profileData.firebaseData.ridesHosted,
+        blockedUsers: profileData.firebaseData.blockedUsers || [], // Preserve blockedUsers
       };
+      
       await setDoc(doc(db, "users", clerkUserId), updatedData);
 
       setProfileData({
         clerkData: {
           ...profileData.clerkData,
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          username: formData.username,
+          firstName: cleanedData.firstName,
+          lastName: cleanedData.lastName,
+          username: cleanedData.username,
         },
         firebaseData: updatedData,
       });
+      
+      setFormData(cleanedData);
+      setFormErrors({});
       setIsEditing(false);
+      
+      Alert.alert("Success", "Profile updated successfully!", [{ text: "OK" }]);
     } catch (error) {
       console.error("Error saving profile:", error);
+      Alert.alert("Error", "Failed to update profile. Please try again.", [{ text: "OK" }]);
     }
   };
 
@@ -144,7 +388,7 @@ export default function ProfileScreen() {
     if (!clerkUserId) return;
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      alert("Camera roll permissions required");
+      Alert.alert("Permission Required", "Camera roll permissions are required to change your avatar.");
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -161,12 +405,12 @@ export default function ProfileScreen() {
       { compress: 0.4, format: ImageManipulator.SaveFormat.JPEG, base64: true }
     );
     if (!compressed.base64) {
-      alert("Image compression failed");
+      Alert.alert("Error", "Image compression failed. Please try again.");
       return;
     }
     const base64 = `data:image/jpeg;base64,${compressed.base64}`;
     if (base64.length > 900000) {
-      alert("Image too large, choose a smaller one");
+      Alert.alert("Error", "Image too large, please choose a smaller one.");
       return;
     }
     await updateDoc(doc(db, "users", clerkUserId), { avatar: base64 });
@@ -184,6 +428,7 @@ export default function ProfileScreen() {
       router.replace("/(auth)/Login");
     } catch (err) {
       console.error("Error signing out:", err);
+      Alert.alert("Error", "Failed to sign out. Please try again.");
     }
   };
 
@@ -223,6 +468,7 @@ export default function ProfileScreen() {
     avatar: profileData.firebaseData.avatar,
     ridesJoined: profileData.firebaseData.ridesJoined,
     ridesHosted: profileData.firebaseData.ridesHosted,
+    blockedUsers: profileData.firebaseData.blockedUsers || [],
   };
 
   const initials =
@@ -280,37 +526,46 @@ export default function ProfileScreen() {
               {isEditing ? (
                 <>
                   <Text color="#a0a0a0">First Name</Text>
-                  <Input bg="#1e1e1e" borderColor="#333">
+                  <Input bg="#1e1e1e" borderColor={formErrors.firstName ? "#ff6b6b" : "#333"}>
                     <InputField
                       color="white"
                       value={formData.firstName}
-                      onChangeText={(t) =>
-                        setFormData({ ...formData, firstName: t })
-                      }
+                      onChangeText={(t) => handleTextChange('firstName', t)}
                     />
                   </Input>
+                  {formErrors.firstName && (
+                    <Text color="#ff6b6b" fontSize="$sm" mt="$1">
+                      {formErrors.firstName}
+                    </Text>
+                  )}
 
-                  <Text color="#a0a0a0">Last Name</Text>
-                  <Input bg="#1e1e1e" borderColor="#333">
+                  <Text color="#a0a0a0" mt="$4">Last Name</Text>
+                  <Input bg="#1e1e1e" borderColor={formErrors.lastName ? "#ff6b6b" : "#333"}>
                     <InputField
                       color="white"
                       value={formData.lastName}
-                      onChangeText={(t) =>
-                        setFormData({ ...formData, lastName: t })
-                      }
+                      onChangeText={(t) => handleTextChange('lastName', t)}
                     />
                   </Input>
+                  {formErrors.lastName && (
+                    <Text color="#ff6b6b" fontSize="$sm" mt="$1">
+                      {formErrors.lastName}
+                    </Text>
+                  )}
 
-                  <Text color="#a0a0a0">Username</Text>
-                  <Input bg="#1e1e1e" borderColor="#333">
+                  <Text color="#a0a0a0" mt="$4">Username</Text>
+                  <Input bg="#1e1e1e" borderColor={formErrors.username ? "#ff6b6b" : "#333"}>
                     <InputField
                       color="white"
                       value={formData.username}
-                      onChangeText={(t) =>
-                        setFormData({ ...formData, username: t })
-                      }
+                      onChangeText={(t) => handleTextChange('username', t)}
                     />
                   </Input>
+                  {formErrors.username && (
+                    <Text color="#ff6b6b" fontSize="$sm" mt="$1">
+                      {formErrors.username}
+                    </Text>
+                  )}
 
                   <Text color="#a0a0a0" mt="$4">
                     Gender
@@ -499,7 +754,10 @@ export default function ProfileScreen() {
                   <Button
                     variant="outline"
                     borderColor="#333"
-                    onPress={() => setIsEditing(false)}
+                    onPress={() => {
+                      setIsEditing(false);
+                      setFormErrors({});
+                    }}
                   >
                     <Text color="white">Cancel</Text>
                   </Button>
@@ -513,6 +771,18 @@ export default function ProfileScreen() {
                   >
                     <Text color="white">Edit Profile</Text>
                   </Button>
+                  
+                  {/* Unblock Users Button */}
+                  <Button
+                    variant="outline"
+                    borderColor="#ff6b6b"
+                    onPress={() => setShowBlockedUsers(true)}
+                  >
+                    <Text color="#ff6b6b">
+                      Unblock Users ({display.blockedUsers.length})
+                    </Text>
+                  </Button>
+                  
                   <Button bg="#3a7bd5" onPress={handleLogout}>
                     <Text color="white" fontWeight="$semibold">
                       Log Out
@@ -524,6 +794,84 @@ export default function ProfileScreen() {
           </VStack>
         </Box>
       </ScrollView>
+
+      {/* Blocked Users Modal */}
+      <Modal
+        isOpen={showBlockedUsers}
+        onClose={() => setShowBlockedUsers(false)}
+        finalFocusRef={undefined}
+      >
+        <ModalBackdrop />
+        <ModalContent bg="#1e1e1e" maxWidth="$96" maxHeight="$3/4">
+          <ModalHeader>
+            <Heading size="lg" color="white">
+              Blocked Users
+            </Heading>
+            <ModalCloseButton>
+              <Icon as={CloseIcon} color="white" />
+            </ModalCloseButton>
+          </ModalHeader>
+          <ModalBody>
+            {loadingBlockedUsers ? (
+              <Box py="$4" alignItems="center">
+                <Text color="#a0a0a0">Loading blocked users...</Text>
+              </Box>
+            ) : blockedUsers.length === 0 ? (
+              <Box py="$4" alignItems="center">
+                <Text color="#a0a0a0">No blocked users</Text>
+              </Box>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <VStack space="md" py="$2">
+                  {blockedUsers.map((blockedUser) => (
+                    <HStack
+                      key={blockedUser.id}
+                      space="md"
+                      alignItems="center"
+                      bg="#2a2a2a"
+                      p="$3"
+                      borderRadius="$md"
+                    >
+                      <Avatar size="md" bg="#333">
+                        {blockedUser.avatar ? (
+                          <AvatarImage
+                            source={{ uri: blockedUser.avatar }}
+                            alt="Avatar"
+                          />
+                        ) : (
+                          <Avatar.FallbackText color="white">
+                            {((blockedUser.first_name?.[0] || "") + 
+                              (blockedUser.last_name?.[0] || "")) || "U"}
+                          </Avatar.FallbackText>
+                        )}
+                      </Avatar>
+                      
+                      <VStack flex={1}>
+                        <Text color="white" fontWeight="$semibold">
+                          {blockedUser.username}
+                        </Text>
+                        <Text color="#a0a0a0" fontSize="$sm">
+                          {blockedUser.first_name} {blockedUser.last_name}
+                        </Text>
+                      </VStack>
+                      
+                      <Button
+                        size="sm"
+                        bg="#ff6b6b"
+                        onPress={() => handleUnblockUser(blockedUser.id, blockedUser.username)}
+                      >
+                        <Text color="white" fontSize="$sm">
+                          Unblock
+                        </Text>
+                      </Button>
+                    </HStack>
+                  ))}
+                </VStack>
+              </ScrollView>
+            )}
+          </ModalBody>
+        </ModalContent>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }

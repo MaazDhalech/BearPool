@@ -24,7 +24,7 @@ Notifications.setNotificationHandler({
 });
 
 // ✅ Access Clerk publishable key via correct env variable
-const publishableKey = Constants.expoConfig?.extra?.clerkPublishableKey || "";
+const publishableKey = Constants.expoConfig?.extra?.expoPublicClerkPublishableKey || "";
 
 const tokenCache = {
   getToken: (key: string) => SecureStore.getItemAsync(key),

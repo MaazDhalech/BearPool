@@ -1,8 +1,9 @@
 import { db } from "@/services/firebaseConfig";
 import { useSignUp } from "@clerk/clerk-expo";
+import { Filter } from 'bad-words';
 import { Link, useRouter } from "expo-router";
 import { doc, setDoc } from "firebase/firestore";
-import React from "react";
+import React, { useRef } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -13,6 +14,12 @@ import {
   View
 } from "react-native";
 import "react-native-get-random-values";
+// Alternative import methods - try these if the require doesn't work
+// Method 1: const Filter = require("bad-words");
+// Method 2: import * as Filter from "bad-words";
+// Method 3: const { Filter } = require("bad-words");
+
+  const filter = useRef(new Filter()).current;
 
 const isBerkeleyEmail = (email: string) => {
   return email.toLowerCase().endsWith("@berkeley.edu");
@@ -26,6 +33,7 @@ type Gender = "M" | "F" | "NB";
 export default function Signup() {
   const { isLoaded, signUp, setActive } = useSignUp();
   const router = useRouter();
+  const filter = new Filter();
 
   const [emailAddress, setEmailAddress] = React.useState("");
   const [username, setUsername] = React.useState("");
@@ -37,6 +45,11 @@ export default function Signup() {
   const [showVerification, setShowVerification] = React.useState(false);
   const [verificationCode, setVerificationCode] = React.useState("");
   const [signUpAttempt, setSignUpAttempt] = React.useState<any>(null);
+
+  // Helper function to check if text contains profanity
+  const containsProfanity = (text: string): boolean => {
+    return filter.isProfane(text);
+  };
 
   const isFormValid = () =>
     isBerkeleyEmail(emailAddress) &&
@@ -52,6 +65,22 @@ export default function Signup() {
 
     if (gender === null) {
       setError("Please select your gender");
+      return;
+    }
+
+    // Check for profanity in user input fields
+    if (containsProfanity(username)) {
+      setError("Username contains inappropriate language. Please choose a different username.");
+      return;
+    }
+
+    if (containsProfanity(firstName)) {
+      setError("First name contains inappropriate language. Please enter a valid name.");
+      return;
+    }
+
+    if (containsProfanity(lastName)) {
+      setError("Last name contains inappropriate language. Please enter a valid name.");
       return;
     }
 
@@ -100,15 +129,16 @@ export default function Signup() {
         }
 
         const clerkId = completeSignUp.createdUserId;
+        // Clean the text before storing (remove profanity if any somehow got through)
         await setDoc(doc(db, "users", clerkId), {
           clerkId,
           avatar: BLANK_AVATAR,
-          username: username.trim(),
+          username: filter.clean(username.trim()),
           email: emailAddress.toLowerCase(),
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-          gender: gender, // Storing the selected gender
-          pref: "N", // Default preference
+          first_name: filter.clean(firstName.trim()),
+          last_name: filter.clean(lastName.trim()),
+          gender: gender,
+          pref: "N",
           createdAt: new Date(),
           ridesJoined: 0,
           ridesHosted: 0,
@@ -121,6 +151,34 @@ export default function Signup() {
     } catch (err) {
       console.error("Verification Error:", err);
       setError("Invalid code. Please try again.");
+    }
+  };
+
+  // Handle text input changes with real-time profanity checking
+  const handleUsernameChange = (text: string) => {
+    setUsername(text);
+    if (text.trim() && containsProfanity(text)) {
+      setError("Username contains inappropriate language.");
+    } else if (error.includes("Username contains inappropriate language")) {
+      setError("");
+    }
+  };
+
+  const handleFirstNameChange = (text: string) => {
+    setFirstName(text);
+    if (text.trim() && containsProfanity(text)) {
+      setError("First name contains inappropriate language.");
+    } else if (error.includes("First name contains inappropriate language")) {
+      setError("");
+    }
+  };
+
+  const handleLastNameChange = (text: string) => {
+    setLastName(text);
+    if (text.trim() && containsProfanity(text)) {
+      setError("Last name contains inappropriate language.");
+    } else if (error.includes("Last name contains inappropriate language")) {
+      setError("");
     }
   };
 
@@ -190,7 +248,7 @@ export default function Signup() {
               value={username}
               placeholder="Choose a username"
               placeholderTextColor="#666"
-              onChangeText={setUsername}
+              onChangeText={handleUsernameChange}
               style={inputStyle}
             />
           </View>
@@ -205,7 +263,7 @@ export default function Signup() {
                 value={firstName}
                 placeholder="First"
                 placeholderTextColor="#666"
-                onChangeText={setFirstName}
+                onChangeText={handleFirstNameChange}
                 style={inputStyle}
               />
             </View>
@@ -218,7 +276,7 @@ export default function Signup() {
                 value={lastName}
                 placeholder="Last"
                 placeholderTextColor="#666"
-                onChangeText={setLastName}
+                onChangeText={handleLastNameChange}
                 style={inputStyle}
               />
             </View>
