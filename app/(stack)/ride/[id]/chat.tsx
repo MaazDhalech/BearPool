@@ -57,7 +57,9 @@ export default function RideChatScreen() {
     null
   );
   const [userMap, setUserMap] = useState<UserMap>({});
+  const userMapRef = useRef<UserMap>({});
   const scrollRef = useRef<any>(null);
+  const [autoScroll, setAutoScroll] = useState(true);
   const insets = useSafeAreaInsets();
 
   // Initialize content filter
@@ -65,6 +67,7 @@ export default function RideChatScreen() {
 
   const animatedValue = useRef(new Animated.Value(0)).current;
   const prevMembersRef = useRef<string[]>([]);
+  const pendingSystemMessageRef = useRef<Set<string>>(new Set());
 
   // Configure filter settings (optional customization)
   useEffect(() => {
@@ -137,6 +140,10 @@ export default function RideChatScreen() {
 
   // Listen for membership changes to post system messages
   useEffect(() => {
+    userMapRef.current = userMap;
+  }, [userMap]);
+
+  useEffect(() => {
     if (!rideId) return;
     const rideDocRef = doc(db, "rides", String(rideId));
     const unsubRide = onSnapshot(rideDocRef, async (snap) => {
@@ -162,19 +169,28 @@ export default function RideChatScreen() {
             ? uDoc.data().username || "Anonymous"
             : "Unknown";
         }
-        await addDoc(collection(db, "rides", String(rideId), "messages"), {
-          text: `${name} has ${joined.includes(uid) ? "joined" : "left"} the ride`,
-          senderId: null,
-          timestamp: serverTimestamp(),
-          system: true,
-        });
+        const key = `${uid}-${joined.includes(uid) ? "join" : "leave"}`;
+        if (!pendingSystemMessageRef.current.has(key)) {
+          pendingSystemMessageRef.current.add(key);
+          await addDoc(collection(db, "rides", String(rideId), "messages"), {
+            text: `${name} has ${
+              joined.includes(uid) ? "joined" : "left"
+            } the ride`,
+            senderId: null,
+            timestamp: serverTimestamp(),
+            system: true,
+          });
+          setTimeout(() => {
+            pendingSystemMessageRef.current.delete(key);
+          }, 2000);
+        }
       }
 
       prevMembersRef.current = newMembers;
     });
 
     return () => unsubRide();
-  }, [rideId, userMap]);
+  }, [rideId]);
 
   useEffect(() => {
     if (!rideId) return;
@@ -204,9 +220,11 @@ export default function RideChatScreen() {
         }
       }
       setUserMap(newMap);
-      InteractionManager.runAfterInteractions(() => {
-        scrollRef.current?.scrollToEnd({ animated: true });
-      });
+      if (autoScroll) {
+        InteractionManager.runAfterInteractions(() => {
+          scrollRef.current?.scrollToEnd({ animated: true });
+        });
+      }
     });
 
     return () => unsubscribe();
@@ -399,6 +417,25 @@ export default function RideChatScreen() {
                 keyboardDismissMode="on-drag"
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ flexGrow: 1, paddingBottom: 90 }}
+                onScroll={({ nativeEvent }) => {
+                  const { contentOffset } = nativeEvent;
+                  // disable auto scroll if user scrolls up
+                  if (contentOffset?.y > 30 && autoScroll) {
+                    setAutoScroll(false);
+                  }
+                }}
+                onScrollToTop={() => setAutoScroll(false)}
+                onMomentumScrollEnd={({ nativeEvent }) => {
+                  const { layoutMeasurement, contentOffset, contentSize } =
+                    nativeEvent;
+                  const distanceFromBottom =
+                    contentSize.height -
+                    (contentOffset.y + layoutMeasurement.height);
+                  if (distanceFromBottom < 30) {
+                    setAutoScroll(true);
+                  }
+                }}
+                scrollEventThrottle={16}
               >
                 <VStack space="sm">
                   {messages.map((msg) => {
