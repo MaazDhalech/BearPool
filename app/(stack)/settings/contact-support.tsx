@@ -18,7 +18,7 @@ import {
 } from "@gluestack-ui/themed";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
-import { doc, getDoc } from "firebase/firestore";
+import { addDoc, collection, doc, getDoc, serverTimestamp } from "firebase/firestore";
 import { ChevronLeft } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import {
@@ -114,6 +114,23 @@ export default function ContactSupportScreen() {
       const result = await response.json();
 
       if (result.success) {
+        if (clerkUserId) {
+          try {
+            await addDoc(collection(db, "supportRequests"), {
+              userId: clerkUserId,
+              name: supportForm.name,
+              email: supportForm.email,
+              subject: supportForm.subject,
+              message: supportForm.message,
+              status: "open",
+              source: "contact-support",
+              createdAt: serverTimestamp(),
+            });
+          } catch (dbError) {
+            console.error("Failed to log support request:", dbError);
+          }
+        }
+
         Alert.alert(
           "Success!",
           "Your support request has been submitted successfully. We'll get back to you soon!",
