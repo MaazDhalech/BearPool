@@ -15,7 +15,8 @@ export default {
       supportsTablet: true,
       infoPlist: {
         UIBackgroundModes: ["remote-notification"],
-        NSUserTrackingUsageDescription: "This identifier will be used to deliver personalized notifications."
+        NSUserTrackingUsageDescription: "This identifier will be used to deliver personalized notifications.",
+        NSPhotoLibraryUsageDescription: "BearPool lets you choose photos from your library for your profile and ride chats so other riders can recognize you and coordinate safely."
       }
     },
     android: {
