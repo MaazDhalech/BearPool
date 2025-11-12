@@ -358,7 +358,17 @@ export default function RideChatScreen() {
                     })
                   }
                 >
-                  <Box alignItems="center" paddingVertical={8} marginBottom={16}>
+                  <Box
+                    alignItems="center"
+                    paddingVertical={12}
+                    marginBottom={16}
+                    borderRadius={12}
+                    style={{
+                      backgroundColor: "#1e1e1e",
+                      borderWidth: 1,
+                      borderColor: "#333",
+                    }}
+                  >
                     <Text
                       style={{
                         fontSize: 18,
@@ -368,6 +378,15 @@ export default function RideChatScreen() {
                       }}
                     >
                       {rideInfo.from} → {rideInfo.to}
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        color: "#a0a0a0",
+                        marginTop: 4,
+                      }}
+                    >
+                      Tap to view group members
                     </Text>
                   </Box>
                 </Pressable>

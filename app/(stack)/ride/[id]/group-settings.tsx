@@ -8,6 +8,7 @@ import {
   Button,
   Heading,
   HStack,
+  Icon,
   Pressable,
   ScrollView,
   Text,
@@ -24,6 +25,7 @@ import {
 import { useEffect, useState } from "react";
 import { Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Menu as MenuIcon } from "lucide-react-native";
 
 const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
@@ -43,6 +45,7 @@ export default function GroupSettings() {
 
   const [ride, setRide] = useState<any>(null);
   const [users, setUsers] = useState<User[]>([]);
+  const [openMenuUserId, setOpenMenuUserId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchRideAndUsers = async () => {
@@ -231,11 +234,14 @@ export default function GroupSettings() {
     );
   };
 
-  const handleAvatarPress = (userId: string) => {
-    if (userId === user?.id) {
+  const handleViewProfile = (targetId: string) => {
+    if (targetId === user?.id) {
       router.push("/(tabs)/profile");
     } else {
-      router.push(`/(stack)/ride/${rideId}/viewProfile?userId=${userId}`);
+      router.push({
+        pathname: "/(stack)/ride/[id]/viewProfile",
+        params: { id: String(rideId), userId: targetId },
+      });
     }
   };
 
@@ -280,11 +286,9 @@ export default function GroupSettings() {
               borderRadius="$lg"
             >
               <HStack space="sm" alignItems="center">
-                <Pressable onPress={() => handleAvatarPress(u.id)}>
-                  <Avatar size="md">
-                    <AvatarImage source={{ uri: u.avatar }} />
-                  </Avatar>
-                </Pressable>
+                <Avatar size="md">
+                  <AvatarImage source={{ uri: u.avatar }} />
+                </Avatar>
                 <VStack>
                   <HStack alignItems="center" space="xs">
                     <Text color="white" fontWeight="$medium">
@@ -301,24 +305,64 @@ export default function GroupSettings() {
                   </Text>
                 </VStack>
               </HStack>
-              {isHost && u.id !== user?.id && (
-                <HStack space="sm">
-                  <Button
-                    size="sm"
-                    backgroundColor="#00cc88"
-                    onPress={() => handleAssignHost(u.id)}
+              <HStack space="sm" alignItems="center">
+                {isHost && u.id !== user?.id && (
+                  <>
+                    <Button
+                      size="sm"
+                      backgroundColor="#00cc88"
+                      onPress={() => handleAssignHost(u.id)}
+                    >
+                      <Text color="white">Make Host</Text>
+                    </Button>
+                    <Button
+                      size="sm"
+                      backgroundColor="#ff5555"
+                      onPress={() => handleKick(u.id)}
+                    >
+                      <Text color="white">Remove</Text>
+                    </Button>
+                  </>
+                )}
+                <Box position="relative">
+                  <Pressable
+                    onPress={() =>
+                      setOpenMenuUserId((prev) => (prev === u.id ? null : u.id))
+                    }
+                    p="$2"
+                    borderRadius="$full"
                   >
-                    <Text color="white">Make Host</Text>
-                  </Button>
-                  <Button
-                    size="sm"
-                    backgroundColor="#ff5555"
-                    onPress={() => handleKick(u.id)}
-                  >
-                    <Text color="white">Remove</Text>
-                  </Button>
-                </HStack>
-              )}
+                    <Icon as={MenuIcon} size="lg" color="#a0a0a0" />
+                  </Pressable>
+                  {openMenuUserId === u.id && (
+                    <Box
+                      position="absolute"
+                      top="$8"
+                      right={0}
+                      bg="#2a2a2a"
+                      borderWidth={1}
+                      borderColor="#333"
+                      borderRadius="$md"
+                      px="$3"
+                      py="$2"
+                      zIndex={10}
+                      minWidth={150}
+                    >
+                      <Pressable
+                        onPress={() => {
+                          setOpenMenuUserId(null);
+                          handleViewProfile(u.id);
+                        }}
+                        p="$2"
+                        borderRadius="$sm"
+                        $pressed={{ bg: "#3a3a3a" }}
+                      >
+                        <Text color="white">View Profile</Text>
+                      </Pressable>
+                    </Box>
+                  )}
+                </Box>
+              </HStack>
             </HStack>
           ))}
 
@@ -346,3 +390,4 @@ export default function GroupSettings() {
     </Box>
   );
 }
+import { Menu } from "lucide-react-native";
