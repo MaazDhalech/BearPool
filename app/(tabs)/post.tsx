@@ -12,7 +12,7 @@ import {
   increment,
   setDoc,
 } from "firebase/firestore";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -38,6 +38,7 @@ export default function PostScreen() {
   const [seats, setSeats] = useState("1");
   const [notes, setNotes] = useState("");
   const [genderPref, setGenderPref] = useState("N");
+  const [userGender, setUserGender] = useState<"M" | "F" | "NB" | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Initialize content filter
@@ -129,6 +130,48 @@ export default function PostScreen() {
 
     return null;
   }
+
+  useEffect(() => {
+    const fetchUserGender = async () => {
+      if (!userId) return;
+      try {
+        const userDoc = await getDoc(doc(db, "users", userId));
+        if (userDoc.exists()) {
+          setUserGender(userDoc.data()?.gender ?? null);
+        } else {
+          setUserGender(null);
+        }
+      } catch (error) {
+        console.error("Failed to fetch user gender:", error);
+        setUserGender(null);
+      }
+    };
+
+    fetchUserGender();
+  }, [userId]);
+
+  const allowedGenderPrefOptions = useMemo(() => {
+    const options = [{ label: "No preference", value: "N" as const }];
+    if (userGender) {
+      options.push({
+        label:
+          userGender === "M"
+            ? "Men only"
+            : userGender === "F"
+            ? "Women only"
+            : "Non-binary only",
+        value: userGender,
+      });
+    }
+    return options;
+  }, [userGender]);
+
+  useEffect(() => {
+    const allowedValues = allowedGenderPrefOptions.map((opt) => opt.value);
+    if (!allowedValues.includes(genderPref as any)) {
+      setGenderPref("N");
+    }
+  }, [allowedGenderPrefOptions, genderPref]);
 
   const handleSubmit = async () => {
     if (!from || !to || !date || !time || !seats) {
@@ -368,6 +411,9 @@ export default function PostScreen() {
             <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
               Gender Preference
             </Text>
+            <Text style={{ color: "#666", fontSize: 12, marginBottom: 8 }}>
+              Only riders who match this selection will see your post. We hide other options to keep rides aligned with your profile.
+            </Text>
             <View
               style={{
                 flexDirection: "row",
@@ -376,12 +422,7 @@ export default function PostScreen() {
                 marginTop: 8,
               }}
             >
-              {[
-                { value: "N", label: "No Preference" },
-                { value: "M", label: "Male" },
-                { value: "F", label: "Female" },
-                { value: "NB", label: "Non-binary" },
-              ].map((option) => (
+              {allowedGenderPrefOptions.map((option) => (
                 <TouchableOpacity
                   key={option.value}
                   onPress={() => setGenderPref(option.value)}
@@ -395,7 +436,8 @@ export default function PostScreen() {
                     borderColor:
                       genderPref === option.value ? "#3a7bd5" : "#333",
                     marginBottom: 8,
-                    width: "48%",
+                    width:
+                      allowedGenderPrefOptions.length > 1 ? "48%" : "100%",
                   }}
                 >
                   <Text

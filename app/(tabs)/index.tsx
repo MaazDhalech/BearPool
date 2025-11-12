@@ -84,6 +84,7 @@ export default function HomeScreen() {
   const [userGender, setUserGender] = useState<string | null>(null);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [blockedUsers, setBlockedUsers] = useState<string[]>([]);
+  const [showRestrictedRides, setShowRestrictedRides] = useState(false);
 
   const ridesUnsubscribeRef = useRef<(() => void) | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
@@ -323,6 +324,34 @@ export default function HomeScreen() {
     }
   };
 
+  const showGenderRestrictionToast = (
+    reason: "missing" | "restricted",
+    label?: string
+  ) => {
+    const isMissing = reason === "missing";
+    toast.show({
+      placement: "top",
+      duration: 3000,
+      render: () => (
+        <Box
+          bg={isMissing ? "$yellow600" : "$red600"}
+          px="$4"
+          py="$3"
+          borderRadius="$md"
+        >
+          <Text color="white" fontWeight="$bold">
+            {isMissing ? "Set Your Gender" : "Restricted Ride"}
+          </Text>
+          <Text color="white">
+            {isMissing
+              ? "Update your gender in Profile to join restricted rides."
+              : `This ride is reserved for ${label}.`}
+          </Text>
+        </Box>
+      ),
+    });
+  };
+
   const handleJoinRide = async (rideId: string) => {
     if (!userId) return;
 
@@ -336,6 +365,14 @@ export default function HomeScreen() {
 
       const rideData = rideSnap.data();
       const currentSeats = rideData.seats ?? 0;
+      const rideGenderPref = rideData.genderPref ?? "N";
+      const requiresSpecificGender = rideGenderPref !== "N";
+      const restrictedLabel =
+        rideGenderPref === "M"
+          ? "men"
+          : rideGenderPref === "F"
+          ? "women"
+          : "non-binary riders";
 
       if (currentSeats <= 0) {
         toast.show({
@@ -369,11 +406,45 @@ export default function HomeScreen() {
         return;
       }
 
+      const userRef = doc(db, "users", userId);
+      const userSnap = await getDoc(userRef);
+
+      if (!userSnap.exists()) {
+        toast.show({
+          placement: "top",
+          duration: 3000,
+          render: () => (
+            <Box bg="$yellow600" px="$4" py="$3" borderRadius="$md">
+              <Text color="white" fontWeight="$bold">
+                Finish Profile
+              </Text>
+              <Text color="white">
+                Complete your profile before joining rides.
+              </Text>
+            </Box>
+          ),
+        });
+        return;
+      }
+
+      const riderGender = userSnap.data()?.gender ?? null;
+
+      if (requiresSpecificGender) {
+        if (!riderGender) {
+          showGenderRestrictionToast("missing");
+          return;
+        }
+
+        if (rideGenderPref !== riderGender) {
+          showGenderRestrictionToast("restricted", restrictedLabel);
+          return;
+        }
+      }
+
       if (currentSeats <= 0) {
         throw new Error("No seats available");
       }
 
-      const userRef = doc(db, "users", userId);
       const batch = writeBatch(db);
       batch.update(rideRef, {
         memberIds: arrayUnion(userId),
@@ -437,16 +508,21 @@ export default function HomeScreen() {
       ride.from.toLowerCase().includes(qs) ||
       ride.to.toLowerCase().includes(qs);
 
-    // If user hasn't set a gender, show all rides
-    if (!userGender) {
-      return matchesSearch;
+    if (!matchesSearch) {
+      return false;
     }
 
-    // If user has set a gender, only show rides that match their gender or have no preference
-    const matchesGender =
-      ride.genderPref === "N" || ride.genderPref === userGender;
+    const requiresGender = ride.genderPref !== "N";
+    const missingGender = requiresGender && !userGender;
+    const mismatchedGender =
+      requiresGender && !!userGender && ride.genderPref !== userGender;
+    const isRestricted = missingGender || mismatchedGender;
 
-    return matchesSearch && matchesGender;
+    if (!showRestrictedRides && isRestricted) {
+      return false;
+    }
+
+    return true;
   });
 
   const toggleSortOrder = () =>
@@ -494,6 +570,30 @@ export default function HomeScreen() {
         </Pressable>
       </HStack>
 
+      <HStack
+        alignItems="center"
+        justifyContent="space-between"
+        mb="$4"
+        px="$2"
+      >
+        <Text color="#a0a0a0" fontSize="$sm">
+          Gender-restricted rides
+        </Text>
+        <Pressable
+          onPress={() => setShowRestrictedRides((prev) => !prev)}
+          px="$3"
+          py="$2"
+          borderRadius="$md"
+          borderWidth={1}
+          borderColor="#333"
+          backgroundColor={showRestrictedRides ? "#1e3a5f" : "#1e1e1e"}
+        >
+          <Text color="#3a7bd5" fontWeight="$semibold">
+            {showRestrictedRides ? "Hide" : "Show"}
+          </Text>
+        </Pressable>
+      </HStack>
+
       <VStack space="lg" pb="$16">
         {filteredRides.map((ride) => {
           // Debug logging to catch any problematic data
@@ -502,10 +602,17 @@ export default function HomeScreen() {
             return null;
           }
 
-          const isLocked =
-            userGender &&
-            ride.genderPref !== "N" &&
-            ride.genderPref !== userGender;
+          const requiresGender = ride.genderPref !== "N";
+          const missingGender = requiresGender && !userGender;
+          const mismatchedGender =
+            requiresGender && !!userGender && ride.genderPref !== userGender;
+          const isLocked = missingGender || mismatchedGender;
+          const restrictedLabel =
+            ride.genderPref === "M"
+              ? "men"
+              : ride.genderPref === "F"
+              ? "women"
+              : "non-binary riders";
 
           return (
             <Box
@@ -532,14 +639,10 @@ export default function HomeScreen() {
                   zIndex={1}
                   borderRadius="$lg"
                 >
-                  <Text color="white" fontWeight="$bold">
-                    This room is for{" "}
-                    {ride.genderPref === "M"
-                      ? "men"
-                      : ride.genderPref === "F"
-                      ? "women"
-                      : "non-binary people"}{" "}
-                    only
+                  <Text color="white" fontWeight="$bold" textAlign="center" px="$4">
+                    {missingGender
+                      ? "Set your gender in Profile to join gender-restricted rides."
+                      : `This ride is for ${restrictedLabel} only.`}
                   </Text>
                 </Box>
               )}
@@ -675,8 +778,18 @@ export default function HomeScreen() {
 
                 {/* Join Group (or View Chat) on the right */}
                 {isLocked ? (
-                  <Button size="sm" backgroundColor="#444" disabled>
-                    <Text color="#888">Join Group</Text>
+                  <Button
+                    size="sm"
+                    backgroundColor="#444"
+                    onPress={() =>
+                      missingGender
+                        ? showGenderRestrictionToast("missing")
+                        : showGenderRestrictionToast("restricted", restrictedLabel)
+                    }
+                  >
+                    <Text color="#888">
+                      {missingGender ? "Set Gender" : "Restricted"}
+                    </Text>
                   </Button>
                 ) : ride.memberIds.includes(userId!) ? (
                   <Button

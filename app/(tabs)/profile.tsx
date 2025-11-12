@@ -88,7 +88,6 @@ export default function ProfileScreen() {
     lastName: "",
     username: "",
     gender: null as Gender,
-    genderPref: "N",
   });
 
   // Single validation function that handles both checking and user feedback
@@ -150,7 +149,6 @@ export default function ProfileScreen() {
             }
           : {
               avatar: DEFAULT_AVATAR,
-              pref: "N",
               username: user.username || "",
               ridesJoined: 0,
               ridesHosted: 0,
@@ -174,7 +172,6 @@ export default function ProfileScreen() {
           lastName: user.lastName || "",
           username: firebaseData.username || user.username || "",
           gender: firebaseData.gender || null,
-          genderPref: firebaseData.pref || "N",
         });
       } catch (error) {
         console.error("Error fetching profile:", error);
@@ -223,7 +220,6 @@ export default function ProfileScreen() {
         lastName: validations.lastName.cleanedText,
         username: validations.username.cleanedText,
         gender: formData.gender,
-        genderPref: formData.genderPref,
       };
 
       // Update Clerk
@@ -235,7 +231,6 @@ export default function ProfileScreen() {
       // Update Firestore
       const updatedData = {
         username: cleanedData.username,
-        pref: cleanedData.genderPref,
         gender: cleanedData.gender,
         email: user.primaryEmailAddress?.emailAddress || "",
         first_name: cleanedData.firstName,
@@ -259,7 +254,12 @@ export default function ProfileScreen() {
         firebaseData: updatedData,
       });
       
-      setFormData(cleanedData);
+      setFormData({
+        firstName: cleanedData.firstName,
+        lastName: cleanedData.lastName,
+        username: cleanedData.username,
+        gender: cleanedData.gender,
+      });
       setFormErrors({});
       setIsEditing(false);
       
@@ -338,7 +338,6 @@ export default function ProfileScreen() {
       profileData.firebaseData.username || profileData.clerkData.username,
     email: profileData.clerkData.email,
     gender: profileData.firebaseData.gender,
-    genderPref: profileData.firebaseData.pref,
     avatar: profileData.firebaseData.avatar,
     ridesJoined: profileData.firebaseData.ridesJoined,
     ridesHosted: profileData.firebaseData.ridesHosted,
@@ -463,7 +462,10 @@ export default function ProfileScreen() {
                     )}
 
                     <Text color="#a0a0a0" mt="$4">
-                      Gender
+                      Gender (optional — helps us keep riders safe)
+                    </Text>
+                    <Text color="#666" fontSize="$xs" mb="$2">
+                      We only ask so safety features can work. It’s completely optional, never shared, and you can remove it anytime.
                     </Text>
                     <HStack space="sm" w="100%">
                       {(["M", "F", "NB"] as Gender[]).map((option) => (
@@ -505,6 +507,29 @@ export default function ProfileScreen() {
                         </TouchableOpacity>
                       ))}
                     </HStack>
+                    <TouchableOpacity
+                      onPress={() => setFormData({ ...formData, gender: null })}
+                      style={{
+                        marginTop: 12,
+                        padding: 12,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: formData.gender === null ? "#3a7bd5" : "#333",
+                        backgroundColor:
+                          formData.gender === null ? "#1a3a7b" : "transparent",
+                        alignItems: "center",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: formData.gender === null ? "#ffffff" : "#a0a0a0",
+                          fontSize: 14,
+                          fontWeight: formData.gender === null ? "600" : "400",
+                        }}
+                      >
+                        Prefer not to say
+                      </Text>
+                    </TouchableOpacity>
                   </>
                 ) : (
                   <>
@@ -521,7 +546,7 @@ export default function ProfileScreen() {
                     </Text>
 
                     <Text color="#a0a0a0" mt="$4">
-                      Gender
+                      Gender (optional — helps us keep riders safe)
                     </Text>
                     <Text color="white" fontSize="$lg" fontWeight="$semibold">
                       {display.gender === "M"
@@ -532,6 +557,9 @@ export default function ProfileScreen() {
                         ? "Non-binary"
                         : "Not specified"}
                     </Text>
+                    <Text color="#666" fontSize="$xs" mt="$1">
+                      We only use this for safety features and never share it elsewhere.
+                    </Text>
                   </>
                 )}
                 <Text color="#a0a0a0" mt="$4">
@@ -540,102 +568,6 @@ export default function ProfileScreen() {
                 <Text color="white" fontSize="$lg" fontWeight="$semibold">
                   {display.email}
                 </Text>
-                <Text color="#a0a0a0" mt="$4">
-                  Gender Preference
-                </Text>
-                {isEditing ? (
-                  <VStack space="sm" w="100%">
-                    {/* First row */}
-                    <HStack space="sm" w="100%">
-                      {(["N", "M"] as const).map((option) => (
-                        <TouchableOpacity
-                          key={option}
-                          onPress={() =>
-                            setFormData({ ...formData, genderPref: option })
-                          }
-                          style={{
-                            flex: 1,
-                            padding: 12,
-                            borderRadius: 8,
-                            borderWidth: 1,
-                            borderColor:
-                              formData.genderPref === option ? "#3a7bd5" : "#333",
-                            backgroundColor:
-                              formData.genderPref === option
-                                ? "#1a3a7b"
-                                : "#1e1e1e",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          <Text
-                            style={{
-                              color:
-                                formData.genderPref === option
-                                  ? "#ffffff"
-                                  : "#a0a0a0",
-                              fontSize: 14,
-                              fontWeight:
-                                formData.genderPref === option ? "600" : "400",
-                            }}
-                          >
-                            {option === "N" ? "No Preference" : "Male Only"}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </HStack>
-
-                    {/* Second row */}
-                    <HStack space="sm" w="100%">
-                      {(["F", "NB"] as const).map((option) => (
-                        <TouchableOpacity
-                          key={option}
-                          onPress={() =>
-                            setFormData({ ...formData, genderPref: option })
-                          }
-                          style={{
-                            flex: 1,
-                            padding: 12,
-                            borderRadius: 8,
-                            borderWidth: 1,
-                            borderColor:
-                              formData.genderPref === option ? "#3a7bd5" : "#333",
-                            backgroundColor:
-                              formData.genderPref === option
-                                ? "#1a3a7b"
-                                : "#1e1e1e",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          <Text
-                            style={{
-                              color:
-                                formData.genderPref === option
-                                  ? "#ffffff"
-                                  : "#a0a0a0",
-                              fontSize: 14,
-                              fontWeight:
-                                formData.genderPref === option ? "600" : "400",
-                            }}
-                          >
-                            {option === "F" ? "Female Only" : "Non-binary Only"}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </HStack>
-                  </VStack>
-                ) : (
-                  <Text color="white" fontSize="$lg" fontWeight="$semibold">
-                    {display.genderPref === "N"
-                      ? "No Preference"
-                      : display.genderPref === "M"
-                      ? "Male Only"
-                      : display.genderPref === "F"
-                      ? "Female Only"
-                      : "Non-binary Only"}
-                  </Text>
-                )}
               </VStack>
 
               <VStack space="md" mt="$8" w="100%" pb="$6">

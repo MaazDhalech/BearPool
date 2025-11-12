@@ -21,6 +21,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
+import { Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type Ride = {
@@ -33,6 +34,7 @@ type Ride = {
   notes?: string;
   createdAt: Timestamp;
   memberIds: string[];
+  genderPref?: string;
 };
 
 type Member = {
@@ -66,6 +68,7 @@ export default function RideDetailsPage() {
   const [ride, setRide] = useState<Ride | null>(null);
   const [loading, setLoading] = useState(true);
   const [members, setMembers] = useState<Member[]>([]);
+  const [userGender, setUserGender] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchRide = async () => {
@@ -87,6 +90,7 @@ export default function RideDetailsPage() {
             notes: data.notes ?? "",
             createdAt: data.createdAt ?? Timestamp.now(),
             memberIds: data.memberIds ?? [],
+            genderPref: data.genderPref ?? "N",
           });
         } else {
           console.warn("No such ride!");
@@ -100,6 +104,23 @@ export default function RideDetailsPage() {
 
     fetchRide();
   }, [id]);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    const fetchUserGender = async () => {
+      try {
+        const snap = await getDoc(doc(db, "users", userId));
+        if (snap.exists()) {
+          setUserGender(snap.data().gender ?? null);
+        }
+      } catch (error) {
+        console.error("Error fetching user gender:", error);
+      }
+    };
+
+    fetchUserGender();
+  }, [userId]);
 
   useEffect(() => {
     const fetchMembers = async () => {
@@ -132,6 +153,34 @@ export default function RideDetailsPage() {
 
   const handleJoinRide = async () => {
     if (!userId || !ride?.id) return;
+
+    const rideGenderPref = ride.genderPref ?? "N";
+    const requiresSpecificGender = rideGenderPref !== "N";
+
+    if (requiresSpecificGender) {
+      if (!userGender) {
+        Alert.alert(
+          "Set Your Gender",
+          "Update your gender in your profile to join gender-restricted rides."
+        );
+        return;
+      }
+
+      if (rideGenderPref !== userGender) {
+        const restrictedLabel =
+          rideGenderPref === "M"
+            ? "men"
+            : rideGenderPref === "F"
+            ? "women"
+            : "non-binary riders";
+
+        Alert.alert(
+          "Restricted Ride",
+          `This ride is reserved for ${restrictedLabel}.`
+        );
+        return;
+      }
+    }
 
     try {
       const rideRef = doc(db, "rides", ride.id);
@@ -173,6 +222,14 @@ export default function RideDetailsPage() {
   }
 
   const alreadyJoined = userId ? ride.memberIds.includes(userId) : false;
+  const genderPrefLabel =
+    ride.genderPref === "M"
+      ? "Men only"
+      : ride.genderPref === "F"
+      ? "Women only"
+      : ride.genderPref === "NB"
+      ? "Non-binary only"
+      : "No preference";
 
   return (
     <Box flex={1} bg="#121212" pt={insets.top}>
@@ -220,6 +277,9 @@ export default function RideDetailsPage() {
             </Text>
             <Text color="#a0a0a0">
               {ride.seats} seat{ride.seats > 1 ? "s" : ""} available
+            </Text>
+            <Text color="#a0a0a0">
+              Gender preference: {genderPrefLabel}
             </Text>
 
             {ride.notes && (

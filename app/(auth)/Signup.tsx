@@ -3,7 +3,7 @@ import { useSignUp } from "@clerk/clerk-expo";
 import { Filter } from 'bad-words';
 import { Link, useRouter } from "expo-router";
 import { doc, setDoc } from "firebase/firestore";
-import React, { useRef } from "react";
+import React from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -18,8 +18,6 @@ import "react-native-get-random-values";
 // Method 1: const Filter = require("bad-words");
 // Method 2: import * as Filter from "bad-words";
 // Method 3: const { Filter } = require("bad-words");
-
-  const filter = useRef(new Filter()).current;
 
 const isBerkeleyEmail = (email: string) => {
   return email.toLowerCase().endsWith("@berkeley.edu");
@@ -56,17 +54,11 @@ export default function Signup() {
     username.trim().length > 0 &&
     password.length > 0 &&
     firstName.trim().length > 0 &&
-    lastName.trim().length > 0 &&
-    gender !== null;
+    lastName.trim().length > 0;
 
   const onSignUpPress = async () => {
     if (!isLoaded) return;
     setError("");
-
-    if (gender === null) {
-      setError("Please select your gender");
-      return;
-    }
 
     // Check for profanity in user input fields
     if (containsProfanity(username)) {
@@ -137,8 +129,7 @@ export default function Signup() {
           email: emailAddress.toLowerCase(),
           first_name: filter.clean(firstName.trim()),
           last_name: filter.clean(lastName.trim()),
-          gender: gender,
-          pref: "N",
+          gender: gender ?? null,
           createdAt: new Date(),
           ridesJoined: 0,
           ridesHosted: 0,
@@ -283,8 +274,11 @@ export default function Signup() {
           </View>
 
 <View style={{ marginBottom: 16 }}>
-  <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
-    Gender (Required)
+  <Text style={{ color: "#a0a0a0", marginBottom: 4, fontSize: 14 }}>
+    Gender (optional — helps us keep riders safe)
+  </Text>
+  <Text style={{ color: "#666", marginBottom: 8, fontSize: 12 }}>
+    Share it only if you want to. We request it for community safety checks and never use it anywhere else. You can ignore this today and add it later.
   </Text>
   <View style={{ flexDirection: "row", gap: 8 }}>
     {(["M", "F", "NB"] as Gender[]).map((option) => (
@@ -304,22 +298,46 @@ export default function Signup() {
           minHeight: 50,
         }}
       >
-        <Text 
-          style={{ 
+        <Text
+          style={{
             color: gender === option ? "#ffffff" : "#a0a0a0",
             fontSize: 14,
             fontWeight: gender === option ? "600" : "400",
-            textAlign: 'center',
+            textAlign: "center",
             lineHeight: 20,
           }}
         >
-          {option === "M" ? "Male" : 
-           option === "F" ? "Female" : 
-           "Non-binary"}
+          {option === "M"
+            ? "Male"
+            : option === "F"
+            ? "Female"
+            : "Non-binary"}
         </Text>
       </TouchableOpacity>
     ))}
   </View>
+  <TouchableOpacity
+    onPress={() => setGender(null)}
+    style={{
+      marginTop: 8,
+      padding: 12,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: gender === null ? "#3a7bd5" : "#333",
+      backgroundColor: gender === null ? "#1a3a7b" : "#1e1e1e",
+      alignItems: "center",
+    }}
+  >
+    <Text
+      style={{
+        color: gender === null ? "#ffffff" : "#a0a0a0",
+        fontSize: 14,
+        fontWeight: gender === null ? "600" : "400",
+      }}
+    >
+      Prefer not to say
+    </Text>
+  </TouchableOpacity>
 </View>
 
           <View style={{ marginBottom: 24 }}>

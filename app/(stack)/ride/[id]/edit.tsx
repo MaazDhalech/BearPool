@@ -5,7 +5,7 @@ import { Filter } from "bad-words";
 import { format, isValid, parse } from "date-fns";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -35,8 +35,32 @@ export default function EditRideScreen() {
   const [seats, setSeats] = useState("1");
   const [notes, setNotes] = useState("");
   const [genderPref, setGenderPref] = useState("N");
+  const [userGender, setUserGender] = useState<"M" | "F" | "NB" | null>(null);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+
+  const allowedGenderPrefOptions = useMemo(() => {
+    const options = [{ label: "No preference", value: "N" as const }];
+    if (userGender) {
+      options.push({
+        label:
+          userGender === "M"
+            ? "Men only"
+            : userGender === "F"
+            ? "Women only"
+            : "Non-binary only",
+        value: userGender,
+      });
+    }
+    return options;
+  }, [userGender]);
+
+  useEffect(() => {
+    const allowedValues = allowedGenderPrefOptions.map((opt) => opt.value);
+    if (!allowedValues.includes(genderPref as any)) {
+      setGenderPref("N");
+    }
+  }, [allowedGenderPrefOptions, genderPref]);
 
   // Initialize content filter
   const filter = new Filter();
@@ -182,6 +206,25 @@ export default function EditRideScreen() {
 
     loadRideData();
   }, [id, userId]);
+
+  useEffect(() => {
+    const fetchUserGender = async () => {
+      if (!userId) return;
+      try {
+        const userDoc = await getDoc(doc(db, "users", userId));
+        if (userDoc.exists()) {
+          setUserGender(userDoc.data()?.gender ?? null);
+        } else {
+          setUserGender(null);
+        }
+      } catch (error) {
+        console.error("Failed to fetch user gender:", error);
+        setUserGender(null);
+      }
+    };
+
+    fetchUserGender();
+  }, [userId]);
 
   const handleSaveChanges = async () => {
     if (!from || !to || !date || !time || !seats) {
@@ -420,6 +463,9 @@ export default function EditRideScreen() {
             <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
               Gender Preference
             </Text>
+            <Text style={{ color: "#666", fontSize: 12, marginBottom: 8 }}>
+              We only show options that match your profile to keep rides aligned with your identity. Riders who don’t match won’t see this post.
+            </Text>
             <View
               style={{
                 flexDirection: "row",
@@ -428,12 +474,7 @@ export default function EditRideScreen() {
                 marginTop: 8,
               }}
             >
-              {[
-                { value: "N", label: "No Preference" },
-                { value: "M", label: "Male" },
-                { value: "F", label: "Female" },
-                { value: "NB", label: "Non-binary" },
-              ].map((option) => (
+              {allowedGenderPrefOptions.map((option) => (
                 <TouchableOpacity
                   key={option.value}
                   onPress={() => setGenderPref(option.value)}
@@ -447,7 +488,8 @@ export default function EditRideScreen() {
                     borderColor:
                       genderPref === option.value ? "#3a7bd5" : "#333",
                     marginBottom: 8,
-                    width: "48%",
+                    width:
+                      allowedGenderPrefOptions.length > 1 ? "48%" : "100%",
                   }}
                 >
                   <Text
