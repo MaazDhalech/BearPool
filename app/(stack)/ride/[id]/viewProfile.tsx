@@ -33,7 +33,7 @@ const DEFAULT_AVATAR =
 export default function UserProfileScreen() {
   const { isLoaded, userId: currentUserId } = useAuth();
   const router = useRouter();
-  const { userId } = useLocalSearchParams(); // The user ID of the profile being viewed
+  const { userId, id: rideIdParam } = useLocalSearchParams();
   
   const [userProfile, setUserProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -271,6 +271,21 @@ export default function UserProfileScreen() {
     );
   };
 
+  const handleReportUser = () => {
+    if (!userId) return;
+    const params: Record<string, string> = {
+      userId: String(userId),
+    };
+    if (rideIdParam) {
+      params.rideId = String(rideIdParam);
+    }
+
+    router.push({
+      pathname: "/(stack)/settings/report-user",
+      params,
+    });
+  };
+
   if (!isLoaded || loading) {
     return (
       <Box flex={1} bg="#121212" justifyContent="center" alignItems="center">
@@ -389,6 +404,14 @@ export default function UserProfileScreen() {
                 </Text>
               </Button>
             )}
+
+            <Button
+              variant="outline"
+              borderColor="#ff6b6b"
+              onPress={handleReportUser}
+            >
+              <Text color="#ff6b6b">Report User</Text>
+            </Button>
             
             <Button
               variant="outline"
