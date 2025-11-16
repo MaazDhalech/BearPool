@@ -1,6 +1,5 @@
 import { db } from "@/services/firebaseConfig";
 import { useAuth, useUser } from "@clerk/clerk-expo";
-import { Filter } from "bad-words";
 import { format, isValid, parse } from "date-fns";
 import { useRouter } from "expo-router";
 import {
@@ -24,6 +23,12 @@ import {
   View,
 } from "react-native";
 
+import * as filter from "leo-profanity";
+
+// Optional: Customize
+filter.add(["ridehate", "berkeleybully"]);
+// filter.remove("assassin");
+
 const MAX_NOTES_LENGTH = 200;
 
 export default function PostScreen() {
@@ -41,9 +46,6 @@ export default function PostScreen() {
   const [userGender, setUserGender] = useState<"M" | "F" | "NB" | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Initialize content filter
-  const filter = new Filter();
-
   const getSafeSeats = () => {
     const parsed = parseInt(seats, 10);
     return isNaN(parsed) ? 1 : parsed;
@@ -59,9 +61,9 @@ export default function PostScreen() {
     setGenderPref("N");
   };
 
-  // Content filtering function
+  // === Content validation using leo-profanity ===
   const validateContent = (text: string, fieldName: string): boolean => {
-    if (filter.isProfane(text)) {
+    if (filter.check(text)) {
       Alert.alert(
         "Inappropriate Content",
         `Please remove inappropriate language from the ${fieldName} field.`
@@ -71,7 +73,6 @@ export default function PostScreen() {
     return true;
   };
 
-  // Clean content function (alternative approach)
   const cleanContent = (text: string): string => {
     return filter.clean(text);
   };
@@ -82,27 +83,16 @@ export default function PostScreen() {
       .replace(/,?\s+(\d{4})$/, " $1")
       .trim();
 
-    const formatsWithYear = [
-      "MMMM d, yyyy",
-      "MMM d, yyyy",
-      "MMMM d yyyy",
-      "MMM d yyyy",
-    ];
-
+    const formatsWithYear = ["MMMM d, yyyy", "MMM d, yyyy", "MMMM d yyyy", "MMM d yyyy"];
     for (const fmt of formatsWithYear) {
       const parsedDate = parse(cleanedDateStr, fmt, new Date());
-      if (isValid(parsedDate)) {
-        return format(parsedDate, "MMMM d");
-      }
+      if (isValid(parsedDate)) return format(parsedDate, "MMMM d");
     }
 
     const formatsWithoutYear = ["MMMM d", "MMM d"];
-
     for (const fmt of formatsWithoutYear) {
       const parsedDate = parse(cleanedDateStr, fmt, new Date());
-      if (isValid(parsedDate)) {
-        return format(parsedDate, "MMMM d");
-      }
+      if (isValid(parsedDate)) return format(parsedDate, "MMMM d");
     }
 
     return null;
@@ -120,17 +110,16 @@ export default function PostScreen() {
       return isValid(parsed) ? format(parsed, "h:mm a") : null;
     };
 
-    if (parts.length === 1) {
-      return parseTime(parts[0]);
-    } else if (parts.length === 2) {
+    if (parts.length === 1) return parseTime(parts[0]);
+    if (parts.length === 2) {
       const start = parseTime(parts[0]);
       const end = parseTime(parts[1]);
       if (start && end) return `${start} - ${end}`;
     }
-
     return null;
   }
 
+  // === Load user gender ===
   useEffect(() => {
     const fetchUserGender = async () => {
       if (!userId) return;
@@ -146,12 +135,13 @@ export default function PostScreen() {
         setUserGender(null);
       }
     };
-
     fetchUserGender();
   }, [userId]);
 
   const allowedGenderPrefOptions = useMemo(() => {
-    const options = [{ label: "No preference", value: "N" as const }];
+    const options: { label: string; value: "N" | "M" | "F" | "NB" }[] = [
+      { label: "No preference", value: "N" },
+    ];
     if (userGender) {
       options.push({
         label:
@@ -173,32 +163,26 @@ export default function PostScreen() {
     }
   }, [allowedGenderPrefOptions, genderPref]);
 
+  // === Submit ride ===
   const handleSubmit = async () => {
     if (!from || !to || !date || !time || !seats) {
       Alert.alert("Error", "Please fill out all required fields");
       return;
     }
 
-    // Validate content for inappropriate language
     if (!validateContent(from, "From")) return;
     if (!validateContent(to, "To")) return;
     if (!validateContent(notes, "Additional Notes")) return;
 
     const formattedDate = validateAndFormatDate(date);
     if (!formattedDate) {
-      Alert.alert(
-        "Invalid Date",
-        "Please enter a valid date like 'June 20th, 2025' or 'Jun 20 2025'."
-      );
+      Alert.alert("Invalid Date", "Please enter a valid date like 'June 20th, 2025' or 'Jun 20 2025'.");
       return;
     }
 
     const formattedTime = validateAndFormatTime(time);
     if (!formattedTime) {
-      Alert.alert(
-        "Invalid Time",
-        "Please enter a valid time like '4:00 PM' or time range like '4:00–6:00 PM'."
-      );
+      Alert.alert("Invalid Time", "Please enter a valid time like '4:00 PM' or '4:00–6:00 PM'.");
       return;
     }
 
@@ -206,9 +190,9 @@ export default function PostScreen() {
     try {
       if (!userId) throw new Error("User not authenticated");
       const userDocRef = doc(db, "users", userId);
-      const existingUser = await getDoc(userDocRef);
+      const existing = await getDoc(userDocRef);
 
-      if (!existingUser.exists()) {
+      if (!existing.exists()) {
         await setDoc(userDocRef, {
           name: user?.fullName || "Unknown",
           email: user?.primaryEmailAddress?.emailAddress || "Unknown",
@@ -217,18 +201,10 @@ export default function PostScreen() {
           ridesHosted: 1,
         });
       } else {
-        await setDoc(
-          userDocRef,
-          {
-            ridesHosted: increment(1),
-          },
-          { merge: true }
-        );
+        await setDoc(userDocRef, { ridesHosted: increment(1) }, { merge: true });
       }
 
       const chatId = `ride_${Date.now()}_${userId}`;
-      
-      // Clean content before saving (optional: use either validation or cleaning)
       const cleanedFrom = cleanContent(from);
       const cleanedTo = cleanContent(to);
       const cleanedNotes = cleanContent(notes);
@@ -252,32 +228,22 @@ export default function PostScreen() {
       clearForm();
       router.replace("/");
     } catch (error) {
-      console.error(error);
+      console.error("Post error:", error);
       Alert.alert("Error", "Failed to post ride. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Handler for real-time content filtering in text inputs
+  // === Real-time input filtering ===
   const handleTextChange = (text: string, setter: (value: string) => void, maxLength?: number) => {
-    if (maxLength && text.length > maxLength) {
+    if (maxLength && text.length > maxLength) return;
+
+    if (filter.check(text)) {
+      Alert.alert("Inappropriate Content", "Please avoid using inappropriate language.");
       return;
     }
-    
-    // Option 1: Block inappropriate content immediately
-    if (filter.isProfane(text)) {
-      Alert.alert(
-        "Inappropriate Content",
-        "Please avoid using inappropriate language."
-      );
-      return;
-    }
-    
-    // Option 2: Auto-clean content (comment out the above if using this)
-    // const cleanedText = filter.clean(text);
-    // setter(cleanedText);
-    
+
     setter(text);
   };
 
@@ -292,48 +258,18 @@ export default function PostScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={{ marginTop: 60, marginBottom: 20 }}>
-          <Text
-            style={{
-              color: "#ffffff",
-              fontSize: 28,
-              fontWeight: "600",
-              marginBottom: 30,
-              textAlign: "left",
-            }}
-          >
+          <Text style={{ color: "#ffffff", fontSize: 28, fontWeight: "600", marginBottom: 30, textAlign: "left" }}>
             Post a Ride
           </Text>
 
           {[
-            {
-              label: "From",
-              value: from,
-              setter: setFrom,
-              placeholder: "e.g. Berkeley – Unit 1",
-            },
-            {
-              label: "To",
-              value: to,
-              setter: setTo,
-              placeholder: "e.g. SFO Terminal 2",
-            },
-            {
-              label: "Date",
-              value: date,
-              setter: setDate,
-              placeholder: "e.g. June 20",
-            },
-            {
-              label: "Time",
-              value: time,
-              setter: setTime,
-              placeholder: "e.g. 4:00–6:00 PM",
-            },
+            { label: "From", value: from, setter: setFrom, placeholder: "e.g. Berkeley – Unit 1" },
+            { label: "To", value: to, setter: setTo, placeholder: "e.g. SFO Terminal 2" },
+            { label: "Date", value: date, setter: setDate, placeholder: "e.g. June 20" },
+            { label: "Time", value: time, setter: setTime, placeholder: "e.g. 4:00–6:00 PM" },
           ].map(({ label, value, setter, placeholder }) => (
             <View key={label} style={{ marginBottom: 16 }}>
-              <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
-                {label}
-              </Text>
+              <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>{label}</Text>
               <TextInput
                 value={value}
                 placeholder={placeholder}
@@ -352,22 +288,14 @@ export default function PostScreen() {
             </View>
           ))}
 
+          {/* Seats */}
           <View style={{ marginBottom: 16 }}>
             <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
               How many other people do you want in the car?
             </Text>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-                marginTop: 8,
-              }}
-            >
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 8 }}>
               <TouchableOpacity
-                onPress={() =>
-                  setSeats(String(Math.max(1, getSafeSeats() - 1)))
-                }
+                onPress={() => setSeats(String(Math.max(1, getSafeSeats() - 1)))}
                 disabled={getSafeSeats() <= 1}
                 style={{
                   backgroundColor: getSafeSeats() <= 1 ? "#333" : "#3a7bd5",
@@ -379,21 +307,12 @@ export default function PostScreen() {
                 <Text style={{ color: "white", fontSize: 18 }}>-</Text>
               </TouchableOpacity>
 
-              <Text
-                style={{
-                  color: "white",
-                  fontSize: 18,
-                  minWidth: 30,
-                  textAlign: "center",
-                }}
-              >
+              <Text style={{ color: "white", fontSize: 18, minWidth: 30, textAlign: "center" }}>
                 {seats}
               </Text>
 
               <TouchableOpacity
-                onPress={() =>
-                  setSeats(String(Math.min(5, getSafeSeats() + 1)))
-                }
+                onPress={() => setSeats(String(Math.min(5, getSafeSeats() + 1)))}
                 disabled={getSafeSeats() >= 5}
                 style={{
                   backgroundColor: getSafeSeats() >= 5 ? "#333" : "#3a7bd5",
@@ -407,37 +326,26 @@ export default function PostScreen() {
             </View>
           </View>
 
+          {/* Gender Preference */}
           <View style={{ marginBottom: 16 }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
-              Gender Preference
-            </Text>
+            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>Gender Preference</Text>
             <Text style={{ color: "#666", fontSize: 12, marginBottom: 8 }}>
               Only riders who match this selection will see your post. We hide other options to keep rides aligned with your profile.
             </Text>
-            <View
-              style={{
-                flexDirection: "row",
-                flexWrap: "wrap",
-                justifyContent: "space-between",
-                marginTop: 8,
-              }}
-            >
+            <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginTop: 8 }}>
               {allowedGenderPrefOptions.map((option) => (
                 <TouchableOpacity
                   key={option.value}
                   onPress={() => setGenderPref(option.value)}
                   style={{
-                    backgroundColor:
-                      genderPref === option.value ? "#3a7bd5" : "#1e1e1e",
+                    backgroundColor: genderPref === option.value ? "#3a7bd5" : "#1e1e1e",
                     paddingVertical: 12,
                     paddingHorizontal: 16,
                     borderRadius: 8,
                     borderWidth: 1,
-                    borderColor:
-                      genderPref === option.value ? "#3a7bd5" : "#333",
+                    borderColor: genderPref === option.value ? "#3a7bd5" : "#333",
                     marginBottom: 8,
-                    width:
-                      allowedGenderPrefOptions.length > 1 ? "48%" : "100%",
+                    width: allowedGenderPrefOptions.length > 1 ? "48%" : "100%",
                   }}
                 >
                   <Text
@@ -454,17 +362,16 @@ export default function PostScreen() {
             </View>
           </View>
 
+          {/* Notes */}
           <View style={{ marginBottom: 24 }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
-              Additional Notes
-            </Text>
+            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>Additional Notes</Text>
             <TextInput
               value={notes}
               placeholder="Optional"
               placeholderTextColor="#666"
               onChangeText={(text) => handleTextChange(text, setNotes, MAX_NOTES_LENGTH)}
               maxLength={MAX_NOTES_LENGTH}
-              multiline={true}
+              multiline
               style={{
                 backgroundColor: "#1e1e1e",
                 color: "#ffffff",
@@ -477,18 +384,12 @@ export default function PostScreen() {
                 textAlignVertical: "top",
               }}
             />
-            <Text
-              style={{
-                color: "#666",
-                fontSize: 12,
-                marginTop: 4,
-                textAlign: "right",
-              }}
-            >
+            <Text style={{ color: "#666", fontSize: 12, marginTop: 4, textAlign: "right" }}>
               {notes.length} / {MAX_NOTES_LENGTH}
             </Text>
           </View>
 
+          {/* Submit */}
           <TouchableOpacity
             onPress={handleSubmit}
             activeOpacity={0.8}
@@ -505,14 +406,7 @@ export default function PostScreen() {
               elevation: 3,
             }}
           >
-            <Text
-              style={{
-                color: "white",
-                textAlign: "center",
-                fontWeight: "600",
-                fontSize: 16,
-              }}
-            >
+            <Text style={{ color: "white", textAlign: "center", fontWeight: "600", fontSize: 16 }}>
               {loading ? "Posting..." : "Post Ride"}
             </Text>
           </TouchableOpacity>

@@ -13,61 +13,22 @@ import {
   KeyboardAvoidingView,
   ScrollView,
   Text,
-  VStack
+  VStack,
 } from "@gluestack-ui/themed";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
-import {
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc
-} from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { Menu } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { Alert, Platform, TouchableOpacity } from "react-native";
 
-// Import bad-words with error handling
-let Filter: any = null;
-let filter: any = null;
+import * as filter from "leo-profanity";
 
-try {
-  // Try to import bad-words
-  const BadWordsModule = require("bad-words");
-  Filter = BadWordsModule.default || BadWordsModule;
-  filter = new Filter();
-} catch (error) {
-  console.warn("Bad-words library not available, using fallback filter:", error);
-  
-  // Fallback implementation with basic profanity list
-  const basicProfanityList = [
-    'damn', 'hell', 'shit', 'fuck', 'bitch', 'ass', 'crap', 'piss'
-    // Add more words as needed
-  ];
-  
-  filter = {
-    isProfane: (text: string) => {
-      const lowerText = text.toLowerCase();
-      return basicProfanityList.some(word => lowerText.includes(word));
-    },
-    clean: (text: string) => {
-      let cleanText = text;
-      basicProfanityList.forEach(word => {
-        const regex = new RegExp(word, 'gi');
-        cleanText = cleanText.replace(regex, '*'.repeat(word.length));
-      });
-      return cleanText;
-    }
-  };
-}
+// Optional: Customize
+filter.add(["ridehate", "berkeleybully"]);
+// filter.remove("assassin");
 
-// Add custom words if the library is available
-if (filter && typeof filter.addWords === 'function') {
-  // filter.addWords(['customword1', 'customword2']);
-}
-
-// Default avatar image (can be a placeholder image URL or base64 string)
 const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
 
@@ -79,10 +40,10 @@ export default function ProfileScreen() {
   const [profileData, setProfileData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
-  const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
-  
+  const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
+
   type Gender = "M" | "F" | "NB" | null;
-  
+
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -90,46 +51,44 @@ export default function ProfileScreen() {
     gender: null as Gender,
   });
 
-  // Single validation function that handles both checking and user feedback
+  // === Single validation using leo-profanity ===
   const validateAndCleanText = (text: string, fieldName: string): { isValid: boolean; cleanedText: string; error?: string } => {
     if (!text.trim()) {
       return { isValid: true, cleanedText: text };
     }
-    
-    if (filter.isProfane(text)) {
+
+    if (filter.check(text)) {
       const cleanedText = filter.clean(text);
       return {
         isValid: false,
         cleanedText,
-        error: `The ${fieldName} contains inappropriate content.`
+        error: `The ${fieldName} contains inappropriate content.`,
       };
     }
-    
+
     return { isValid: true, cleanedText: text };
   };
 
-  // Real-time validation with user feedback
+  // === Real-time validation + error feedback ===
   const handleTextChange = (field: keyof typeof formData, value: string) => {
-    // Update form data immediately for responsive UI
     setFormData({ ...formData, [field]: value });
-    
-    // Clear previous error for this field
+
     if (formErrors[field]) {
-      setFormErrors({ ...formErrors, [field]: '' });
+      setFormErrors({ ...formErrors, [field]: "" });
     }
-    
-    // Validate and show immediate feedback if needed
+
     if (value.trim()) {
       const validation = validateAndCleanText(value, field);
       if (!validation.isValid) {
-        setFormErrors({ 
-          ...formErrors, 
-          [field]: validation.error || `${field} contains inappropriate content` 
+        setFormErrors({
+          ...formErrors,
+          [field]: validation.error || `${field} contains inappropriate content`,
         });
       }
     }
   };
 
+  // === Load profile data ===
   useEffect(() => {
     if (!isLoaded || !clerkUserId || !user) return;
 
@@ -141,11 +100,8 @@ export default function ProfileScreen() {
         const firebaseData = userSnap.exists()
           ? {
               ...userSnap.data(),
-              avatar:
-                typeof userSnap.data().avatar === "string"
-                  ? userSnap.data().avatar
-                  : DEFAULT_AVATAR,
-              blockedUsers: userSnap.data().blockedUsers || [], // Ensure blockedUsers exists
+              avatar: typeof userSnap.data().avatar === "string" ? userSnap.data().avatar : DEFAULT_AVATAR,
+              blockedUsers: userSnap.data().blockedUsers || [],
             }
           : {
               avatar: DEFAULT_AVATAR,
@@ -183,38 +139,30 @@ export default function ProfileScreen() {
     fetchUserData();
   }, [isLoaded, clerkUserId, user]);
 
+  // === Save profile ===
   const handleUpdateProfile = async () => {
     if (!clerkUserId || !user) return;
-    
-    // Validate all fields
+
     const validations = {
       firstName: validateAndCleanText(formData.firstName, "first name"),
       lastName: validateAndCleanText(formData.lastName, "last name"),
       username: validateAndCleanText(formData.username, "username"),
     };
 
-    // Check if any validation failed
-    const hasErrors = Object.values(validations).some(v => !v.isValid);
-    
+    const hasErrors = Object.values(validations).some((v) => !v.isValid);
     if (hasErrors) {
-      // Show which fields have issues
       const errorMessages = Object.entries(validations)
-        .filter(([_, validation]) => !validation.isValid)
-        .map(([field, validation]) => `${field}: ${validation.error}`)
-        .join('\n');
-      
-      Alert.alert(
-        "Content Issues Found",
-        `Please fix the following issues:\n\n${errorMessages}`,
-        [
-          { text: "Edit", style: "cancel" }
-        ]
-      );
+        .filter(([_, v]) => !v.isValid)
+        .map(([field, v]) => `${field}: ${v.error}`)
+        .join("\n");
+
+      Alert.alert("Content Issues Found", `Please fix the following:\n\n${errorMessages}`, [
+        { text: "Edit", style: "cancel" },
+      ]);
       return;
     }
 
     try {
-      // Use the already validated data (which is clean)
       const cleanedData = {
         firstName: validations.firstName.cleanedText,
         lastName: validations.lastName.cleanedText,
@@ -222,13 +170,11 @@ export default function ProfileScreen() {
         gender: formData.gender,
       };
 
-      // Update Clerk
       await user.update({
         firstName: cleanedData.firstName,
         lastName: cleanedData.lastName,
       });
 
-      // Update Firestore
       const updatedData = {
         username: cleanedData.username,
         gender: cleanedData.gender,
@@ -239,30 +185,20 @@ export default function ProfileScreen() {
         createdAt: profileData.firebaseData.createdAt,
         ridesJoined: profileData.firebaseData.ridesJoined,
         ridesHosted: profileData.firebaseData.ridesHosted,
-        blockedUsers: profileData.firebaseData.blockedUsers || [], // Preserve blockedUsers
+        blockedUsers: profileData.firebaseData.blockedUsers || [],
       };
-      
+
       await setDoc(doc(db, "users", clerkUserId), updatedData);
 
       setProfileData({
-        clerkData: {
-          ...profileData.clerkData,
-          firstName: cleanedData.firstName,
-          lastName: cleanedData.lastName,
-          username: cleanedData.username,
-        },
+        clerkData: { ...profileData.clerkData, ...cleanedData },
         firebaseData: updatedData,
       });
-      
-      setFormData({
-        firstName: cleanedData.firstName,
-        lastName: cleanedData.lastName,
-        username: cleanedData.username,
-        gender: cleanedData.gender,
-      });
+
+      setFormData(cleanedData);
       setFormErrors({});
       setIsEditing(false);
-      
+
       Alert.alert("Success", "Profile updated successfully!", [{ text: "OK" }]);
     } catch (error) {
       console.error("Error saving profile:", error);
@@ -270,6 +206,7 @@ export default function ProfileScreen() {
     }
   };
 
+  // === Change avatar ===
   const handleChangeAvatar = async () => {
     if (!clerkUserId) return;
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -277,11 +214,13 @@ export default function ProfileScreen() {
       Alert.alert("Permission Required", "Camera roll permissions are required to change your avatar.");
       return;
     }
+
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       aspect: [1, 1],
       quality: 0.5,
     });
+
     if (result.canceled) return;
 
     const asset = result.assets[0];
@@ -290,15 +229,18 @@ export default function ProfileScreen() {
       [{ resize: { width: 400 } }],
       { compress: 0.4, format: ImageManipulator.SaveFormat.JPEG, base64: true }
     );
+
     if (!compressed.base64) {
       Alert.alert("Error", "Image compression failed. Please try again.");
       return;
     }
+
     const base64 = `data:image/jpeg;base64,${compressed.base64}`;
     if (base64.length > 900000) {
       Alert.alert("Error", "Image too large, please choose a smaller one.");
       return;
     }
+
     await updateDoc(doc(db, "users", clerkUserId), { avatar: base64 });
     setProfileData((p: any) => ({
       ...p,
@@ -318,11 +260,7 @@ export default function ProfileScreen() {
     return (
       <Box flex={1} bg="#121212" justifyContent="center" alignItems="center">
         <Text color="#a0a0a0">Please sign in to view your profile</Text>
-        <Button
-          mt="$4"
-          bg="#3a7bd5"
-          onPress={() => router.push("/(auth)/Login")}
-        >
+        <Button mt="$4" bg="#3a7bd5" onPress={() => router.push("/(auth)/Login")}>
           <Text color="white">Sign In</Text>
         </Button>
       </Box>
@@ -330,12 +268,9 @@ export default function ProfileScreen() {
   }
 
   const display = {
-    firstName:
-      profileData.firebaseData.first_name || profileData.clerkData.firstName,
-    lastName:
-      profileData.firebaseData.last_name || profileData.clerkData.lastName,
-    username:
-      profileData.firebaseData.username || profileData.clerkData.username,
+    firstName: profileData.firebaseData.first_name || profileData.clerkData.firstName,
+    lastName: profileData.firebaseData.last_name || profileData.clerkData.lastName,
+    username: profileData.firebaseData.username || profileData.clerkData.username,
     email: profileData.clerkData.email,
     gender: profileData.firebaseData.gender,
     avatar: profileData.firebaseData.avatar,
@@ -344,22 +279,14 @@ export default function ProfileScreen() {
     blockedUsers: profileData.firebaseData.blockedUsers || [],
   };
 
-  const initials =
-    (display.firstName?.[0] || "") + (display.lastName?.[0] || "") || "U";
+  const initials = (display.firstName?.[0] || "") + (display.lastName?.[0] || "") || "U";
 
   return (
     <Box flex={1} bg="#121212">
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
-      >
-        <ScrollView 
-          contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
-          showsVerticalScrollIndicator={false}
-        >
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
           <Box px="$4" py="$6">
-            {/* Header with Settings Button */}
+            {/* Header */}
             <HStack justifyContent="space-between" alignItems="center" mb="$6" mt="$8">
               <Heading size="xl" color="white">
                 {isEditing ? "Edit Profile" : "Your Profile"}
@@ -381,26 +308,19 @@ export default function ProfileScreen() {
             </HStack>
 
             <VStack space="lg" alignItems="center">
-              <TouchableOpacity
-                onPress={isEditing ? handleChangeAvatar : undefined}
-                style={{ marginBottom: 24 }}
-              >
+              {/* Avatar */}
+              <TouchableOpacity onPress={isEditing ? handleChangeAvatar : undefined} style={{ marginBottom: 24 }}>
                 <Avatar size="2xl" bg="#1e1e1e" borderRadius="$full">
                   {display.avatar ? (
                     <AvatarImage source={{ uri: display.avatar }} alt="Avatar" />
                   ) : (
-                    <Avatar.FallbackText color="white">
-                      {initials}
-                    </Avatar.FallbackText>
+                    <Avatar.FallbackText color="white">{initials}</Avatar.FallbackText>
                   )}
                 </Avatar>
-                {isEditing && (
-                  <Text mt="$2" color="#3a7bd5">
-                    Tap to change photo
-                  </Text>
-                )}
+                {isEditing && <Text mt="$2" color="#3a7bd5">Tap to change photo</Text>}
               </TouchableOpacity>
 
+              {/* Stats */}
               <HStack space="xl" w="100%" justifyContent="space-evenly">
                 <VStack alignItems="center">
                   <Text color="#a0a0a0">Rides Joined</Text>
@@ -416,54 +336,29 @@ export default function ProfileScreen() {
                 </VStack>
               </HStack>
 
+              {/* Form / Display */}
               <VStack space="sm" w="100%" mt="$6">
                 {isEditing ? (
                   <>
                     <Text color="#a0a0a0">First Name</Text>
                     <Input bg="#1e1e1e" borderColor={formErrors.firstName ? "#ff6b6b" : "#333"}>
-                      <InputField
-                        color="white"
-                        value={formData.firstName}
-                        onChangeText={(t) => handleTextChange('firstName', t)}
-                      />
+                      <InputField color="white" value={formData.firstName} onChangeText={(t) => handleTextChange("firstName", t)} />
                     </Input>
-                    {formErrors.firstName && (
-                      <Text color="#ff6b6b" fontSize="$sm" mt="$1">
-                        {formErrors.firstName}
-                      </Text>
-                    )}
+                    {formErrors.firstName && <Text color="#ff6b6b" fontSize="$sm" mt="$1">{formErrors.firstName}</Text>}
 
                     <Text color="#a0a0a0" mt="$4">Last Name</Text>
                     <Input bg="#1e1e1e" borderColor={formErrors.lastName ? "#ff6b6b" : "#333"}>
-                      <InputField
-                        color="white"
-                        value={formData.lastName}
-                        onChangeText={(t) => handleTextChange('lastName', t)}
-                      />
+                      <InputField color="white" value={formData.lastName} onChangeText={(t) => handleTextChange("lastName", t)} />
                     </Input>
-                    {formErrors.lastName && (
-                      <Text color="#ff6b6b" fontSize="$sm" mt="$1">
-                        {formErrors.lastName}
-                      </Text>
-                    )}
+                    {formErrors.lastName && <Text color="#ff6b6b" fontSize="$sm" mt="$1">{formErrors.lastName}</Text>}
 
                     <Text color="#a0a0a0" mt="$4">Username</Text>
                     <Input bg="#1e1e1e" borderColor={formErrors.username ? "#ff6b6b" : "#333"}>
-                      <InputField
-                        color="white"
-                        value={formData.username}
-                        onChangeText={(t) => handleTextChange('username', t)}
-                      />
+                      <InputField color="white" value={formData.username} onChangeText={(t) => handleTextChange("username", t)} />
                     </Input>
-                    {formErrors.username && (
-                      <Text color="#ff6b6b" fontSize="$sm" mt="$1">
-                        {formErrors.username}
-                      </Text>
-                    )}
+                    {formErrors.username && <Text color="#ff6b6b" fontSize="$sm" mt="$1">{formErrors.username}</Text>}
 
-                    <Text color="#a0a0a0" mt="$4">
-                      Gender (optional — helps us keep riders safe)
-                    </Text>
+                    <Text color="#a0a0a0" mt="$4">Gender (optional — helps us keep riders safe)</Text>
                     <Text color="#666" fontSize="$xs" mb="$2">
                       We only ask so safety features can work. It’s completely optional, never shared, and you can remove it anytime.
                     </Text>
@@ -471,38 +366,25 @@ export default function ProfileScreen() {
                       {(["M", "F", "NB"] as Gender[]).map((option) => (
                         <TouchableOpacity
                           key={option}
-                          onPress={() =>
-                            setFormData({ ...formData, gender: option })
-                          }
+                          onPress={() => setFormData({ ...formData, gender: option })}
                           style={{
                             flex: 1,
                             padding: 12,
                             borderRadius: 8,
                             borderWidth: 1,
-                            borderColor:
-                              formData.gender === option ? "#3a7bd5" : "#333",
-                            backgroundColor:
-                              formData.gender === option ? "#1a3a7b" : "#1e1e1e",
+                            borderColor: formData.gender === option ? "#3a7bd5" : "#333",
+                            backgroundColor: formData.gender === option ? "#1a3a7b" : "#1e1e1e",
                             alignItems: "center",
-                            justifyContent: "center",
                           }}
                         >
                           <Text
                             style={{
-                              color:
-                                formData.gender === option
-                                  ? "#ffffff"
-                                  : "#a0a0a0",
+                              color: formData.gender === option ? "#ffffff" : "#a0a0a0",
                               fontSize: 14,
-                              fontWeight:
-                                formData.gender === option ? "600" : "400",
+                              fontWeight: formData.gender === option ? "600" : "400",
                             }}
                           >
-                            {option === "M"
-                              ? "Male"
-                              : option === "F"
-                              ? "Female"
-                              : "Non-binary"}
+                            {option === "M" ? "Male" : option === "F" ? "Female" : "Non-binary"}
                           </Text>
                         </TouchableOpacity>
                       ))}
@@ -515,8 +397,7 @@ export default function ProfileScreen() {
                         borderRadius: 8,
                         borderWidth: 1,
                         borderColor: formData.gender === null ? "#3a7bd5" : "#333",
-                        backgroundColor:
-                          formData.gender === null ? "#1a3a7b" : "transparent",
+                        backgroundColor: formData.gender === null ? "#1a3a7b" : "transparent",
                         alignItems: "center",
                       }}
                     >
@@ -538,16 +419,12 @@ export default function ProfileScreen() {
                       {display.firstName} {display.lastName}
                     </Text>
 
-                    <Text color="#a0a0a0" mt="$4">
-                      Username
-                    </Text>
+                    <Text color="#a0a0a0" mt="$4">Username</Text>
                     <Text color="white" fontSize="$lg" fontWeight="$semibold">
                       {display.username || "Not set"}
                     </Text>
 
-                    <Text color="#a0a0a0" mt="$4">
-                      Gender (optional — helps us keep riders safe)
-                    </Text>
+                    <Text color="#a0a0a0" mt="$4">Gender (optional — helps us keep riders safe)</Text>
                     <Text color="white" fontSize="$lg" fontWeight="$semibold">
                       {display.gender === "M"
                         ? "Male"
@@ -562,21 +439,18 @@ export default function ProfileScreen() {
                     </Text>
                   </>
                 )}
-                <Text color="#a0a0a0" mt="$4">
-                  Email
-                </Text>
+                <Text color="#a0a0a0" mt="$4">Email</Text>
                 <Text color="white" fontSize="$lg" fontWeight="$semibold">
                   {display.email}
                 </Text>
               </VStack>
 
+              {/* Buttons */}
               <VStack space="md" mt="$8" w="100%" pb="$6">
                 {isEditing ? (
                   <>
                     <Button bg="#3a7bd5" onPress={handleUpdateProfile}>
-                      <Text color="white" fontWeight="$semibold">
-                        Save Changes
-                      </Text>
+                      <Text color="white" fontWeight="$semibold">Save Changes</Text>
                     </Button>
                     <Button
                       variant="outline"
@@ -590,11 +464,7 @@ export default function ProfileScreen() {
                     </Button>
                   </>
                 ) : (
-                  <Button
-                    variant="outline"
-                    borderColor="#333"
-                    onPress={() => setIsEditing(true)}
-                  >
+                  <Button variant="outline" borderColor="#333" onPress={() => setIsEditing(true)}>
                     <Text color="white">Edit Profile</Text>
                   </Button>
                 )}

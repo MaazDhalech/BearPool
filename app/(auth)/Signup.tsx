@@ -1,7 +1,6 @@
-import TOSOverlay from "@/components/TOSOverlay"; // <-- NEW
+import TOSOverlay from "@/components/TOSOverlay";
 import { db } from "@/services/firebaseConfig";
 import { useSignUp } from "@clerk/clerk-expo";
-import { Filter } from 'bad-words';
 import { Link, useRouter } from "expo-router";
 import { doc, setDoc } from "firebase/firestore";
 import React from "react";
@@ -16,6 +15,13 @@ import {
 } from "react-native";
 import "react-native-get-random-values";
 
+import * as filter from "leo-profanity";
+
+// Optional: Add app-specific blocked words
+filter.add(["yourappspecificslur", "berkeleyhateword"]);
+// Optional: Remove false positives
+// filter.remove("innocentword");
+
 const isBerkeleyEmail = (email: string) => {
   return email.toLowerCase().endsWith("@berkeley.edu");
 };
@@ -28,7 +34,6 @@ type Gender = "M" | "F" | "NB";
 export default function Signup() {
   const { isLoaded, signUp, setActive } = useSignUp();
   const router = useRouter();
-  const filter = new Filter();
 
   const [emailAddress, setEmailAddress] = React.useState("");
   const [username, setUsername] = React.useState("");
@@ -41,12 +46,16 @@ export default function Signup() {
   const [verificationCode, setVerificationCode] = React.useState("");
   const [signUpAttempt, setSignUpAttempt] = React.useState<any>(null);
 
-  // --- NEW: TOS Agreement ---
+  // --- TOS Agreement ---
   const [tosAccepted, setTosAccepted] = React.useState(false);
   const [showTOS, setShowTOS] = React.useState(false);
 
   const containsProfanity = (text: string): boolean => {
-    return filter.isProfane(text);
+    return filter.check(text);
+  };
+
+  const cleanText = (text: string): string => {
+    return filter.clean(text);
   };
 
   const isFormValid = () =>
@@ -55,23 +64,27 @@ export default function Signup() {
     password.length > 0 &&
     firstName.trim().length > 0 &&
     lastName.trim().length > 0 &&
-    tosAccepted; // <-- REQUIRED
+    tosAccepted;
 
   const onSignUpPress = async () => {
     if (!isLoaded) return;
     setError("");
 
-    if (containsProfanity(username)) {
-      setError("Username contains inappropriate language. Please choose a different username.");
+    const trimmedUsername = username.trim();
+    const trimmedFirstName = firstName.trim();
+    const trimmedLastName = lastName.trim();
+
+    if (containsProfanity(trimmedUsername)) {
+      setError("Username contains inappropriate language. Please choose a different one.");
       return;
     }
 
-    if (containsProfanity(firstName)) {
+    if (containsProfanity(trimmedFirstName)) {
       setError("First name contains inappropriate language. Please enter a valid name.");
       return;
     }
 
-    if (containsProfanity(lastName)) {
+    if (containsProfanity(trimmedLastName)) {
       setError("Last name contains inappropriate language. Please enter a valid name.");
       return;
     }
@@ -89,9 +102,9 @@ export default function Signup() {
       const attempt = await signUp.create({
         emailAddress,
         password,
-        username,
-        firstName,
-        lastName,
+        username: trimmedUsername,
+        firstName: trimmedFirstName,
+        lastName: trimmedLastName,
       });
 
       await attempt.prepareEmailAddressVerification({ strategy: "email_code" });
@@ -110,10 +123,9 @@ export default function Signup() {
     }
 
     try {
-      const completeSignUp =
-        await signUpAttempt.attemptEmailAddressVerification({
-          code: verificationCode,
-        });
+      const completeSignUp = await signUpAttempt.attemptEmailAddressVerification({
+        code: verificationCode,
+      });
 
       if (completeSignUp.status === "complete") {
         if (setActive) {
@@ -125,17 +137,16 @@ export default function Signup() {
         await setDoc(doc(db, "users", clerkId), {
           clerkId,
           avatar: BLANK_AVATAR,
-          username: filter.clean(username.trim()),
+          username: cleanText(username.trim()),
           email: emailAddress.toLowerCase(),
-          first_name: filter.clean(firstName.trim()),
-          last_name: filter.clean(lastName.trim()),
+          first_name: cleanText(firstName.trim()),
+          last_name: cleanText(lastName.trim()),
           gender: gender ?? null,
           createdAt: new Date(),
           ridesJoined: 0,
           ridesHosted: 0,
-          // --- NEW: TOS Acceptance ---
           tosAcceptedAt: new Date(),
-          tosVersion: "2025-11-15", // Update when TOS changes
+          tosVersion: "2025-11-15",
         });
 
         router.replace("/");
@@ -190,7 +201,7 @@ export default function Signup() {
         contentContainerStyle={{
           flexGrow: 1,
           justifyContent: "center",
-          padding: 20
+          padding: 20,
         }}
         keyboardShouldPersistTaps="handled"
       >
@@ -315,11 +326,7 @@ export default function Signup() {
                       lineHeight: 20,
                     }}
                   >
-                    {option === "M"
-                      ? "Male"
-                      : option === "F"
-                      ? "Female"
-                      : "Non-binary"}
+                    {option === "M" ? "Male" : option === "F" ? "Female" : "Non-binary"}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -379,7 +386,7 @@ export default function Signup() {
               }}
             >
               {tosAccepted && (
-                <Text style={{ color: "white", fontSize: 16, lineHeight: 20 }}>✓</Text>
+                <Text style={{ color: "white", fontSize: 16, lineHeight: 20 }}>Check</Text>
               )}
             </TouchableOpacity>
 
@@ -441,7 +448,7 @@ export default function Signup() {
         </View>
       </ScrollView>
 
-      {/* --- TOS Overlay (fetches from your Gist) --- */}
+      {/* --- TOS Overlay --- */}
       <TOSOverlay
         visible={showTOS}
         onClose={() => setShowTOS(false)}

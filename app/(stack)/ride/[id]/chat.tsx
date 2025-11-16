@@ -13,7 +13,6 @@ import {
   Text,
   VStack,
 } from "@gluestack-ui/themed";
-import { Filter } from 'bad-words';
 import { router, useLocalSearchParams } from "expo-router";
 import {
   addDoc,
@@ -34,9 +33,15 @@ import {
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
-  TouchableWithoutFeedback
+  TouchableWithoutFeedback,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import * as filter from "leo-profanity";
+
+// Optional: Customize filter on startup
+filter.add(["berkeleyhate", "ridebully"]); // Add ride-specific slurs
+// filter.remove("assassin"); // Avoid false positives
 
 const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
@@ -53,33 +58,16 @@ export default function RideChatScreen() {
   const { user } = useUser();
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
-  const [rideInfo, setRideInfo] = useState<{ from: string; to: string } | null>(
-    null
-  );
+  const [rideInfo, setRideInfo] = useState<{ from: string; to: string } | null>(null);
   const [userMap, setUserMap] = useState<UserMap>({});
   const userMapRef = useRef<UserMap>({});
   const scrollRef = useRef<any>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const insets = useSafeAreaInsets();
 
-  // Initialize content filter
-  const filter = useRef(new Filter()).current;
-
   const animatedValue = useRef(new Animated.Value(0)).current;
   const prevMembersRef = useRef<string[]>([]);
   const pendingSystemMessageRef = useRef<Set<string>>(new Set());
-
-  // Configure filter settings (optional customization)
-  useEffect(() => {
-    // You can add custom words to the filter
-    // filter.addWords('customword1', 'customword2');
-    
-    // You can remove words if needed
-    // filter.removeWords('word1', 'word2');
-    
-    // Set placeholder character (default is '*')
-    filter.placeHolder = '*';
-  }, []);
 
   const animatePressIn = () => {
     Animated.timing(animatedValue, {
@@ -102,15 +90,15 @@ export default function RideChatScreen() {
     outputRange: ["#3a7bd5", "#122a58"],
   });
 
-  // Content filtering function
+  // === Content filtering using leo-profanity ===
   const filterContent = (text: string): { filtered: string; containsProfanity: boolean } => {
-    const containsProfanity = filter.isProfane(text);
+    const containsProfanity = filter.check(text);
     const filtered = filter.clean(text);
     return { filtered, containsProfanity };
   };
 
   const fetchUserDetails = async (uid: string) => {
-    if (userMap[uid]) return; // Prevent refetching
+    if (userMap[uid]) return;
     const uDoc = await getDoc(doc(db, "users", uid));
     if (uDoc.exists()) {
       const d = uDoc.data();
@@ -124,25 +112,22 @@ export default function RideChatScreen() {
     }
   };
 
-  // Navigate to user profile
   const handleUserPress = (userId: string) => {
     if (userId === user?.id) {
-      // If it's the current user, go to their own profile
       router.push("/(tabs)/profile");
     } else {
-      // Navigate to other user's profile
       router.push({
         pathname: "/(stack)/ride/[id]/viewProfile",
-        params: { id: rideId as string, userId }
+        params: { id: rideId as string, userId },
       });
     }
   };
 
-  // Listen for membership changes to post system messages
   useEffect(() => {
     userMapRef.current = userMap;
   }, [userMap]);
 
+  // === System messages for join/leave ===
   useEffect(() => {
     if (!rideId) return;
     const rideDocRef = doc(db, "rides", String(rideId));
@@ -165,17 +150,13 @@ export default function RideChatScreen() {
         let name = userMap[uid]?.name;
         if (!name) {
           const uDoc = await getDoc(doc(db, "users", uid));
-          name = uDoc.exists()
-            ? uDoc.data().username || "Anonymous"
-            : "Unknown";
+          name = uDoc.exists() ? uDoc.data().username || "Anonymous" : "Unknown";
         }
         const key = `${uid}-${joined.includes(uid) ? "join" : "leave"}`;
         if (!pendingSystemMessageRef.current.has(key)) {
           pendingSystemMessageRef.current.add(key);
           await addDoc(collection(db, "rides", String(rideId), "messages"), {
-            text: `${name} has ${
-              joined.includes(uid) ? "joined" : "left"
-            } the ride`,
+            text: `${name} has ${joined.includes(uid) ? "joined" : "left"} the ride`,
             senderId: null,
             timestamp: serverTimestamp(),
             system: true,
@@ -192,6 +173,7 @@ export default function RideChatScreen() {
     return () => unsubRide();
   }, [rideId]);
 
+  // === Load messages + user data ===
   useEffect(() => {
     if (!rideId) return;
 
@@ -230,6 +212,7 @@ export default function RideChatScreen() {
     return () => unsubscribe();
   }, [rideId, userMap]);
 
+  // === Load ride info ===
   useEffect(() => {
     if (!rideId) return;
     (async () => {
@@ -241,9 +224,10 @@ export default function RideChatScreen() {
     })();
   }, [rideId]);
 
+  // === Send message with filtering ===
   const sendMessage = async (messageText: string) => {
     try {
-      console.log("📤 Sending message:", {
+      console.log("Sending message:", {
         text: messageText,
         senderId: user?.id,
         senderName: user?.fullName || user?.primaryEmailAddress || "Anonymous",
@@ -260,34 +244,18 @@ export default function RideChatScreen() {
 
       setInput("");
     } catch (err) {
-      console.error("❌ Failed to send message:", JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
+      console.error("Failed to send message:", err);
       Alert.alert("Error", "Failed to send message. Please try again.");
     }
   };
 
   const handleSend = async () => {
-    console.log("📨 handleSend triggered");
-
     const trimmed = input.trim();
-  
-    if (!trimmed) {
-      console.warn("✋ Empty input. Aborting send.");
-      return;
-    }
-  
-    if (!rideId) {
-      console.error("❌ rideId is undefined.");
-      return;
-    }
-  
-    if (!user?.id) {
-      console.error("❌ Clerk user is not available.");
-      return;
-    }
+    if (!trimmed || !rideId || !user?.id) return;
 
     const { filtered, containsProfanity } = filterContent(trimmed);
 
-    // Option 1: Block messages with profanity entirely
+    // === Option 1: Block profane messages ===
     if (containsProfanity) {
       Alert.alert(
         "Message Not Sent",
@@ -297,23 +265,18 @@ export default function RideChatScreen() {
       return;
     }
 
-    // Option 2: Send filtered message (uncomment this and comment out the above if you prefer filtering)
+    // === Option 2: Allow filtered message (uncomment to enable) ===
     /*
     if (containsProfanity) {
       Alert.alert(
         "Message Filtered",
         "Your message contained inappropriate language and has been filtered.",
         [
-          {
-            text: "Cancel",
-            style: "cancel"
-          },
+          { text: "Cancel", style: "cancel" },
           {
             text: "Send Anyway",
-            onPress: async () => {
-              await sendMessage(filtered);
-            }
-          }
+            onPress: () => sendMessage(filtered),
+          },
         ]
       );
       return;
@@ -323,14 +286,9 @@ export default function RideChatScreen() {
     await sendMessage(filtered);
   };
 
-  // Real-time input validation (optional - shows warning as user types)
   const handleInputChange = (text: string) => {
     setInput(text);
-    
-    // Optional: Show real-time feedback
-    // if (filter.isProfane(text)) {
-    //   // Could show a warning indicator here
-    // }
+    // Optional: Add real-time warning UI here
   };
 
   return (
@@ -343,24 +301,11 @@ export default function RideChatScreen() {
         >
           <Box flex={1} bg="#121212" pt={insets.top}>
             {/* Header */}
-            <HStack
-              alignItems="center"
-              px="$4"
-              py="$3"
-              borderBottomWidth="$1"
-              borderBottomColor="#333"
-            >
-              <Pressable
-                onPress={() => router.back()}
-                p="$2"
-                borderRadius="$full"
-                mr="$3"
-              >
+            <HStack alignItems="center" px="$4" py="$3" borderBottomWidth="$1" borderBottomColor="#333">
+              <Pressable onPress={() => router.back()} p="$2" borderRadius="$full" mr="$3">
                 <HStack alignItems="center" space="sm">
                   <Ionicons name="arrow-back" size={24} color="white" />
-                  <Heading size="sm" color="white">
-                    Back
-                  </Heading>
+                  <Heading size="sm" color="white">Back</Heading>
                 </HStack>
               </Pressable>
             </HStack>
@@ -387,23 +332,10 @@ export default function RideChatScreen() {
                       borderColor: "#333",
                     }}
                   >
-                    <Text
-                      style={{
-                        fontSize: 18,
-                        fontWeight: "600",
-                        color: "white",
-                        textAlign: "center",
-                      }}
-                    >
+                    <Text style={{ fontSize: 18, fontWeight: "600", color: "white", textAlign: "center" }}>
                       {rideInfo.from} → {rideInfo.to}
                     </Text>
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        color: "#a0a0a0",
-                        marginTop: 4,
-                      }}
-                    >
+                    <Text style={{ fontSize: 12, color: "#a0a0a0", marginTop: 4 }}>
                       Tap to view group members
                     </Text>
                   </Box>
@@ -418,22 +350,16 @@ export default function RideChatScreen() {
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ flexGrow: 1, paddingBottom: 90 }}
                 onScroll={({ nativeEvent }) => {
-                  const { contentOffset } = nativeEvent;
-                  // disable auto scroll if user scrolls up
-                  if (contentOffset?.y > 30 && autoScroll) {
+                  if (nativeEvent.contentOffset.y > 30 && autoScroll) {
                     setAutoScroll(false);
                   }
                 }}
                 onScrollToTop={() => setAutoScroll(false)}
                 onMomentumScrollEnd={({ nativeEvent }) => {
-                  const { layoutMeasurement, contentOffset, contentSize } =
-                    nativeEvent;
+                  const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
                   const distanceFromBottom =
-                    contentSize.height -
-                    (contentOffset.y + layoutMeasurement.height);
-                  if (distanceFromBottom < 30) {
-                    setAutoScroll(true);
-                  }
+                    contentSize.height - (contentOffset.y + layoutMeasurement.height);
+                  if (distanceFromBottom < 30) setAutoScroll(true);
                 }}
                 scrollEventThrottle={16}
               >
@@ -448,13 +374,7 @@ export default function RideChatScreen() {
 
                     if (isSystem) {
                       return (
-                        <Text
-                          key={msg.id}
-                          fontSize="$xs"
-                          color="#888"
-                          textAlign="center"
-                          my="$2"
-                        >
+                        <Text key={msg.id} fontSize="$xs" color="#888" textAlign="center" my="$2">
                           {msg.text}
                         </Text>
                       );
@@ -468,28 +388,16 @@ export default function RideChatScreen() {
                         justifyContent={isCurrentUser ? "flex-end" : "flex-start"}
                       >
                         {!isCurrentUser && (
-                          <TouchableOpacity
-                            onPress={() => handleUserPress(msg.senderId)}
-                            activeOpacity={0.7}
-                          >
+                          <TouchableOpacity onPress={() => handleUserPress(msg.senderId)} activeOpacity={0.7}>
                             <Avatar size="sm" bgColor="#1e1e1e">
-                              <Avatar.Image
-                                source={{ uri: sender.avatar }}
-                                alt="User avatar"
-                              />
+                              <Avatar.Image source={{ uri: sender.avatar }} alt="User avatar" />
                             </Avatar>
                           </TouchableOpacity>
                         )}
 
-                        <VStack
-                          alignItems={isCurrentUser ? "flex-end" : "flex-start"}
-                          maxWidth="80%"
-                        >
+                        <VStack alignItems={isCurrentUser ? "flex-end" : "flex-start"} maxWidth="80%">
                           {!isCurrentUser && (
-                            <TouchableOpacity
-                              onPress={() => handleUserPress(msg.senderId)}
-                              activeOpacity={0.7}
-                            >
+                            <TouchableOpacity onPress={() => handleUserPress(msg.senderId)} activeOpacity={0.7}>
                               <Text fontSize="$xs" color="#aaaaaa" mb="$1">
                                 {sender.name}
                               </Text>
@@ -505,10 +413,7 @@ export default function RideChatScreen() {
                             borderBottomLeftRadius="$xl"
                             borderBottomRightRadius="$xl"
                           >
-                            <Text
-                              color={isCurrentUser ? "#ffffff" : "#e0e0e0"}
-                              fontSize="$sm"
-                            >
+                            <Text color={isCurrentUser ? "#ffffff" : "#e0e0e0"} fontSize="$sm">
                               {msg.text}
                             </Text>
                           </Box>
@@ -534,25 +439,9 @@ export default function RideChatScreen() {
                 </VStack>
               </ScrollView>
 
-              {/* Message Input + Send Button */}
-              <HStack
-                space="sm"
-                alignItems="center"
-                mt="$2"
-                bg="transparent"
-                p="$2"
-                borderRadius="$xl"
-                pb={Platform.OS === "android" ? "$6" : "$2"}
-              >
-                <Input
-                  flex={1}
-                  size="md"
-                  borderWidth={0}
-                  borderRadius="$full"
-                  backgroundColor="#2a2a2a"
-                  px="$4"
-                  py="$2"
-                >
+              {/* Input */}
+              <HStack space="sm" alignItems="center" mt="$2" bg="transparent" p="$2" borderRadius="$xl" pb={Platform.OS === "android" ? "$6" : "$2"}>
+                <Input flex={1} size="md" borderWidth={0} borderRadius="$full" backgroundColor="#2a2a2a" px="$4" py="$2">
                   <InputField
                     placeholder="Message..."
                     placeholderTextColor="#777"
@@ -565,11 +454,7 @@ export default function RideChatScreen() {
                   />
                 </Input>
 
-                <Pressable
-                  onPressIn={animatePressIn}
-                  onPressOut={animatePressOut}
-                  onPress={handleSend}
-                >
+                <Pressable onPressIn={animatePressIn} onPressOut={animatePressOut} onPress={handleSend}>
                   <Animated.View
                     style={{
                       backgroundColor: interpolatedColor,

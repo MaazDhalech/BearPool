@@ -1,7 +1,6 @@
 import { db } from "@/services/firebaseConfig";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
-import { Filter } from "bad-words";
 import { format, isValid, parse } from "date-fns";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
@@ -18,6 +17,12 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import * as filter from "leo-profanity";
+
+// Optional: Customize
+filter.add(["ridehate", "berkeleybully"]);
+// filter.remove("assassin");
 
 const MAX_NOTES_LENGTH = 200;
 
@@ -40,7 +45,7 @@ export default function EditRideScreen() {
   const [initialLoading, setInitialLoading] = useState(true);
 
   const allowedGenderPrefOptions = useMemo(() => {
-    const options = [{ label: "No preference", value: "N" as const }];
+    const options: Array<{ label: string; value: "N" | "M" | "F" | "NB" }> = [{ label: "No preference", value: "N" as const }];
     if (userGender) {
       options.push({
         label:
@@ -62,17 +67,14 @@ export default function EditRideScreen() {
     }
   }, [allowedGenderPrefOptions, genderPref]);
 
-  // Initialize content filter
-  const filter = new Filter();
-
   const getSafeSeats = () => {
     const parsed = parseInt(seats, 10);
     return isNaN(parsed) ? 1 : parsed;
   };
 
-  // Content filtering function
+  // === Content validation using leo-profanity ===
   const validateContent = (text: string, fieldName: string): boolean => {
-    if (filter.isProfane(text)) {
+    if (filter.check(text)) {
       Alert.alert(
         "Inappropriate Content",
         `Please remove inappropriate language from the ${fieldName} field.`
@@ -82,7 +84,6 @@ export default function EditRideScreen() {
     return true;
   };
 
-  // Clean content function (alternative approach)
   const cleanContent = (text: string): string => {
     return filter.clean(text);
   };
@@ -108,7 +109,6 @@ export default function EditRideScreen() {
     }
 
     const formatsWithoutYear = ["MMMM d", "MMM d"];
-
     for (const fmt of formatsWithoutYear) {
       const parsedDate = parse(cleanedDateStr, fmt, new Date());
       if (isValid(parsedDate)) {
@@ -142,36 +142,26 @@ export default function EditRideScreen() {
     return null;
   }
 
-  // Handler for real-time content filtering in text inputs
+  // === Real-time input filtering ===
   const handleTextChange = (text: string, setter: (value: string) => void, maxLength?: number) => {
-    if (maxLength && text.length > maxLength) {
+    if (maxLength && text.length > maxLength) return;
+
+    // Block profanity in real-time
+    if (filter.check(text)) {
+      Alert.alert("Inappropriate Content", "Please avoid using inappropriate language.");
       return;
     }
-    
-    // Option 1: Block inappropriate content immediately
-    if (filter.isProfane(text)) {
-      Alert.alert(
-        "Inappropriate Content",
-        "Please avoid using inappropriate language."
-      );
-      return;
-    }
-    
-    // Option 2: Auto-clean content (comment out the above if using this)
-    // const cleanedText = filter.clean(text);
-    // setter(cleanedText);
-    
+
     setter(text);
   };
 
-  // Load existing ride data
+  // === Load ride data ===
   useEffect(() => {
     const loadRideData = async () => {
       if (!id || !userId) return;
 
       try {
         const rideDoc = await getDoc(doc(db, "rides", id as string));
-
         if (!rideDoc.exists()) {
           Alert.alert("Error", "Ride not found");
           router.back();
@@ -179,15 +169,12 @@ export default function EditRideScreen() {
         }
 
         const rideData = rideDoc.data();
-
-        // Check if current user is the host
         if (rideData.hostId !== userId) {
           Alert.alert("Error", "You can only edit your own rides");
           router.back();
           return;
         }
 
-        // Pre-fill the form with existing data
         setFrom(rideData.from || "");
         setTo(rideData.to || "");
         setDate(rideData.date || "");
@@ -207,6 +194,7 @@ export default function EditRideScreen() {
     loadRideData();
   }, [id, userId]);
 
+  // === Load user gender ===
   useEffect(() => {
     const fetchUserGender = async () => {
       if (!userId) return;
@@ -226,32 +214,26 @@ export default function EditRideScreen() {
     fetchUserGender();
   }, [userId]);
 
+  // === Save changes ===
   const handleSaveChanges = async () => {
     if (!from || !to || !date || !time || !seats) {
       Alert.alert("Error", "Please fill out all required fields");
       return;
     }
 
-    // Validate content for inappropriate language
     if (!validateContent(from, "From")) return;
     if (!validateContent(to, "To")) return;
     if (!validateContent(notes, "Additional Notes")) return;
 
     const formattedDate = validateAndFormatDate(date);
     if (!formattedDate) {
-      Alert.alert(
-        "Invalid Date",
-        "Please enter a valid date like 'June 20th, 2025' or 'Jun 20 2025'."
-      );
+      Alert.alert("Invalid Date", "Please enter a valid date like 'June 20th, 2025' or 'Jun 20 2025'.");
       return;
     }
 
     const formattedTime = validateAndFormatTime(time);
     if (!formattedTime) {
-      Alert.alert(
-        "Invalid Time",
-        "Please enter a valid time like '4:00 PM' or time range like '4:00–6:00 PM'."
-      );
+      Alert.alert("Invalid Time", "Please enter a valid time like '4:00 PM' or time range like '4:00–6:00 PM'.");
       return;
     }
 
@@ -263,8 +245,6 @@ export default function EditRideScreen() {
     setLoading(true);
     try {
       const rideRef = doc(db, "rides", id as string);
-
-      // Clean content before saving (optional: use either validation or cleaning)
       const cleanedFrom = cleanContent(from);
       const cleanedTo = cleanContent(to);
       const cleanedNotes = cleanContent(notes);
@@ -280,10 +260,7 @@ export default function EditRideScreen() {
       });
 
       Alert.alert("Success", "Ride updated successfully!", [
-        {
-          text: "OK",
-          onPress: () => router.back(),
-        },
+        { text: "OK", onPress: () => router.back() },
       ]);
     } catch (error) {
       console.error("Error updating ride:", error);
@@ -295,18 +272,9 @@ export default function EditRideScreen() {
 
   if (initialLoading) {
     return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: "#121212",
-          justifyContent: "center",
-          alignItems: "center",
-        }}
-      >
+      <View style={{ flex: 1, backgroundColor: "#121212", justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color="#3a7bd5" />
-        <Text style={{ color: "#ffffff", marginTop: 16 }}>
-          Loading ride details...
-        </Text>
+        <Text style={{ color: "#ffffff", marginTop: 16 }}>Loading ride details...</Text>
       </View>
     );
   }
@@ -317,7 +285,7 @@ export default function EditRideScreen() {
       style={{ flex: 1, backgroundColor: "#121212" }}
       keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}
     >
-      {/* Header with Back Button */}
+      {/* Header */}
       <View
         style={{
           paddingTop: insets.top,
@@ -331,22 +299,11 @@ export default function EditRideScreen() {
       >
         <TouchableOpacity
           onPress={() => router.back()}
-          style={{
-            padding: 8,
-            borderRadius: 20,
-            marginRight: 12,
-          }}
+          style={{ padding: 8, borderRadius: 20, marginRight: 12 }}
         >
           <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
-        <Text
-          style={{
-            color: "#ffffff",
-            fontSize: 20,
-            fontWeight: "600",
-            flex: 1,
-          }}
-        >
+        <Text style={{ color: "#ffffff", fontSize: 20, fontWeight: "600", flex: 1 }}>
           Edit Ride
         </Text>
       </View>
@@ -357,35 +314,13 @@ export default function EditRideScreen() {
       >
         <View style={{ marginBottom: 20 }}>
           {[
-            {
-              label: "From",
-              value: from,
-              setter: setFrom,
-              placeholder: "e.g. Berkeley – Unit 1",
-            },
-            {
-              label: "To",
-              value: to,
-              setter: setTo,
-              placeholder: "e.g. SFO Terminal 2",
-            },
-            {
-              label: "Date",
-              value: date,
-              setter: setDate,
-              placeholder: "e.g. June 20",
-            },
-            {
-              label: "Time",
-              value: time,
-              setter: setTime,
-              placeholder: "e.g. 4:00–6:00 PM",
-            },
+            { label: "From", value: from, setter: setFrom, placeholder: "e.g. Berkeley – Unit 1" },
+            { label: "To", value: to, setter: setTo, placeholder: "e.g. SFO Terminal 2" },
+            { label: "Date", value: date, setter: setDate, placeholder: "e.g. June 20" },
+            { label: "Time", value: time, setter: setTime, placeholder: "e.g. 4:00–6:00 PM" },
           ].map(({ label, value, setter, placeholder }) => (
             <View key={label} style={{ marginBottom: 16 }}>
-              <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
-                {label}
-              </Text>
+              <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>{label}</Text>
               <TextInput
                 value={value}
                 placeholder={placeholder}
@@ -404,22 +339,14 @@ export default function EditRideScreen() {
             </View>
           ))}
 
+          {/* Seats */}
           <View style={{ marginBottom: 16 }}>
             <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
               How many other people do you want in the car?
             </Text>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-                marginTop: 8,
-              }}
-            >
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 8 }}>
               <TouchableOpacity
-                onPress={() =>
-                  setSeats(String(Math.max(1, getSafeSeats() - 1)))
-                }
+                onPress={() => setSeats(String(Math.max(1, getSafeSeats() - 1)))}
                 disabled={getSafeSeats() <= 1}
                 style={{
                   backgroundColor: getSafeSeats() <= 1 ? "#333" : "#3a7bd5",
@@ -431,21 +358,12 @@ export default function EditRideScreen() {
                 <Text style={{ color: "white", fontSize: 18 }}>-</Text>
               </TouchableOpacity>
 
-              <Text
-                style={{
-                  color: "white",
-                  fontSize: 18,
-                  minWidth: 30,
-                  textAlign: "center",
-                }}
-              >
+              <Text style={{ color: "white", fontSize: 18, minWidth: 30, textAlign: "center" }}>
                 {seats}
               </Text>
 
               <TouchableOpacity
-                onPress={() =>
-                  setSeats(String(Math.min(5, getSafeSeats() + 1)))
-                }
+                onPress={() => setSeats(String(Math.min(5, getSafeSeats() + 1)))}
                 disabled={getSafeSeats() >= 5}
                 style={{
                   backgroundColor: getSafeSeats() >= 5 ? "#333" : "#3a7bd5",
@@ -459,37 +377,26 @@ export default function EditRideScreen() {
             </View>
           </View>
 
+          {/* Gender Preference */}
           <View style={{ marginBottom: 16 }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
-              Gender Preference
-            </Text>
+            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>Gender Preference</Text>
             <Text style={{ color: "#666", fontSize: 12, marginBottom: 8 }}>
               We only show options that match your profile to keep rides aligned with your identity. Riders who don’t match won’t see this post.
             </Text>
-            <View
-              style={{
-                flexDirection: "row",
-                flexWrap: "wrap",
-                justifyContent: "space-between",
-                marginTop: 8,
-              }}
-            >
+            <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginTop: 8 }}>
               {allowedGenderPrefOptions.map((option) => (
                 <TouchableOpacity
                   key={option.value}
                   onPress={() => setGenderPref(option.value)}
                   style={{
-                    backgroundColor:
-                      genderPref === option.value ? "#3a7bd5" : "#1e1e1e",
+                    backgroundColor: genderPref === option.value ? "#3a7bd5" : "#1e1e1e",
                     paddingVertical: 12,
                     paddingHorizontal: 16,
                     borderRadius: 8,
                     borderWidth: 1,
-                    borderColor:
-                      genderPref === option.value ? "#3a7bd5" : "#333",
+                    borderColor: genderPref === option.value ? "#3a7bd5" : "#333",
                     marginBottom: 8,
-                    width:
-                      allowedGenderPrefOptions.length > 1 ? "48%" : "100%",
+                    width: allowedGenderPrefOptions.length > 1 ? "48%" : "100%",
                   }}
                 >
                   <Text
@@ -506,10 +413,9 @@ export default function EditRideScreen() {
             </View>
           </View>
 
+          {/* Notes */}
           <View style={{ marginBottom: 24 }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
-              Additional Notes
-            </Text>
+            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>Additional Notes</Text>
             <TextInput
               value={notes}
               placeholder="Optional"
@@ -529,18 +435,12 @@ export default function EditRideScreen() {
                 textAlignVertical: "top",
               }}
             />
-            <Text
-              style={{
-                color: "#666",
-                fontSize: 12,
-                marginTop: 4,
-                textAlign: "right",
-              }}
-            >
+            <Text style={{ color: "#666", fontSize: 12, marginTop: 4, textAlign: "right" }}>
               {notes.length} / {MAX_NOTES_LENGTH}
             </Text>
           </View>
 
+          {/* Save Button */}
           <TouchableOpacity
             onPress={handleSaveChanges}
             activeOpacity={0.8}
@@ -557,14 +457,7 @@ export default function EditRideScreen() {
               elevation: 3,
             }}
           >
-            <Text
-              style={{
-                color: "white",
-                textAlign: "center",
-                fontWeight: "600",
-                fontSize: 16,
-              }}
-            >
+            <Text style={{ color: "white", textAlign: "center", fontWeight: "600", fontSize: 16 }}>
               {loading ? "Saving..." : "Save Changes"}
             </Text>
           </TouchableOpacity>
