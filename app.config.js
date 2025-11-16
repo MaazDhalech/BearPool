@@ -62,6 +62,7 @@ export default {
       firebaseMeasurementId: process.env.FIREBASE_MEASUREMENT_ID,
       expoPublicClerkPublishableKey: process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY,
       web3formsApiKey: process.env.WEB3FORMS_API_KEY,
+      backendUrl: process.env.BACKEND_URL,
 
       eas: {
         projectId: "e469f4b5-1dbf-4a1d-aa5e-0417dee7cf2c",
