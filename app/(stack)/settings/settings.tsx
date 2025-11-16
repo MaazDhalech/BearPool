@@ -23,20 +23,22 @@ import {
 import { useRouter } from "expo-router";
 import {
   arrayRemove,
-  collection,
-  doc,
+  collection, deleteDoc, doc,
   getDoc,
   getDocs,
   query,
   updateDoc,
   where,
+  writeBatch
 } from "firebase/firestore";
 import {
   Bell,
   ChevronLeft,
+  FileText,
   HelpCircle,
   LogOut,
   Shield,
+  Trash2,
   UserX,
 } from "lucide-react-native";
 import { useEffect, useState } from "react";
@@ -129,6 +131,7 @@ export default function SettingsScreen() {
   const [showBlockedUsers, setShowBlockedUsers] = useState(false);
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
   const [loadingBlockedUsers, setLoadingBlockedUsers] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   // Fetch user data
   useEffect(() => {
@@ -242,6 +245,143 @@ export default function SettingsScreen() {
     );
   };
 
+  // Delete account handler
+  const handleDeleteAccount = async () => {
+    if (!clerkUserId) return;
+
+    Alert.alert(
+      "Delete Account",
+      "Are you sure you want to delete your account? This action cannot be undone. All your data will be permanently deleted.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            // Second confirmation
+            Alert.alert(
+              "Final Confirmation",
+              "This will permanently delete your account and all associated data. Are you absolutely sure?",
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Yes, Delete My Account",
+                  style: "destructive",
+                  onPress: performAccountDeletion,
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
+  };
+
+const performAccountDeletion = async () => {
+  if (!clerkUserId) return;
+
+  setDeletingAccount(true);
+
+  const batch = writeBatch(db);
+  let hasError = false;
+
+  try {
+    // === 1. Delete all messages by the user ===
+    const messagesQuery = query(
+      collection(db, "messages"),
+      where("userId", "==", clerkUserId)
+    );
+    const messagesSnapshot = await getDocs(messagesQuery);
+
+    const messageDeleteBatch = writeBatch(db);
+    messagesSnapshot.forEach((docSnap) => {
+      messageDeleteBatch.delete(docSnap.ref);
+    });
+    await messageDeleteBatch.commit();
+
+    // === 2. Remove user from all rides (memberIds, pendingNotifications) ===
+    const memberRidesQuery = query(
+      collection(db, "rides"),
+      where("memberIds", "array-contains", clerkUserId)
+    );
+    const memberRidesSnapshot = await getDocs(memberRidesQuery);
+
+    memberRidesSnapshot.forEach((rideDoc) => {
+      const rideRef = rideDoc.ref;
+      batch.update(rideRef, {
+        memberIds: arrayRemove(clerkUserId),
+        pendingNotifications: arrayRemove(clerkUserId),
+      });
+    });
+
+    // === 3. Cancel and clean up hosted rides ===
+    const hostedRidesQuery = query(
+      collection(db, "rides"),
+      where("hostId", "==", clerkUserId)
+    );
+    const hostedRidesSnapshot = await getDocs(hostedRidesQuery);
+
+    hostedRidesSnapshot.forEach((rideDoc) => {
+      const rideRef = rideDoc.ref;
+      batch.update(rideRef, {
+        status: "cancelled",
+        isActive: false,
+        cancelledAt: new Date().toISOString(),
+        cancelReason: "Host account deleted",
+        hostId: "[deleted]", // optional: anonymize
+      });
+    });
+
+    // === 4. Commit all ride updates ===
+    await batch.commit();
+
+    // === 5. Delete subcollections (e.g., user-specific data) ===
+    // Example: Delete user's notifications, ride history, etc.
+    const userSubcollections = ["notifications", "rideHistory", "preferences"]; // add as needed
+    for (const subcoll of userSubcollections) {
+      const subCollRef = collection(db, "users", clerkUserId, subcoll);
+      const subDocs = await getDocs(subCollRef);
+      const subDeleteBatch = writeBatch(db);
+      subDocs.forEach((doc) => subDeleteBatch.delete(doc.ref));
+      await subDeleteBatch.commit();
+    }
+
+    // === 6. Finally: DELETE the user document ===
+    const userDocRef = doc(db, "users", clerkUserId);
+    await deleteDoc(userDocRef);
+
+    // === 7. Delete user from Clerk (via backend) ===
+    try {
+      const response = await fetch('/api/delete-clerk-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: clerkUserId }),
+      });
+
+      if (!response.ok) throw new Error('Failed to delete Clerk user');
+    } catch (clerkError) {
+      console.error("Clerk deletion failed (non-critical):", clerkError);
+      // Continue — Firestore is already clean
+    }
+
+    // === 8. Sign out & redirect ===
+    await signOut();
+    router.replace("/(auth)/Login");
+
+    Alert.alert("Account Deleted", "Your account and all data have been permanently removed.");
+
+  } catch (error) {
+    console.error("Account deletion failed:", error);
+    hasError = true;
+    Alert.alert("Error", "Failed to delete account. Please try again or contact support.");
+  } finally {
+    setDeletingAccount(false);
+    if (hasError) {
+      // Optionally re-enable button or retry
+    }
+  }
+};
+
   // Fetch blocked users when modal opens
   useEffect(() => {
     if (showBlockedUsers && profileData) {
@@ -275,7 +415,7 @@ export default function SettingsScreen() {
   };
 
   const handlePrivacySettings = () => {
-  router.push("/(stack)/settings/privacy-policy");
+    router.push("/(stack)/settings/privacy-policy");
   };
 
   const handleNotificationSettings = () => {
@@ -334,10 +474,18 @@ export default function SettingsScreen() {
 
               <SettingsItem
                 icon={Shield}
-                title="Privacy & Safety"
-                subtitle="Control your privacy settings"
+                title="Privacy Policy"
+                subtitle="View our privacy policy"
                 onPress={handlePrivacySettings}
                 color="#4CAF50"
+              />
+
+              <SettingsItem
+                icon={FileText}
+                title="Terms of Service"
+                subtitle="Read our terms of service"
+                onPress={() => router.push("/(stack)/settings/terms-of-service")}
+                color="#2196F3"
               />
 
               <SettingsItem
@@ -363,7 +511,23 @@ export default function SettingsScreen() {
                 onPress={handleLogout}
                 color="#ff6b6b"
               />
+
+              <SettingsItem
+                icon={Trash2}
+                title="Delete Account"
+                subtitle="Permanently delete your account and all data"
+                onPress={handleDeleteAccount}
+                color="#ff0000"
+              />
             </VStack>
+
+            {deletingAccount && (
+              <Box mt="$4" p="$4" bg="#2a2a2a" borderRadius="$md">
+                <Text color="#ff6b6b" textAlign="center">
+                  Deleting account... Please wait.
+                </Text>
+              </Box>
+            )}
           </Box>
         </ScrollView>
 

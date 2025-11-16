@@ -1,3 +1,4 @@
+import TOSOverlay from "@/components/TOSOverlay"; // <-- NEW
 import { db } from "@/services/firebaseConfig";
 import { useSignUp } from "@clerk/clerk-expo";
 import { Filter } from 'bad-words';
@@ -11,13 +12,9 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
 import "react-native-get-random-values";
-// Alternative import methods - try these if the require doesn't work
-// Method 1: const Filter = require("bad-words");
-// Method 2: import * as Filter from "bad-words";
-// Method 3: const { Filter } = require("bad-words");
 
 const isBerkeleyEmail = (email: string) => {
   return email.toLowerCase().endsWith("@berkeley.edu");
@@ -44,7 +41,10 @@ export default function Signup() {
   const [verificationCode, setVerificationCode] = React.useState("");
   const [signUpAttempt, setSignUpAttempt] = React.useState<any>(null);
 
-  // Helper function to check if text contains profanity
+  // --- NEW: TOS Agreement ---
+  const [tosAccepted, setTosAccepted] = React.useState(false);
+  const [showTOS, setShowTOS] = React.useState(false);
+
   const containsProfanity = (text: string): boolean => {
     return filter.isProfane(text);
   };
@@ -54,13 +54,13 @@ export default function Signup() {
     username.trim().length > 0 &&
     password.length > 0 &&
     firstName.trim().length > 0 &&
-    lastName.trim().length > 0;
+    lastName.trim().length > 0 &&
+    tosAccepted; // <-- REQUIRED
 
   const onSignUpPress = async () => {
     if (!isLoaded) return;
     setError("");
 
-    // Check for profanity in user input fields
     if (containsProfanity(username)) {
       setError("Username contains inappropriate language. Please choose a different username.");
       return;
@@ -121,7 +121,7 @@ export default function Signup() {
         }
 
         const clerkId = completeSignUp.createdUserId;
-        // Clean the text before storing (remove profanity if any somehow got through)
+
         await setDoc(doc(db, "users", clerkId), {
           clerkId,
           avatar: BLANK_AVATAR,
@@ -133,6 +133,9 @@ export default function Signup() {
           createdAt: new Date(),
           ridesJoined: 0,
           ridesHosted: 0,
+          // --- NEW: TOS Acceptance ---
+          tosAcceptedAt: new Date(),
+          tosVersion: "2025-11-15", // Update when TOS changes
         });
 
         router.replace("/");
@@ -145,7 +148,6 @@ export default function Signup() {
     }
   };
 
-  // Handle text input changes with real-time profanity checking
   const handleUsernameChange = (text: string) => {
     setUsername(text);
     if (text.trim() && containsProfanity(text)) {
@@ -173,6 +175,11 @@ export default function Signup() {
     }
   };
 
+  const handleTOSAccept = () => {
+    setTosAccepted(true);
+    setShowTOS(false);
+  };
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -194,6 +201,7 @@ export default function Signup() {
               fontSize: 28,
               fontWeight: "600",
               marginBottom: 30,
+              marginTop: 50,
               textAlign: "center",
             }}
           >
@@ -273,72 +281,72 @@ export default function Signup() {
             </View>
           </View>
 
-<View style={{ marginBottom: 16 }}>
-  <Text style={{ color: "#a0a0a0", marginBottom: 4, fontSize: 14 }}>
-    Gender (optional — helps us keep riders safe)
-  </Text>
-  <Text style={{ color: "#666", marginBottom: 8, fontSize: 12 }}>
-    Share it only if you want to. We request it for community safety checks and never use it anywhere else. You can ignore this today and add it later.
-  </Text>
-  <View style={{ flexDirection: "row", gap: 8 }}>
-    {(["M", "F", "NB"] as Gender[]).map((option) => (
-      <TouchableOpacity
-        key={option}
-        onPress={() => setGender(option)}
-        style={{
-          flex: 1,
-          paddingVertical: 12,
-          paddingHorizontal: 8,
-          borderRadius: 8,
-          borderWidth: 1,
-          borderColor: gender === option ? "#3a7bd5" : "#333",
-          backgroundColor: gender === option ? "#1a3a7b" : "#1e1e1e",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: 50,
-        }}
-      >
-        <Text
-          style={{
-            color: gender === option ? "#ffffff" : "#a0a0a0",
-            fontSize: 14,
-            fontWeight: gender === option ? "600" : "400",
-            textAlign: "center",
-            lineHeight: 20,
-          }}
-        >
-          {option === "M"
-            ? "Male"
-            : option === "F"
-            ? "Female"
-            : "Non-binary"}
-        </Text>
-      </TouchableOpacity>
-    ))}
-  </View>
-  <TouchableOpacity
-    onPress={() => setGender(null)}
-    style={{
-      marginTop: 8,
-      padding: 12,
-      borderRadius: 8,
-      borderWidth: 1,
-      borderColor: gender === null ? "#3a7bd5" : "#333",
-      backgroundColor: gender === null ? "#1a3a7b" : "#1e1e1e",
-      alignItems: "center",
-    }}
-  >
-    <Text
-      style={{
-        color: gender === null ? "#ffffff" : "#a0a0a0",
-        fontSize: 14,
-        fontWeight: gender === null ? "600" : "400",
-      }}
-    >
-      Prefer not to say
-    </Text>
-  </TouchableOpacity>
-</View>
+          <View style={{ marginBottom: 16 }}>
+            <Text style={{ color: "#a0a0a0", marginBottom: 4, fontSize: 14 }}>
+              Gender (optional — helps us keep riders safe)
+            </Text>
+            <Text style={{ color: "#666", marginBottom: 8, fontSize: 12 }}>
+              Share it only if you want to. We request it for community safety checks and never use it anywhere else. You can ignore this today and add it later.
+            </Text>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              {(["M", "F", "NB"] as Gender[]).map((option) => (
+                <TouchableOpacity
+                  key={option}
+                  onPress={() => setGender(option)}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 12,
+                    paddingHorizontal: 8,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: gender === option ? "#3a7bd5" : "#333",
+                    backgroundColor: gender === option ? "#1a3a7b" : "#1e1e1e",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    minHeight: 50,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: gender === option ? "#ffffff" : "#a0a0a0",
+                      fontSize: 14,
+                      fontWeight: gender === option ? "600" : "400",
+                      textAlign: "center",
+                      lineHeight: 20,
+                    }}
+                  >
+                    {option === "M"
+                      ? "Male"
+                      : option === "F"
+                      ? "Female"
+                      : "Non-binary"}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity
+              onPress={() => setGender(null)}
+              style={{
+                marginTop: 8,
+                padding: 12,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: gender === null ? "#3a7bd5" : "#333",
+                backgroundColor: gender === null ? "#1a3a7b" : "#1e1e1e",
+                alignItems: "center",
+              }}
+            >
+              <Text
+                style={{
+                  color: gender === null ? "#ffffff" : "#a0a0a0",
+                  fontSize: 14,
+                  fontWeight: gender === null ? "600" : "400",
+                }}
+              >
+                Prefer not to say
+              </Text>
+            </TouchableOpacity>
+          </View>
 
           <View style={{ marginBottom: 24 }}>
             <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
@@ -354,6 +362,40 @@ export default function Signup() {
             />
           </View>
 
+          {/* --- TOS Checkbox --- */}
+          <View style={{ marginBottom: 24, flexDirection: "row", alignItems: "flex-start" }}>
+            <TouchableOpacity
+              onPress={() => setTosAccepted(!tosAccepted)}
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: 6,
+                borderWidth: 2,
+                borderColor: tosAccepted ? "#3a7bd5" : "#666",
+                backgroundColor: tosAccepted ? "#3a7bd5" : "transparent",
+                marginRight: 12,
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              {tosAccepted && (
+                <Text style={{ color: "white", fontSize: 16, lineHeight: 20 }}>✓</Text>
+              )}
+            </TouchableOpacity>
+
+            <Text style={{ color: "#a0a0a0", flex: 1, fontSize: 14 }}>
+              I have read and agree to the{" "}
+              <Text
+                style={{ color: "#3a7bd5", textDecorationLine: "underline" }}
+                onPress={() => setShowTOS(true)}
+              >
+                Terms of Service
+              </Text>
+              .
+            </Text>
+          </View>
+
+          {/* --- Continue Button --- */}
           <TouchableOpacity
             onPress={onSignUpPress}
             disabled={!isFormValid()}
@@ -399,7 +441,14 @@ export default function Signup() {
         </View>
       </ScrollView>
 
-      {/* Verification Modal */}
+      {/* --- TOS Overlay (fetches from your Gist) --- */}
+      <TOSOverlay
+        visible={showTOS}
+        onClose={() => setShowTOS(false)}
+        onAccept={handleTOSAccept}
+      />
+
+      {/* --- Verification Modal --- */}
       {showVerification && (
         <View
           style={{

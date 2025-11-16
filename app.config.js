@@ -44,7 +44,10 @@ export default {
         },
       ],
       "expo-secure-store",
-      "expo-notifications"
+      "expo-notifications",
+      "expo-font",
+      "expo-localization",
+      "expo-web-browser"
     ],
     experiments: {
       typedRoutes: true,
