@@ -37,7 +37,6 @@ target 'BearPool' do
   use_react_native!(
     :path => config[:reactNativePath],
     :hermes_enabled => podfile_properties['expo.jsEngine'] == nil || podfile_properties['expo.jsEngine'] == 'hermes',
-    # An absolute path to your application root.
     :app_path => "#{Pod::Config.instance.installation_root}/..",
     :privacy_file_aggregation_enabled => podfile_properties['apple.privacyManifestAggregationEnabled'] != 'false',
   )
@@ -50,13 +49,32 @@ target 'BearPool' do
       :ccache_enabled => podfile_properties['apple.ccacheEnabled'] == 'true',
     )
 
-    # This is necessary for Xcode 14, because it signs resource bundles by default
-    # when building for devices.
-    installer.target_installation_results.pod_target_installation_results
-      .each do |pod_name, target_installation_result|
-      target_installation_result.resource_bundle_targets.each do |resource_bundle_target|
-        resource_bundle_target.build_configurations.each do |config|
-          config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+    # Ensure Folly flags are set so it doesn't look for coro headers on iOS
+    folly_flags = [
+      'FOLLY_NO_CONFIG=1',
+      'FOLLY_MOBILE=1',
+      'FOLLY_USE_LIBCPP=1',
+      'FOLLY_HAVE_CLOCK_GETTIME=1',
+      'FOLLY_CFG_NO_COROUTINES=1',
+      'FOLLY_HAS_COROUTINES=0'
+    ]
+
+    installer.pods_project.targets.each do |t|
+      t.build_configurations.each do |bc|
+        definitions = Array(bc.build_settings['GCC_PREPROCESSOR_DEFINITIONS'])
+        definitions << '$(inherited)' if definitions.empty?
+        folly_flags.each do |flag|
+          definitions << flag unless definitions.include?(flag)
+        end
+        bc.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = definitions
+      end
+    end
+
+    # Xcode 14+: don't sign resource bundles
+    installer.target_installation_results.pod_target_installation_results.each do |pod_name, result|
+      result.resource_bundle_targets.each do |bundle_target|
+        bundle_target.build_configurations.each do |bc|
+          bc.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
         end
       end
     end

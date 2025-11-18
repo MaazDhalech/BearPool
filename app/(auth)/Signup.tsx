@@ -5,6 +5,7 @@ import { Link, useRouter } from "expo-router";
 import { doc, setDoc } from "firebase/firestore";
 import React from "react";
 import {
+  GestureResponderEvent,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -26,10 +27,15 @@ const isBerkeleyEmail = (email: string) => {
   return email.toLowerCase().endsWith("@berkeley.edu");
 };
 
+const PRIMARY_BLUE = "#3a7bd5";
+const DARK_BG = "#1e1e1e";
+const GREY_TEXT = "#a0a0a0";
+
 const BLANK_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
 
-type Gender = "M" | "F" | "NB";
+type Gender = "M" | "F" | "NB"; // what we store in Firestore
+type GenderOption = Gender | "PNTS"; // UI options, includes Prefer Not To Say
 
 export default function Signup() {
   const { isLoaded, signUp, setActive } = useSignUp();
@@ -40,7 +46,11 @@ export default function Signup() {
   const [password, setPassword] = React.useState("");
   const [firstName, setFirstName] = React.useState("");
   const [lastName, setLastName] = React.useState("");
-  const [gender, setGender] = React.useState<Gender | null>(null);
+
+  // UI selection state
+  const [genderOption, setGenderOption] =
+    React.useState<GenderOption | null>(null);
+
   const [error, setError] = React.useState("");
   const [showVerification, setShowVerification] = React.useState(false);
   const [verificationCode, setVerificationCode] = React.useState("");
@@ -58,37 +68,62 @@ export default function Signup() {
     return filter.clean(text);
   };
 
-  const isFormValid = () =>
-    isBerkeleyEmail(emailAddress) &&
-    username.trim().length > 0 &&
-    password.length > 0 &&
-    firstName.trim().length > 0 &&
-    lastName.trim().length > 0 &&
-    tosAccepted;
-
   const onSignUpPress = async () => {
     if (!isLoaded) return;
     setError("");
 
+    // TOS must be accepted
+    if (!tosAccepted) {
+      setError("Please accept the Terms of Service to continue.");
+      return;
+    }
+
+    const trimmedEmail = emailAddress.trim();
     const trimmedUsername = username.trim();
     const trimmedFirstName = firstName.trim();
     const trimmedLastName = lastName.trim();
 
+    // Basic required field checks
+    if (
+      !trimmedEmail ||
+      !trimmedUsername ||
+      !trimmedFirstName ||
+      !trimmedLastName ||
+      !password
+    ) {
+      setError("Please fill out all fields before continuing.");
+      return;
+    }
+
+    // Berkeley email check
+    if (!isBerkeleyEmail(trimmedEmail)) {
+      setError("Please use a valid @berkeley.edu email to sign up.");
+      return;
+    }
+
+    // Profanity checks
     if (containsProfanity(trimmedUsername)) {
-      setError("Username contains inappropriate language. Please choose a different one.");
+      setError(
+        "Username contains inappropriate language. Please choose a different one."
+      );
       return;
     }
 
     if (containsProfanity(trimmedFirstName)) {
-      setError("First name contains inappropriate language. Please enter a valid name.");
+      setError(
+        "First name contains inappropriate language. Please enter a valid name."
+      );
       return;
     }
 
     if (containsProfanity(trimmedLastName)) {
-      setError("Last name contains inappropriate language. Please enter a valid name.");
+      setError(
+        "Last name contains inappropriate language. Please enter a valid name."
+      );
       return;
     }
 
+    // Password rules
     const passwordRegex =
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/;
     if (!passwordRegex.test(password)) {
@@ -100,14 +135,16 @@ export default function Signup() {
 
     try {
       const attempt = await signUp.create({
-        emailAddress,
+        emailAddress: trimmedEmail,
         password,
         username: trimmedUsername,
         firstName: trimmedFirstName,
         lastName: trimmedLastName,
       });
 
-      await attempt.prepareEmailAddressVerification({ strategy: "email_code" });
+      await attempt.prepareEmailAddressVerification({
+        strategy: "email_code",
+      });
       setSignUpAttempt(attempt);
       setShowVerification(true);
     } catch (err: any) {
@@ -123,9 +160,10 @@ export default function Signup() {
     }
 
     try {
-      const completeSignUp = await signUpAttempt.attemptEmailAddressVerification({
-        code: verificationCode,
-      });
+      const completeSignUp =
+        await signUpAttempt.attemptEmailAddressVerification({
+          code: verificationCode,
+        });
 
       if (completeSignUp.status === "complete") {
         if (setActive) {
@@ -134,6 +172,12 @@ export default function Signup() {
 
         const clerkId = completeSignUp.createdUserId;
 
+        // Map UI gender option -> stored gender value
+        const genderValue: Gender | null =
+          genderOption === null || genderOption === "PNTS"
+            ? null
+            : genderOption;
+
         await setDoc(doc(db, "users", clerkId), {
           clerkId,
           avatar: BLANK_AVATAR,
@@ -141,7 +185,7 @@ export default function Signup() {
           email: emailAddress.toLowerCase(),
           first_name: cleanText(firstName.trim()),
           last_name: cleanText(lastName.trim()),
-          gender: gender ?? null,
+          gender: genderValue, // stored as "M" | "F" | "NB" | null
           createdAt: new Date(),
           ridesJoined: 0,
           ridesHosted: 0,
@@ -191,6 +235,15 @@ export default function Signup() {
     setShowTOS(false);
   };
 
+  const toggleTosAccepted = () => {
+    setTosAccepted((prev) => !prev);
+  };
+
+  const openTOS = (event: GestureResponderEvent) => {
+    event.stopPropagation?.();
+    setShowTOS(true);
+  };
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -230,12 +283,17 @@ export default function Signup() {
                 borderColor: "#4a1e1e",
               }}
             >
-              <Text style={{ color: "#ff7d7d", textAlign: "center" }}>{error}</Text>
+              <Text style={{ color: "#ff7d7d", textAlign: "center" }}>
+                {error}
+              </Text>
             </View>
           ) : null}
 
+          {/* Email */}
           <View style={{ marginBottom: 16 }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+            <Text
+              style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}
+            >
               Berkeley Email
             </Text>
             <TextInput
@@ -249,8 +307,11 @@ export default function Signup() {
             />
           </View>
 
+          {/* Username */}
           <View style={{ marginBottom: 16 }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+            <Text
+              style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}
+            >
               Username
             </Text>
             <TextInput
@@ -263,9 +324,12 @@ export default function Signup() {
             />
           </View>
 
+          {/* Name row */}
           <View style={{ flexDirection: "row", gap: 16, marginBottom: 16 }}>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+              <Text
+                style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}
+              >
                 First Name
               </Text>
               <TextInput
@@ -278,7 +342,9 @@ export default function Signup() {
               />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+              <Text
+                style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}
+              >
                 Last Name
               </Text>
               <TextInput
@@ -292,62 +358,82 @@ export default function Signup() {
             </View>
           </View>
 
+          {/* --- Gender --- */}
           <View style={{ marginBottom: 16 }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: 4, fontSize: 14 }}>
+            <Text
+              style={{ color: "#a0a0a0", marginBottom: 4, fontSize: 14 }}
+            >
               Gender (optional — helps us keep riders safe)
             </Text>
             <Text style={{ color: "#666", marginBottom: 8, fontSize: 12 }}>
-              Share it only if you want to. We request it for community safety checks and never use it anywhere else. You can ignore this today and add it later.
+              Share it only if you want to. We request it for community safety
+              checks and never use it anywhere else. You can ignore this today
+              and add it later.
             </Text>
+
+            {/* MAIN GENDER OPTIONS */}
             <View style={{ flexDirection: "row", gap: 8 }}>
-              {(["M", "F", "NB"] as Gender[]).map((option) => (
-                <TouchableOpacity
-                  key={option}
-                  onPress={() => setGender(option)}
-                  style={{
-                    flex: 1,
-                    paddingVertical: 12,
-                    paddingHorizontal: 8,
-                    borderRadius: 8,
-                    borderWidth: 1,
-                    borderColor: gender === option ? "#3a7bd5" : "#333",
-                    backgroundColor: gender === option ? "#1a3a7b" : "#1e1e1e",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    minHeight: 50,
-                  }}
-                >
-                  <Text
+              {(["M", "F", "NB"] as GenderOption[]).map((option) => {
+                const isSelected = genderOption === option;
+                return (
+                  <TouchableOpacity
+                    key={option}
+                    onPress={() => setGenderOption(option)}
+                    activeOpacity={0.95}
                     style={{
-                      color: gender === option ? "#ffffff" : "#a0a0a0",
-                      fontSize: 14,
-                      fontWeight: gender === option ? "600" : "400",
-                      textAlign: "center",
-                      lineHeight: 20,
+                      flex: 1,
+                      paddingVertical: 12,
+                      paddingHorizontal: 8,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: isSelected ? PRIMARY_BLUE : "#333",
+                      backgroundColor: isSelected ? PRIMARY_BLUE : DARK_BG,
+                      opacity: 1,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      minHeight: 50,
                     }}
                   >
-                    {option === "M" ? "Male" : option === "F" ? "Female" : "Non-binary"}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                    <Text
+                      style={{
+                        color: isSelected ? "#ffffff" : GREY_TEXT,
+                        fontSize: 14,
+                        fontWeight: isSelected ? "600" : "500",
+                        textAlign: "center",
+                        lineHeight: 20,
+                      }}
+                    >
+                      {option === "M"
+                        ? "Male"
+                        : option === "F"
+                        ? "Female"
+                        : "Non-binary"}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
+
+            {/* PREFER NOT TO SAY */}
             <TouchableOpacity
-              onPress={() => setGender(null)}
+              onPress={() => setGenderOption("PNTS")}
+              activeOpacity={0.95}
               style={{
                 marginTop: 8,
                 padding: 12,
                 borderRadius: 8,
                 borderWidth: 1,
-                borderColor: gender === null ? "#3a7bd5" : "#333",
-                backgroundColor: gender === null ? "#1a3a7b" : "#1e1e1e",
+                borderColor: genderOption === "PNTS" ? PRIMARY_BLUE : "#333",
+                backgroundColor: genderOption === "PNTS" ? PRIMARY_BLUE : DARK_BG,
+                opacity: 1,
                 alignItems: "center",
               }}
             >
               <Text
                 style={{
-                  color: gender === null ? "#ffffff" : "#a0a0a0",
+                  color: genderOption === "PNTS" ? "#ffffff" : GREY_TEXT,
                   fontSize: 14,
-                  fontWeight: gender === null ? "600" : "400",
+                  fontWeight: genderOption === "PNTS" ? "600" : "400",
                 }}
               >
                 Prefer not to say
@@ -355,8 +441,11 @@ export default function Signup() {
             </TouchableOpacity>
           </View>
 
+          {/* Password */}
           <View style={{ marginBottom: 24 }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+            <Text
+              style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}
+            >
               Password
             </Text>
             <TextInput
@@ -370,57 +459,89 @@ export default function Signup() {
           </View>
 
           {/* --- TOS Checkbox --- */}
-          <View style={{ marginBottom: 24, flexDirection: "row", alignItems: "flex-start" }}>
+          <View
+            style={{
+              marginBottom: 24,
+              flexDirection: "row",
+              alignItems: "flex-start",
+            }}
+          >
             <TouchableOpacity
-              onPress={() => setTosAccepted(!tosAccepted)}
+              onPress={toggleTosAccepted}
+              activeOpacity={1}
               style={{
                 width: 24,
                 height: 24,
                 borderRadius: 6,
                 borderWidth: 2,
-                borderColor: tosAccepted ? "#3a7bd5" : "#666",
-                backgroundColor: tosAccepted ? "#3a7bd5" : "transparent",
+                borderColor: tosAccepted ? PRIMARY_BLUE : "#666",
+                backgroundColor: tosAccepted
+                  ? PRIMARY_BLUE
+                  : "transparent",
                 marginRight: 12,
                 justifyContent: "center",
                 alignItems: "center",
               }}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: tosAccepted }}
             >
               {tosAccepted && (
-                <Text style={{ color: "white", fontSize: 16, lineHeight: 20 }}>Check</Text>
+                <Text
+                  style={{
+                    color: "#ffffff",
+                    fontSize: 18,
+                    lineHeight: 18,
+                    fontWeight: "800",
+                  }}
+                >
+                  ✓
+                </Text>
               )}
             </TouchableOpacity>
 
-            <Text style={{ color: "#a0a0a0", flex: 1, fontSize: 14 }}>
-              I have read and agree to the{" "}
+            <View style={{ flex: 1 }}>
               <Text
-                style={{ color: "#3a7bd5", textDecorationLine: "underline" }}
-                onPress={() => setShowTOS(true)}
+                style={{
+                  color: "#a0a0a0",
+                  fontSize: 14,
+                  lineHeight: 20,
+                }}
               >
-                Terms of Service
+                I have read and agree to the{" "}
+                <Text
+                  style={{
+                    color: PRIMARY_BLUE,
+                    textDecorationLine: "underline",
+                  }}
+                  onPress={openTOS}
+                >
+                  Terms of Service
+                </Text>
+                .
               </Text>
-              .
-            </Text>
+            </View>
           </View>
 
           {/* --- Continue Button --- */}
           <TouchableOpacity
             onPress={onSignUpPress}
-            disabled={!isFormValid()}
+            disabled={!tosAccepted}
             style={{
-              backgroundColor: "#3a7bd5",
+              backgroundColor: tosAccepted ? PRIMARY_BLUE : "#1e1e1e",
               padding: 16,
               borderRadius: 8,
-              opacity: isFormValid() ? 1 : 0.5,
-              shadowColor: "#3a7bd5",
+              borderWidth: 1,
+              borderColor: tosAccepted ? PRIMARY_BLUE : "#333",
+              shadowColor: tosAccepted ? PRIMARY_BLUE : "transparent",
               shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.3,
-              shadowRadius: 4,
-              elevation: 3,
+              shadowOpacity: tosAccepted ? 0.3 : 0,
+              shadowRadius: tosAccepted ? 4 : 0,
+              elevation: tosAccepted ? 3 : 0,
             }}
           >
             <Text
               style={{
-                color: "white",
+                color: tosAccepted ? "white" : "#777",
                 textAlign: "center",
                 fontWeight: "600",
                 fontSize: 16,
@@ -430,6 +551,7 @@ export default function Signup() {
             </Text>
           </TouchableOpacity>
 
+          {/* Login link */}
           <View
             style={{
               flexDirection: "row",
@@ -438,10 +560,16 @@ export default function Signup() {
               gap: 5,
             }}
           >
-            <Text style={{ color: "#a0a0a0" }}>Already have an account?</Text>
+            <Text style={{ color: "#a0a0a0" }}>
+              Already have an account?
+            </Text>
             <Link href="/(auth)/Login" asChild>
               <TouchableOpacity>
-                <Text style={{ color: "#3a7bd5", fontWeight: "500" }}>Sign in</Text>
+                <Text
+                  style={{ color: PRIMARY_BLUE, fontWeight: "500" }}
+                >
+                  Sign in
+                </Text>
               </TouchableOpacity>
             </Link>
           </View>
@@ -498,7 +626,9 @@ export default function Signup() {
               }}
             >
               We sent a verification code to{"\n"}
-              <Text style={{ fontWeight: "500" }}>{emailAddress}</Text>
+              <Text style={{ fontWeight: "500" }}>
+                {emailAddress}
+              </Text>
             </Text>
 
             <TextInput
@@ -525,7 +655,7 @@ export default function Signup() {
             <TouchableOpacity
               onPress={onVerifyPress}
               style={{
-                backgroundColor: "#3a7bd5",
+                backgroundColor: PRIMARY_BLUE,
                 padding: 16,
                 borderRadius: 8,
                 marginBottom: 16,
@@ -551,7 +681,7 @@ export default function Signup() {
             >
               <Text
                 style={{
-                  color: "#3a7bd5",
+                  color: PRIMARY_BLUE,
                   textAlign: "center",
                   fontSize: 14,
                 }}

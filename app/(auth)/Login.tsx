@@ -69,7 +69,7 @@ export default function Login() {
               textAlign: "center",
             }}
           >
-            Welcome Back
+            Welcome!
           </Text>
 
           <View style={{ marginBottom: 16 }}>
