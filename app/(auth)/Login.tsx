@@ -3,18 +3,22 @@ import { Link, useRouter } from "expo-router";
 import React from "react";
 import {
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function Login() {
   const { signIn, setActive, isLoaded } = useSignIn();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [identifier, setIdentifier] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -49,136 +53,139 @@ export default function Login() {
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={{ flex: 1, backgroundColor: "#121212" }}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}
+      keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
     >
-      <ScrollView
-        contentContainerStyle={{
-          flexGrow: 1,
-          justifyContent: "center",
-          padding: 20,
-        }}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={{ marginBottom: 20 }}>
-          <Text
-            style={{
-              color: "#ffffff",
-              fontSize: 28,
-              fontWeight: "600",
-              marginBottom: 30,
-              textAlign: "center",
-            }}
-          >
-            Welcome!
-          </Text>
-
-          <View style={{ marginBottom: 16 }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
-              Email or Username
-            </Text>
-            <TextInput
-              autoCapitalize="none"
-              value={identifier}
-              placeholder="Enter email or username"
-              placeholderTextColor="#666"
-              onChangeText={setIdentifier}
-              style={{
-                backgroundColor: "#1e1e1e",
-                color: "#ffffff",
-                padding: 14,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: "#333",
-                fontSize: 16,
-              }}
-            />
-          </View>
-
-          <View style={{ marginBottom: 24 }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
-              Password
-            </Text>
-            <TextInput
-              value={password}
-              placeholder="Enter password"
-              placeholderTextColor="#666"
-              secureTextEntry={true}
-              onChangeText={setPassword}
-              style={{
-                backgroundColor: "#1e1e1e",
-                color: "#ffffff",
-                padding: 14,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: "#333",
-                fontSize: 16,
-              }}
-            />
-          </View>
-
-          <TouchableOpacity
-            onPress={onSignInPress}
-            activeOpacity={0.8}
-            disabled={loading}
-            style={{
-              backgroundColor: "#3a7bd5",
-              padding: 16,
-              borderRadius: 8,
-              opacity: loading ? 0.7 : 1,
-              shadowColor: "#3a7bd5",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.3,
-              shadowRadius: 4,
-              elevation: 3,
-            }}
-          >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <ScrollView
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: "center",
+            padding: 20,
+            paddingTop: insets.top + 20,
+          }}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={{ marginBottom: 20 }}>
             <Text
               style={{
-                color: "white",
-                textAlign: "center",
+                color: "#ffffff",
+                fontSize: 28,
                 fontWeight: "600",
-                fontSize: 16,
-              }}
-            >
-              {loading ? "Signing in..." : "Continue"}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => router.push("/(auth)/Reset")}
-            style={{ padding: 16 }}
-          >
-            <Text
-              style={{
-                color: "#3a7bd5",
+                marginBottom: 30,
                 textAlign: "center",
-                fontWeight: "500",
-                fontSize: 14,
               }}
             >
-              Forgot Password?
+              Welcome Back
             </Text>
-          </TouchableOpacity>
 
-          <View
-            style={{
-              flexDirection: "row",
-              marginTop: 16,
-              justifyContent: "center",
-              gap: 5,
-            }}
-          >
-            <Text style={{ color: "#a0a0a0" }}>Don't have an account?</Text>
-            <Link href="/(auth)/Signup" asChild>
-              <TouchableOpacity>
-                <Text style={{ color: "#3a7bd5", fontWeight: "500" }}>
-                  Sign up
-                </Text>
-              </TouchableOpacity>
-            </Link>
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+                Email or Username
+              </Text>
+              <TextInput
+                autoCapitalize="none"
+                value={identifier}
+                placeholder="Enter email or username"
+                placeholderTextColor="#666"
+                onChangeText={setIdentifier}
+                style={{
+                  backgroundColor: "#1e1e1e",
+                  color: "#ffffff",
+                  padding: 14,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: "#333",
+                  fontSize: 16,
+                }}
+              />
+            </View>
+
+            <View style={{ marginBottom: 24 }}>
+              <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+                Password
+              </Text>
+              <TextInput
+                value={password}
+                placeholder="Enter password"
+                placeholderTextColor="#666"
+                secureTextEntry={true}
+                onChangeText={setPassword}
+                style={{
+                  backgroundColor: "#1e1e1e",
+                  color: "#ffffff",
+                  padding: 14,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: "#333",
+                  fontSize: 16,
+                }}
+              />
+            </View>
+
+            <TouchableOpacity
+              onPress={onSignInPress}
+              activeOpacity={0.8}
+              disabled={loading}
+              style={{
+                backgroundColor: "#3a7bd5",
+                padding: 16,
+                borderRadius: 8,
+                opacity: loading ? 0.7 : 1,
+                shadowColor: "#3a7bd5",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.3,
+                shadowRadius: 4,
+                elevation: 3,
+              }}
+            >
+              <Text
+                style={{
+                  color: "white",
+                  textAlign: "center",
+                  fontWeight: "600",
+                  fontSize: 16,
+                }}
+              >
+                {loading ? "Signing in..." : "Continue"}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => router.push("/(auth)/Reset")}
+              style={{ padding: 16 }}
+            >
+              <Text
+                style={{
+                  color: "#3a7bd5",
+                  textAlign: "center",
+                  fontWeight: "500",
+                  fontSize: 14,
+                }}
+              >
+                Forgot Password?
+              </Text>
+            </TouchableOpacity>
+
+            <View
+              style={{
+                flexDirection: "row",
+                marginTop: 16,
+                justifyContent: "center",
+                gap: 5,
+              }}
+            >
+              <Text style={{ color: "#a0a0a0" }}>Don't have an account?</Text>
+              <Link href="/(auth)/Signup" asChild>
+                <TouchableOpacity>
+                  <Text style={{ color: "#3a7bd5", fontWeight: "500" }}>
+                    Sign up
+                  </Text>
+                </TouchableOpacity>
+              </Link>
+            </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   );
 }
