@@ -363,7 +363,7 @@ export default function ProfileScreen() {
               {/* Avatar */}
               <TouchableOpacity
                 onPress={isEditing ? handleChangeAvatar : undefined}
-                style={{ marginBottom: 24 }}
+                style={{ marginBottom: 24, alignItems: 'center' }}
               >
                 <Avatar size="2xl" bg="#1e1e1e" borderRadius="$full">
                   {display.avatar ? (
