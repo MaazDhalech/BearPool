@@ -58,7 +58,9 @@ export default function RideChatScreen() {
   const { user } = useUser();
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
-  const [rideInfo, setRideInfo] = useState<{ from: string; to: string } | null>(null);
+  const [rideInfo, setRideInfo] = useState<{ from: string; to: string } | null>(
+    null
+  );
   const [userMap, setUserMap] = useState<UserMap>({});
   const userMapRef = useRef<UserMap>({});
   const scrollRef = useRef<any>(null);
@@ -66,8 +68,10 @@ export default function RideChatScreen() {
   const insets = useSafeAreaInsets();
 
   const animatedValue = useRef(new Animated.Value(0)).current;
-  const prevMembersRef = useRef<string[]>([]);
-  const pendingSystemMessageRef = useRef<Set<string>>(new Set());
+  const prevMembersRef = useRef<string[] | null>(null);
+  const pendingSystemMessageRef = useRef<Map<string, number>>(new Map());
+  const listenerActiveRef = useRef(false);
+  const hasInitializedRef = useRef(false);
 
   const animatePressIn = () => {
     Animated.timing(animatedValue, {
@@ -91,7 +95,9 @@ export default function RideChatScreen() {
   });
 
   // === Content filtering using leo-profanity ===
-  const filterContent = (text: string): { filtered: string; containsProfanity: boolean } => {
+  const filterContent = (
+    text: string
+  ): { filtered: string; containsProfanity: boolean } => {
     const containsProfanity = filter.check(text);
     const filtered = filter.clean(text);
     return { filtered, containsProfanity };
@@ -130,47 +136,156 @@ export default function RideChatScreen() {
   // === System messages for join/leave ===
   useEffect(() => {
     if (!rideId) return;
+
+    // Prevent multiple listeners
+    if (listenerActiveRef.current) {
+      console.log(`⚠️ Listener already active for ride ${rideId}, skipping`);
+      return;
+    }
+
+    listenerActiveRef.current = true;
+    console.log(`🔵 Setting up ride listener for ride: ${rideId}`);
+
     const rideDocRef = doc(db, "rides", String(rideId));
     const unsubRide = onSnapshot(rideDocRef, async (snap) => {
       const data = snap.data();
-      if (!data) return;
+      if (!data) {
+        console.log(`⚠️ No data found for ride ${rideId}`);
+        return;
+      }
 
       const newMembers: string[] = data.memberIds || [];
       const prevMembers = prevMembersRef.current;
 
-      if (prevMembers.length === 0) {
+      console.log(`👥 Member change detected:`, {
+        previous: prevMembers,
+        current: newMembers,
+        isInitialLoad: prevMembers === null,
+      });
+
+      // Initial load - just store the current members
+      if (prevMembers === null) {
+        console.log(`📝 Initial load - storing ${newMembers.length} members`);
         prevMembersRef.current = newMembers;
+        hasInitializedRef.current = true;
         return;
       }
 
       const joined = newMembers.filter((uid) => !prevMembers.includes(uid));
       const left = prevMembers.filter((uid) => !newMembers.includes(uid));
 
-      for (const uid of [...joined, ...left]) {
-        let name = userMap[uid]?.name;
-        if (!name) {
-          const uDoc = await getDoc(doc(db, "users", uid));
-          name = uDoc.exists() ? uDoc.data().username || "Anonymous" : "Unknown";
+      console.log(`📊 Changes: ${joined.length} joined, ${left.length} left`);
+
+      // Process each join event
+      for (const uid of joined) {
+        console.log(`✅ Processing join for user: ${uid}`);
+
+        const now = Date.now();
+        const lastMessageTime = pendingSystemMessageRef.current.get(
+          `join-${uid}`
+        );
+
+        // Skip if we sent a message for this user in the last 10 seconds
+        if (lastMessageTime && now - lastMessageTime < 10000) {
+          console.log(
+            `⏭️ Skipping duplicate join message for ${uid} (sent ${
+              now - lastMessageTime
+            }ms ago)`
+          );
+          continue;
         }
-        const key = `${uid}-${joined.includes(uid) ? "join" : "leave"}`;
-        if (!pendingSystemMessageRef.current.has(key)) {
-          pendingSystemMessageRef.current.add(key);
+
+        try {
+          // Fetch user name
+          let name = userMapRef.current[uid]?.name;
+          if (!name) {
+            console.log(`🔍 Fetching user data for ${uid}`);
+            const uDoc = await getDoc(doc(db, "users", uid));
+            name = uDoc.exists()
+              ? uDoc.data().username || "Anonymous"
+              : "Unknown";
+          }
+
+          console.log(`✉️ Creating join message for ${name} (${uid})`);
+
+          // Mark as pending BEFORE creating the message
+          pendingSystemMessageRef.current.set(`join-${uid}`, now);
+
+          // Create system message
           await addDoc(collection(db, "rides", String(rideId), "messages"), {
-            text: `${name} has ${joined.includes(uid) ? "joined" : "left"} the ride`,
+            text: `${name} has joined the ride`,
             senderId: null,
             timestamp: serverTimestamp(),
             system: true,
           });
-          setTimeout(() => {
-            pendingSystemMessageRef.current.delete(key);
-          }, 2000);
+
+          console.log(`✅ Join message created successfully`);
+        } catch (error) {
+          console.error("❌ Error creating join message:", error);
+          // Remove from pending on error so it can be retried
+          pendingSystemMessageRef.current.delete(`join-${uid}`);
+        }
+      }
+
+      // Process each leave event
+      for (const uid of left) {
+        console.log(`❌ Processing leave for user: ${uid}`);
+
+        const now = Date.now();
+        const lastMessageTime = pendingSystemMessageRef.current.get(
+          `leave-${uid}`
+        );
+
+        // Skip if we sent a message for this user in the last 10 seconds
+        if (lastMessageTime && now - lastMessageTime < 10000) {
+          console.log(
+            `⏭️ Skipping duplicate leave message for ${uid} (sent ${
+              now - lastMessageTime
+            }ms ago)`
+          );
+          continue;
+        }
+
+        try {
+          // Fetch user name
+          let name = userMapRef.current[uid]?.name;
+          if (!name) {
+            console.log(`🔍 Fetching user data for ${uid}`);
+            const uDoc = await getDoc(doc(db, "users", uid));
+            name = uDoc.exists()
+              ? uDoc.data().username || "Anonymous"
+              : "Unknown";
+          }
+
+          console.log(`✉️ Creating leave message for ${name} (${uid})`);
+
+          // Mark as pending BEFORE creating the message
+          pendingSystemMessageRef.current.set(`leave-${uid}`, now);
+
+          // Create system message
+          await addDoc(collection(db, "rides", String(rideId), "messages"), {
+            text: `${name} has left the ride`,
+            senderId: null,
+            timestamp: serverTimestamp(),
+            system: true,
+          });
+
+          console.log(`✅ Leave message created successfully`);
+        } catch (error) {
+          console.error("❌ Error creating leave message:", error);
+          // Remove from pending on error so it can be retried
+          pendingSystemMessageRef.current.delete(`leave-${uid}`);
         }
       }
 
       prevMembersRef.current = newMembers;
     });
 
-    return () => unsubRide();
+    return () => {
+      console.log(`🔴 Cleaning up ride listener for ride: ${rideId}`);
+      listenerActiveRef.current = false;
+      unsubRide();
+    };
   }, [rideId]);
 
   // === Load messages + user data ===
@@ -188,7 +303,9 @@ export default function RideChatScreen() {
       const uniqueIds = Array.from(
         new Set(msgs.map((m) => m.senderId).filter(Boolean))
       );
-      const newMap = { ...userMap };
+      const newMap = { ...userMapRef.current };
+      let hasUpdates = false;
+
       for (const uid of uniqueIds) {
         if (!newMap[uid]) {
           const uDoc = await getDoc(doc(db, "users", uid));
@@ -198,10 +315,15 @@ export default function RideChatScreen() {
               name: d.username || "Anonymous",
               avatar: d.avatar || DEFAULT_AVATAR,
             };
+            hasUpdates = true;
           }
         }
       }
-      setUserMap(newMap);
+
+      if (hasUpdates) {
+        setUserMap(newMap);
+      }
+
       if (autoScroll) {
         InteractionManager.runAfterInteractions(() => {
           scrollRef.current?.scrollToEnd({ animated: true });
@@ -210,7 +332,7 @@ export default function RideChatScreen() {
     });
 
     return () => unsubscribe();
-  }, [rideId, userMap]);
+  }, [rideId, autoScroll]);
 
   // === Load ride info ===
   useEffect(() => {
@@ -301,11 +423,24 @@ export default function RideChatScreen() {
         >
           <Box flex={1} bg="#121212" pt={insets.top}>
             {/* Header */}
-            <HStack alignItems="center" px="$4" py="$3" borderBottomWidth="$1" borderBottomColor="#333">
-              <Pressable onPress={() => router.back()} p="$2" borderRadius="$full" mr="$3">
+            <HStack
+              alignItems="center"
+              px="$4"
+              py="$3"
+              borderBottomWidth="$1"
+              borderBottomColor="#333"
+            >
+              <Pressable
+                onPress={() => router.back()}
+                p="$2"
+                borderRadius="$full"
+                mr="$3"
+              >
                 <HStack alignItems="center" space="sm">
                   <Ionicons name="arrow-back" size={24} color="white" />
-                  <Heading size="sm" color="white">Back</Heading>
+                  <Heading size="sm" color="white">
+                    Back
+                  </Heading>
                 </HStack>
               </Pressable>
             </HStack>
@@ -332,10 +467,19 @@ export default function RideChatScreen() {
                       borderColor: "#333",
                     }}
                   >
-                    <Text style={{ fontSize: 18, fontWeight: "600", color: "white", textAlign: "center" }}>
+                    <Text
+                      style={{
+                        fontSize: 18,
+                        fontWeight: "600",
+                        color: "white",
+                        textAlign: "center",
+                      }}
+                    >
                       {rideInfo.from} → {rideInfo.to}
                     </Text>
-                    <Text style={{ fontSize: 12, color: "#a0a0a0", marginTop: 4 }}>
+                    <Text
+                      style={{ fontSize: 12, color: "#a0a0a0", marginTop: 4 }}
+                    >
                       Tap to view group members
                     </Text>
                   </Box>
@@ -356,15 +500,17 @@ export default function RideChatScreen() {
                 }}
                 onScrollToTop={() => setAutoScroll(false)}
                 onMomentumScrollEnd={({ nativeEvent }) => {
-                  const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+                  const { layoutMeasurement, contentOffset, contentSize } =
+                    nativeEvent;
                   const distanceFromBottom =
-                    contentSize.height - (contentOffset.y + layoutMeasurement.height);
+                    contentSize.height -
+                    (contentOffset.y + layoutMeasurement.height);
                   if (distanceFromBottom < 30) setAutoScroll(true);
                 }}
                 scrollEventThrottle={16}
               >
                 <VStack space="sm">
-                  {messages.map((msg) => {
+                  {messages.map((msg, index) => {
                     const isSystem = !!msg.system;
                     const isCurrentUser = msg.senderId === user?.id;
                     const sender = userMap[msg.senderId] || {
@@ -372,76 +518,196 @@ export default function RideChatScreen() {
                       avatar: msg.avatar || DEFAULT_AVATAR,
                     };
 
+                    // Determine if we need to show a timestamp divider
+                    const currentMsgDate = msg.timestamp?.toDate();
+                    const prevMsg = index > 0 ? messages[index - 1] : null;
+                    const prevMsgDate = prevMsg?.timestamp?.toDate();
+
+                    let showTimeDivider = false;
+                    let dividerText = "";
+
+                    if (currentMsgDate) {
+                      if (index === 0) {
+                        // First message always gets a timestamp
+                        showTimeDivider = true;
+                      } else if (prevMsgDate) {
+                        const timeDiff = currentMsgDate - prevMsgDate;
+                        const hourInMs = 60 * 60 * 1000;
+
+                        // Check if different days
+                        const isDifferentDay =
+                          currentMsgDate.toDateString() !==
+                          prevMsgDate.toDateString();
+
+                        // Check if more than 1 hour apart
+                        const isHourApart = timeDiff >= hourInMs;
+
+                        if (isDifferentDay || isHourApart) {
+                          showTimeDivider = true;
+                        }
+                      }
+
+                      if (showTimeDivider) {
+                        const today = new Date();
+                        const yesterday = new Date(today);
+                        yesterday.setDate(yesterday.getDate() - 1);
+
+                        const time = currentMsgDate.toLocaleTimeString([], {
+                          hour: "numeric",
+                          minute: "2-digit",
+                        });
+
+                        if (
+                          currentMsgDate.toDateString() === today.toDateString()
+                        ) {
+                          dividerText = `Today ${time}`;
+                        } else if (
+                          currentMsgDate.toDateString() ===
+                          yesterday.toDateString()
+                        ) {
+                          dividerText = `Yesterday ${time}`;
+                        } else {
+                          const date = currentMsgDate.toLocaleDateString([], {
+                            month: "long",
+                            day: "numeric",
+                          });
+                          dividerText = `${date} ${time}`;
+                        }
+                      }
+                    }
+
                     if (isSystem) {
                       return (
-                        <Text key={msg.id} fontSize="$xs" color="#888" textAlign="center" my="$2">
+                        <Text
+                          key={msg.id}
+                          fontSize="$xs"
+                          color="#888"
+                          textAlign="center"
+                          my="$2"
+                        >
                           {msg.text}
                         </Text>
                       );
                     }
 
                     return (
-                      <HStack
-                        key={msg.id}
-                        space="sm"
-                        alignItems="flex-end"
-                        justifyContent={isCurrentUser ? "flex-end" : "flex-start"}
-                      >
-                        {!isCurrentUser && (
-                          <TouchableOpacity onPress={() => handleUserPress(msg.senderId)} activeOpacity={0.7}>
-                            <Avatar size="sm" bgColor="#1e1e1e">
-                              <Avatar.Image source={{ uri: sender.avatar }} alt="User avatar" />
-                            </Avatar>
-                          </TouchableOpacity>
-                        )}
-
-                        <VStack alignItems={isCurrentUser ? "flex-end" : "flex-start"} maxWidth="80%">
-                          {!isCurrentUser && (
-                            <TouchableOpacity onPress={() => handleUserPress(msg.senderId)} activeOpacity={0.7}>
-                              <Text fontSize="$xs" color="#aaaaaa" mb="$1">
-                                {sender.name}
-                              </Text>
-                            </TouchableOpacity>
-                          )}
-
+                      <>
+                        {showTimeDivider && (
                           <Box
-                            px="$4"
-                            py="$2"
-                            bg={isCurrentUser ? "#3a7bd5" : "#1e1e1e"}
-                            borderTopLeftRadius={isCurrentUser ? "$xl" : "$sm"}
-                            borderTopRightRadius={isCurrentUser ? "$sm" : "$xl"}
-                            borderBottomLeftRadius="$xl"
-                            borderBottomRightRadius="$xl"
+                            key={`divider-${msg.id}`}
+                            alignItems="center"
+                            my="$3"
                           >
-                            <Text color={isCurrentUser ? "#ffffff" : "#e0e0e0"} fontSize="$sm">
-                              {msg.text}
-                            </Text>
-                          </Box>
-
-                          {msg.timestamp?.toDate && (
                             <Text
                               fontSize="$xs"
                               color="#888888"
-                              mt="$1"
-                              mb="$1"
-                              textAlign={isCurrentUser ? "right" : "left"}
+                              fontWeight="500"
                             >
-                              {msg.timestamp.toDate().toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
+                              {dividerText}
                             </Text>
+                          </Box>
+                        )}
+                        <HStack
+                          key={msg.id}
+                          space="sm"
+                          alignItems="flex-end"
+                          justifyContent={
+                            isCurrentUser ? "flex-end" : "flex-start"
+                          }
+                        >
+                          {!isCurrentUser && (
+                            <TouchableOpacity
+                              onPress={() => handleUserPress(msg.senderId)}
+                              activeOpacity={0.7}
+                            >
+                              <Avatar size="sm" bgColor="#1e1e1e">
+                                <Avatar.Image
+                                  source={{ uri: sender.avatar }}
+                                  alt="User avatar"
+                                />
+                              </Avatar>
+                            </TouchableOpacity>
                           )}
-                        </VStack>
-                      </HStack>
+
+                          <VStack
+                            alignItems={
+                              isCurrentUser ? "flex-end" : "flex-start"
+                            }
+                            maxWidth="80%"
+                          >
+                            {!isCurrentUser && (
+                              <TouchableOpacity
+                                onPress={() => handleUserPress(msg.senderId)}
+                                activeOpacity={0.7}
+                              >
+                                <Text fontSize="$xs" color="#aaaaaa" mb="$1">
+                                  {sender.name}
+                                </Text>
+                              </TouchableOpacity>
+                            )}
+
+                            <Box
+                              px="$4"
+                              py="$2"
+                              bg={isCurrentUser ? "#3a7bd5" : "#1e1e1e"}
+                              borderTopLeftRadius={
+                                isCurrentUser ? "$xl" : "$sm"
+                              }
+                              borderTopRightRadius={
+                                isCurrentUser ? "$sm" : "$xl"
+                              }
+                              borderBottomLeftRadius="$xl"
+                              borderBottomRightRadius="$xl"
+                            >
+                              <Text
+                                color={isCurrentUser ? "#ffffff" : "#e0e0e0"}
+                                fontSize="$sm"
+                              >
+                                {msg.text}
+                              </Text>
+                            </Box>
+
+                            {msg.timestamp?.toDate && (
+                              <Text
+                                fontSize="$xs"
+                                color="#888888"
+                                mt="$1"
+                                mb="$1"
+                                textAlign={isCurrentUser ? "right" : "left"}
+                              >
+                                {msg.timestamp.toDate().toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </Text>
+                            )}
+                          </VStack>
+                        </HStack>
+                      </>
                     );
                   })}
                 </VStack>
               </ScrollView>
 
               {/* Input */}
-              <HStack space="sm" alignItems="center" mt="$2" bg="transparent" p="$2" borderRadius="$xl" pb={Platform.OS === "android" ? "$6" : "$2"}>
-                <Input flex={1} size="md" borderWidth={0} borderRadius="$full" backgroundColor="#2a2a2a" px="$4" py="$2">
+              <HStack
+                space="sm"
+                alignItems="center"
+                mt="$2"
+                bg="transparent"
+                p="$2"
+                borderRadius="$xl"
+                pb={Platform.OS === "android" ? "$6" : "$2"}
+              >
+                <Input
+                  flex={1}
+                  size="md"
+                  borderWidth={0}
+                  borderRadius="$full"
+                  backgroundColor="#2a2a2a"
+                  px="$4"
+                  py="$2"
+                >
                   <InputField
                     placeholder="Message..."
                     placeholderTextColor="#777"
@@ -454,7 +720,11 @@ export default function RideChatScreen() {
                   />
                 </Input>
 
-                <Pressable onPressIn={animatePressIn} onPressOut={animatePressOut} onPress={handleSend}>
+                <Pressable
+                  onPressIn={animatePressIn}
+                  onPressOut={animatePressOut}
+                  onPress={handleSend}
+                >
                   <Animated.View
                     style={{
                       backgroundColor: interpolatedColor,
