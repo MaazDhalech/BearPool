@@ -463,7 +463,7 @@ export default function ProfileScreen() {
                       Gender (optional — helps us keep riders safe)
                     </Text>
                     <Text color="#666" fontSize="$xs" mb="$2">
-                      We only ask so safety features can work. It’s completely
+                      We only ask so safety features can work. It's completely
                       optional, never shared, and you can remove it anytime.
                     </Text>
                     <HStack space="sm" w="100%">
@@ -473,6 +473,7 @@ export default function ProfileScreen() {
                           onPress={() =>
                             setFormData({ ...formData, gender: option })
                           }
+                          activeOpacity={1}
                           style={{
                             flex: 1,
                             padding: 12,
@@ -482,17 +483,14 @@ export default function ProfileScreen() {
                               formData.gender === option ? "#3a7bd5" : "#333",
                             backgroundColor:
                               formData.gender === option
-                                ? "#1a3a7b"
+                                ? "#3a7bd5"
                                 : "#1e1e1e",
                             alignItems: "center",
                           }}
                         >
                           <Text
                             style={{
-                              color:
-                                formData.gender === option
-                                  ? "#ffffff"
-                                  : "#a0a0a0",
+                              color: "#ffffff",
                               fontSize: 14,
                               fontWeight:
                                 formData.gender === option ? "600" : "400",
@@ -509,6 +507,7 @@ export default function ProfileScreen() {
                     </HStack>
                     <TouchableOpacity
                       onPress={() => setFormData({ ...formData, gender: null })}
+                      activeOpacity={1}
                       style={{
                         marginTop: 12,
                         padding: 12,
@@ -517,14 +516,13 @@ export default function ProfileScreen() {
                         borderColor:
                           formData.gender === null ? "#3a7bd5" : "#333",
                         backgroundColor:
-                          formData.gender === null ? "#1a3a7b" : "transparent",
+                          formData.gender === null ? "#3a7bd5" : "transparent",
                         alignItems: "center",
                       }}
                     >
                       <Text
                         style={{
-                          color:
-                            formData.gender === null ? "#ffffff" : "#a0a0a0",
+                          color: "#ffffff",
                           fontSize: 14,
                           fontWeight: formData.gender === null ? "600" : "400",
                         }}
