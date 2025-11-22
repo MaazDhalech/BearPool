@@ -16,7 +16,7 @@ export default {
       infoPlist: {
         UIBackgroundModes: ["remote-notification"],
         NSUserTrackingUsageDescription: "This identifier will be used to deliver personalized notifications.",
-        NSPhotoLibraryUsageDescription: "BearPool lets you choose a profile picture or avatar from your photo library so you can personalize your account."
+        NSPhotoLibraryUsageDescription: "BearPool uses your photo library to let you select and upload a profile picture that other riders will see when viewing your profile or ride details. For example, when you host or join a ride, your chosen photo helps other users identify and recognize you at pickup locations."
       }
     },
     android: {

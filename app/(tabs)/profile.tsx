@@ -21,7 +21,7 @@ import { useRouter } from "expo-router";
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { Menu } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { Alert, Linking, Platform, TouchableOpacity } from "react-native";
+import { Alert, Platform, TouchableOpacity } from "react-native";
 
 import * as filter from "leo-profanity";
 
@@ -217,35 +217,15 @@ export default function ProfileScreen() {
     }
   };
 
-// === Change avatar ===
+  // === Change avatar ===
   const handleChangeAvatar = async () => {
     if (!clerkUserId) return;
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert(
-        "Camera Roll Access Needed",
-        "We need access to your camera roll so you can choose a photo for your profile picture. Your photos are only used for your avatar and never shared without your permission.",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Open Settings",
-            onPress: () => {
-              if (Platform.OS === "ios") {
-                Linking.openURL("app-settings:");
-              } else {
-                Linking.openSettings();
-              }
-            },
-          },
-        ]
-      );
-      return;
-    }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       aspect: [1, 1],
       quality: 0.5,
+      legacy: true, // This forces the old-style permission dialog
     });
 
     if (result.canceled) return;
@@ -363,7 +343,7 @@ export default function ProfileScreen() {
               {/* Avatar */}
               <TouchableOpacity
                 onPress={isEditing ? handleChangeAvatar : undefined}
-                style={{ marginBottom: 24, alignItems: 'center' }}
+                style={{ marginBottom: 24, alignItems: "center" }}
               >
                 <Avatar size="2xl" bg="#1e1e1e" borderRadius="$full">
                   {display.avatar ? (
