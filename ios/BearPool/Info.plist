@@ -58,7 +58,7 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Allow $(PRODUCT_NAME) to access your microphone</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Allow $(PRODUCT_NAME) to access your photos</string>
+	<string>Allow $(PRODUCT_NAME) to access your photos. $(PRODUCT_NAME) uses your photo library to let you select and upload a profile picture that other riders will see when viewing your profile or ride details.</string>
 	<key>NSUserActivityTypes</key>
 	<array>
 		<string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>
