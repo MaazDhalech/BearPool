@@ -1,3 +1,5 @@
+import { NotificationOptInModal } from "@/components/NotificationOptInModal";
+import { useNotificationOptInPrompt } from "@/hooks/useNotificationOptInPrompt";
 import { db } from "@/services/firebaseConfig";
 import { useAuth } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
@@ -20,7 +22,7 @@ import {
   getDoc,
   updateDoc,
 } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -69,6 +71,42 @@ export default function RideDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [members, setMembers] = useState<Member[]>([]);
   const [userGender, setUserGender] = useState<string | null>(null);
+  const [showNotifPrompt, setShowNotifPrompt] = useState(false);
+  const [notifDenied, setNotifDenied] = useState(false);
+  const pendingNavRef = useRef<(() => void) | null>(null);
+
+  const { shouldPrompt, requestPermission, openSettings, markDismissed } =
+    useNotificationOptInPrompt(userId);
+
+  const handleEnableNotifications = async () => {
+    try {
+      if (notifDenied) {
+        await openSettings();
+        return;
+      }
+
+      const status = await requestPermission();
+      setNotifDenied(status === "denied");
+    } catch (error) {
+      console.error("Notification prompt failed", error);
+    } finally {
+      setShowNotifPrompt(false);
+      pendingNavRef.current?.();
+      pendingNavRef.current = null;
+    }
+  };
+
+  const handleDismissNotifications = async () => {
+    try {
+      await markDismissed();
+    } catch (error) {
+      console.error("Failed to mark notification prompt dismissed", error);
+    } finally {
+      setShowNotifPrompt(false);
+      pendingNavRef.current?.();
+      pendingNavRef.current = null;
+    }
+  };
 
   useEffect(() => {
     const fetchRide = async () => {
@@ -188,10 +226,21 @@ export default function RideDetailsPage() {
         memberIds: arrayUnion(userId),
       });
 
-      router.push({
-        pathname: "/(stack)/ride/[id]/chat",
-        params: { id: ride.id },
-      });
+      const goToChat = () => {
+        router.push({
+          pathname: "/(stack)/ride/[id]/chat",
+          params: { id: ride.id },
+        });
+      };
+
+      const res = await shouldPrompt();
+      if (res.shouldShow) {
+        setNotifDenied(res.permissionStatus === "denied");
+        pendingNavRef.current = goToChat;
+        setShowNotifPrompt(true);
+      } else {
+        goToChat();
+      }
     } catch (err) {
       console.error("Error joining ride:", err);
     }
@@ -332,6 +381,12 @@ export default function RideDetailsPage() {
           </VStack>
         </Box>
       </ScrollView>
+      <NotificationOptInModal
+        visible={showNotifPrompt}
+        isDenied={notifDenied}
+        onEnable={handleEnableNotifications}
+        onClose={handleDismissNotifications}
+      />
     </Box>
   );
 }

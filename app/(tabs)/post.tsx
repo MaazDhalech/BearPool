@@ -1,3 +1,5 @@
+import { NotificationOptInModal } from "@/components/NotificationOptInModal";
+import { useNotificationOptInPrompt } from "@/hooks/useNotificationOptInPrompt";
 import { db } from "@/services/firebaseConfig";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import DateTimePicker, {
@@ -53,6 +55,8 @@ export default function PostScreen() {
   const [genderPref, setGenderPref] = useState("N");
   const [userGender, setUserGender] = useState<"M" | "F" | "NB" | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showNotifPrompt, setShowNotifPrompt] = useState(false);
+  const [notifDenied, setNotifDenied] = useState(false);
 
   // Picker states
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -61,6 +65,9 @@ export default function PostScreen() {
   // Success popup state
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const [lastRideId, setLastRideId] = useState<string | null>(null);
+
+  const { shouldPrompt, requestPermission, openSettings, markDismissed } =
+    useNotificationOptInPrompt(user?.id);
 
   const getSafeSeats = () => {
     const parsed = parseInt(seats, 10);
@@ -76,6 +83,14 @@ export default function PostScreen() {
     setSeats("1");
     setNotes("");
     setGenderPref("N");
+  };
+
+  const triggerNotificationPrompt = async () => {
+    const res = await shouldPrompt();
+    if (res.shouldShow) {
+      setNotifDenied(res.permissionStatus === "denied");
+      setShowNotifPrompt(true);
+    }
   };
 
   // === Content validation using leo-profanity ===
@@ -282,6 +297,7 @@ export default function PostScreen() {
       clearForm();
       // Show success popup instead of immediately routing
       setShowSuccessPopup(true);
+      triggerNotificationPrompt();
     } catch (error) {
       console.error("Post error:", error);
       Alert.alert("Error", "Failed to post ride. Please try again.");
@@ -323,6 +339,32 @@ export default function PostScreen() {
   // Format date for display
   const formattedDate = format(date, "MMMM d, yyyy");
   const formattedTime = format(date, "h:mm a");
+
+  const handleEnableNotifications = async () => {
+    try {
+      if (notifDenied) {
+        await openSettings();
+        return;
+      }
+
+      const status = await requestPermission();
+      setNotifDenied(status === "denied");
+    } catch (error) {
+      console.error("Notification prompt failed", error);
+    } finally {
+      setShowNotifPrompt(false);
+    }
+  };
+
+  const handleDismissNotifications = async () => {
+    try {
+      await markDismissed();
+    } catch (error) {
+      console.error("Failed to mark notification prompt dismissed", error);
+    } finally {
+      setShowNotifPrompt(false);
+    }
+  };
 
   return (
     <KeyboardAvoidingView
@@ -758,6 +800,13 @@ export default function PostScreen() {
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+
+      <NotificationOptInModal
+        visible={showNotifPrompt}
+        isDenied={notifDenied}
+        onEnable={handleEnableNotifications}
+        onClose={handleDismissNotifications}
+      />
 
       {/* Android Date Picker Modal */}
       {Platform.OS === "android" && showDatePicker && (
