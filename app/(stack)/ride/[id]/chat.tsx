@@ -23,10 +23,11 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   Timestamp,
   updateDoc,
 } from "firebase/firestore";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   Animated,
@@ -37,6 +38,7 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
 } from "react-native";
+import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import * as filter from "leo-profanity";
@@ -73,6 +75,7 @@ type RideInfo = {
 export default function RideChatScreen() {
   const { id: rideId } = useLocalSearchParams();
   const { user } = useUser();
+  const isFocused = useIsFocused();
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
   const [rideInfo, setRideInfo] = useState<RideInfo | null>(null);
@@ -91,8 +94,66 @@ export default function RideChatScreen() {
   const pendingSystemMessageRef = useRef<Map<string, number>>(new Map());
   const listenerActiveRef = useRef(false);
   const hasInitializedRef = useRef(false);
+  const hasLoadedMessagesRef = useRef(false);
+  const lastReadWriteAtRef = useRef(0);
   const rideCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const archiveCountdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const readStateHeartbeatRef = useRef<NodeJS.Timeout | null>(null);
+
+  const updateReadState = useCallback(
+    async (payload: Record<string, any>) => {
+      if (!rideId || !user?.id) return;
+      try {
+        await setDoc(
+          doc(db, "rides", String(rideId), "readState", user.id),
+          payload,
+          { merge: true },
+        );
+      } catch (error) {
+        console.error("Failed to update read state", error);
+      }
+    },
+    [rideId, user?.id],
+  );
+
+  const markReadIfAllowed = useCallback(() => {
+    const now = Date.now();
+    if (now - lastReadWriteAtRef.current < 4000) return; // throttle to avoid spamming writes
+    lastReadWriteAtRef.current = now;
+    updateReadState({ lastReadAt: serverTimestamp() });
+  }, [updateReadState]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!rideId || !user?.id) return;
+
+      hasLoadedMessagesRef.current = false;
+      // Mark as active on entry
+      updateReadState({
+        activeChat: true,
+        activeAt: serverTimestamp(),
+      });
+
+      readStateHeartbeatRef.current = setInterval(() => {
+        updateReadState({
+          activeChat: true,
+          activeAt: serverTimestamp(),
+        });
+      }, 27000);
+
+      return () => {
+        if (readStateHeartbeatRef.current) {
+          clearInterval(readStateHeartbeatRef.current);
+          readStateHeartbeatRef.current = null;
+        }
+
+        updateReadState({
+          activeChat: false,
+          activeAt: serverTimestamp(),
+        });
+      };
+    }, [rideId, updateReadState, user?.id]),
+  );
 
   const animatePressIn = () => {
     Animated.timing(animatedValue, {
@@ -647,6 +708,35 @@ export default function RideChatScreen() {
       const msgs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       setMessages(msgs);
 
+      if (isFocused) {
+        // Determine latest non-system message timestamp
+        let latestNonSystemTs: number | null = null;
+        let newestSenderId: string | null = null;
+        for (const msg of msgs) {
+          const isSystem = msg.system === true;
+          const ts = msg.timestamp?.toMillis?.() ? msg.timestamp.toMillis() : null;
+          if (!isSystem && ts !== null) {
+            if (latestNonSystemTs === null || ts > latestNonSystemTs) {
+              latestNonSystemTs = ts;
+              newestSenderId = msg.senderId || null;
+            }
+          }
+        }
+
+        const isFirstLoad = !hasLoadedMessagesRef.current;
+        const userSentLatest = newestSenderId && newestSenderId === user?.id;
+        const shouldMarkRead =
+          isFirstLoad || autoScroll || userSentLatest;
+
+        if (shouldMarkRead) {
+          markReadIfAllowed();
+          hasLoadedMessagesRef.current = true;
+        } else if (isFirstLoad) {
+          // On first load while focused, mark as loaded even if we didn't mark read
+          hasLoadedMessagesRef.current = true;
+        }
+      }
+
       const uniqueIds = Array.from(
         new Set(msgs.map((m) => m.senderId).filter(Boolean)),
       );
@@ -679,7 +769,7 @@ export default function RideChatScreen() {
     });
 
     return () => unsubscribe();
-  }, [rideId, autoScroll]);
+  }, [rideId, autoScroll, isFocused, updateReadState, markReadIfAllowed, user?.id]);
 
   // === Send message with filtering and archive check ===
   const sendMessage = async (messageText: string) => {
