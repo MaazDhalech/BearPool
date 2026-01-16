@@ -41,11 +41,7 @@ export default function EditRideScreen() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [date, setDate] = useState<Date>(() => {
-    const now = new Date();
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(8, 0, 0, 0);
-    return tomorrow;
+    return new Date(); // Just use current time as placeholder
   });
   const [seats, setSeats] = useState("1");
   const [notes, setNotes] = useState("");

@@ -45,11 +45,8 @@ export default function PostScreen() {
   const [to, setTo] = useState("");
   const [date, setDate] = useState<Date>(() => {
     const now = new Date();
-    // Set default to tomorrow at 8 AM
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(8, 0, 0, 0);
-    return tomorrow;
+    // Set default to current date and time
+    return new Date(now);
   });
   const [seats, setSeats] = useState("1");
   const [notes, setNotes] = useState("");
@@ -73,10 +70,9 @@ export default function PostScreen() {
   const clearForm = () => {
     setFrom("");
     setTo("");
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(8, 0, 0, 0);
-    setDate(tomorrow);
+    const now = new Date();
+    // Set to current date and time
+    setDate(new Date(now));
     setSeats("1");
     setNotes("");
     setGenderPref("N");
