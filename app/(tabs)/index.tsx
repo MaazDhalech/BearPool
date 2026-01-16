@@ -172,54 +172,8 @@ const shouldHideRideBasedOnDateTime = (ride: Ride): boolean => {
   }
 };
 
-const shouldArchiveRideBasedOnDateTime = async (
-  ride: Ride,
-): Promise<boolean> => {
-  try {
-    // Skip if already archived
-    if (ride.archived) {
-      return false;
-    }
-
-    // Parse ride date/time
-    const rideDateTime = parseRideDateTime(ride.date, ride.time);
-    if (!rideDateTime) {
-      console.warn(`Could not parse date/time for ride ${ride.id}`);
-      return false;
-    }
-
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const rideYear = rideDateTime.getFullYear();
-
-    // NEW: Archive if ride is from last year (any time last year)
-    if (rideYear < currentYear) {
-      console.log(`Ride ${ride.id} is from year ${rideYear}, archiving...`);
-      return true;
-    }
-
-    // If ride is from current year, apply the 5-day rule
-    const daysSinceRide = Math.floor(
-      (now.getTime() - rideDateTime.getTime()) / (1000 * 60 * 60 * 24),
-    );
-
-    if (daysSinceRide > 5) {
-      // Also check if ride should have been archived based on 6-hour rule
-      const sixHoursInMs = 6 * 60 * 60 * 1000;
-      const timeSinceStart = now.getTime() - rideDateTime.getTime();
-
-      if (timeSinceStart >= sixHoursInMs) {
-        console.log(`Ride ${ride.id} is more than 5 days old, archiving...`);
-        return true;
-      }
-    }
-
-    return false;
-  } catch (error) {
-    console.error("Error checking if ride should be archived:", error);
-    return false;
-  }
-};
+// REMOVED COMPLETELY: shouldArchiveRideBasedOnDateTime function
+// We will NOT check if rides should be archived anymore
 
 const archiveRide = async (rideId: string): Promise<void> => {
   try {
@@ -354,30 +308,15 @@ export default function HomeScreen() {
     });
   };
 
-  const checkAndArchiveOldRides = async (rideData: Ride[]) => {
-    try {
-      for (const ride of rideData) {
-        // Skip if already archived
-        if (ride.archived) {
-          continue;
-        }
-
-        // Check if ride should be archived (more than 5 days old OR from last year)
-        const shouldArchive = await shouldArchiveRideBasedOnDateTime(ride);
-        if (shouldArchive) {
-          await archiveRide(ride.id);
-        }
-      }
-    } catch (error) {
-      console.error("Error checking and archiving old rides:", error);
-    }
-  };
+  // REMOVED COMPLETELY: checkAndArchiveOldRides function
+  // We will NOT automatically archive rides anymore
 
   const setupRealTimeListener = () => {
     if (ridesUnsubscribeRef.current) {
       ridesUnsubscribeRef.current();
     }
 
+    // SIMPLIFIED QUERY: Only order by createdAt to avoid index error
     const rideQuery = query(
       collection(db, "rides"),
       orderBy("createdAt", sortOrder === "newest" ? "desc" : "asc"),
@@ -411,8 +350,8 @@ export default function HomeScreen() {
             return processedRide;
           });
 
-          // Check and archive old rides
-          await checkAndArchiveOldRides(rideData);
+          // REMOVED: checkAndArchiveOldRides call
+          // We will NOT automatically archive rides
 
           // Filter out rides with blocked users
           const filteredRideData = filterRidesWithBlockedUsers(rideData);
@@ -435,6 +374,7 @@ export default function HomeScreen() {
 
   const fetchRidesManually = async () => {
     try {
+      // SIMPLIFIED QUERY: Only order by createdAt to avoid index error
       const rideQuery = query(
         collection(db, "rides"),
         orderBy("createdAt", sortOrder === "newest" ? "desc" : "asc"),
@@ -462,8 +402,8 @@ export default function HomeScreen() {
         };
       });
 
-      // Check and archive old rides
-      await checkAndArchiveOldRides(rideData);
+      // REMOVED: checkAndArchiveOldRides call
+      // We will NOT automatically archive rides
 
       // Filter out rides with blocked users
       const filteredRideData = filterRidesWithBlockedUsers(rideData);
