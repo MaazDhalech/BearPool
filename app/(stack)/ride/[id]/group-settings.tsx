@@ -25,6 +25,7 @@ import {
   updateDoc,
   setDoc,
   serverTimestamp,
+  collection,
 } from "firebase/firestore";
 import { Menu as MenuIcon } from "lucide-react-native";
 import { useEffect, useState } from "react";
@@ -131,11 +132,16 @@ export default function GroupSettings() {
     reason: string,
   ) => {
     try {
-      const kickRecordRef = doc(
+      // Create a reference to the ride's kickLogs subcollection
+      const kickLogsCollectionRef = collection(
         db,
-        "kickRecords",
-        `${rideId}_${kickedUserId}_${Date.now()}`,
+        "rides",
+        String(rideId),
+        "kickLogs",
       );
+
+      // Create a new document in the kickLogs subcollection
+      const kickRecordRef = doc(kickLogsCollectionRef);
 
       await setDoc(kickRecordRef, {
         rideId: String(rideId),
@@ -150,7 +156,9 @@ export default function GroupSettings() {
         rideDate: ride?.date || "Unknown",
       });
 
-      console.log("Kick record stored successfully");
+      console.log(
+        "Kick record stored successfully in ride's kickLogs subcollection",
+      );
     } catch (error) {
       console.error("Error storing kick record:", error);
     }
@@ -199,7 +207,7 @@ export default function GroupSettings() {
         seats: increment(1),
       });
 
-      // Store kick record in Firebase
+      // Store kick record in the ride's kickLogs subcollection
       await storeKickRecord(
         userToKick.id,
         userToKick.name || "Unknown",
@@ -368,8 +376,6 @@ This ride has been permanently deleted from the system.
       const result = await response.json();
 
       if (result.success) {
-        // Log deletion to Firebase for record keeping
-
         return true;
       } else {
         throw new Error(result.message || "Failed to send deletion email");
@@ -420,10 +426,9 @@ This ride has been permanently deleted from the system.
       }
 
       // Delete the ride document
+      // Note: When a document is deleted, its subcollections (including kickLogs)
+      // are also automatically deleted by Firestore
       await deleteDoc(rideRef);
-
-      // Notify all members about the deletion (optional - you could implement push notifications here)
-      // For now, just log it
 
       Alert.alert(
         "Success",
