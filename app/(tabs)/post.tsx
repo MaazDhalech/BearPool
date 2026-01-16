@@ -61,6 +61,10 @@ export default function PostScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
 
+  // Success popup state
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+  const [lastRideId, setLastRideId] = useState<string | null>(null);
+
   const getSafeSeats = () => {
     const parsed = parseInt(seats, 10);
     return isNaN(parsed) ? 1 : parsed;
@@ -260,7 +264,7 @@ export default function PostScreen() {
       const cleanedTo = cleanContent(to);
       const cleanedNotes = cleanContent(notes);
 
-      await addDoc(collection(db, "rides"), {
+      const rideDocRef = await addDoc(collection(db, "rides"), {
         from: cleanedFrom,
         to: cleanedTo,
         date: format(date, "MMMM d"),
@@ -276,14 +280,29 @@ export default function PostScreen() {
         genderPref,
       });
 
+      // Save the ride document ID to state
+      setLastRideId(rideDocRef.id);
+
       clearForm();
-      router.replace("/");
+      // Show success popup instead of immediately routing
+      setShowSuccessPopup(true);
     } catch (error) {
       console.error("Post error:", error);
       Alert.alert("Error", "Failed to post ride. Please try again.");
     } finally {
       setLoading(false);
     }
+  };
+
+  // Handle navigation after success
+  const handleGoToHome = () => {
+    setShowSuccessPopup(false);
+    router.replace("/");
+  };
+
+  const handleGoToChat = () => {
+    setShowSuccessPopup(false);
+    router.replace("/(tabs)/chats");
   };
 
   // === Real-time input filtering ===
@@ -313,7 +332,6 @@ export default function PostScreen() {
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={{ flex: 1, backgroundColor: "#121212" }}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}
     >
       <ScrollView
         contentContainerStyle={{ flexGrow: 1, padding: 20, paddingBottom: 120 }}
@@ -598,6 +616,152 @@ export default function PostScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Success Popup Modal */}
+      <Modal
+        visible={showSuccessPopup}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleGoToHome}
+      >
+        <TouchableWithoutFeedback onPress={handleGoToHome}>
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: "rgba(0,0,0,0.7)",
+              justifyContent: "center",
+              alignItems: "center",
+              padding: 20,
+            }}
+          >
+            <TouchableWithoutFeedback>
+              <View
+                style={{
+                  backgroundColor: "#1e1e1e",
+                  borderRadius: 16,
+                  padding: 24,
+                  width: "100%",
+                  maxWidth: 400,
+                  alignItems: "center",
+                  borderWidth: 1,
+                  borderColor: "#333",
+                }}
+              >
+                {/* Success Icon */}
+                <View
+                  style={{
+                    width: 60,
+                    height: 60,
+                    borderRadius: 30,
+                    backgroundColor: "#4CAF50",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    marginBottom: 20,
+                  }}
+                >
+                  <Text style={{ color: "white", fontSize: 32 }}>✓</Text>
+                </View>
+
+                {/* Title */}
+                <Text
+                  style={{
+                    color: "#ffffff",
+                    fontSize: 22,
+                    fontWeight: "600",
+                    marginBottom: 12,
+                    textAlign: "center",
+                  }}
+                >
+                  Ride Posted Successfully!
+                </Text>
+
+                {/* Message */}
+                <Text
+                  style={{
+                    color: "#a0a0a0",
+                    fontSize: 16,
+                    marginBottom: 24,
+                    textAlign: "center",
+                    lineHeight: 22,
+                  }}
+                >
+                  Your ride has been posted and is now visible to other users.
+                  You can view it on the home screen or go to your chats.
+                </Text>
+
+                {/* Buttons Container */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    width: "100%",
+                    gap: 12,
+                  }}
+                >
+                  {/* Go to Home Button */}
+                  <TouchableOpacity
+                    onPress={handleGoToHome}
+                    style={{
+                      flex: 1,
+                      backgroundColor: "transparent",
+                      paddingVertical: 14,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: "#3a7bd5",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "#3a7bd5",
+                        textAlign: "center",
+                        fontWeight: "600",
+                        fontSize: 16,
+                      }}
+                    >
+                      Go to Home
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Go to Chat Button */}
+                  <TouchableOpacity
+                    onPress={handleGoToChat}
+                    style={{
+                      flex: 1,
+                      backgroundColor: "#3a7bd5",
+                      paddingVertical: 14,
+                      borderRadius: 8,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "white",
+                        textAlign: "center",
+                        fontWeight: "600",
+                        fontSize: 16,
+                      }}
+                    >
+                      Go to Chat
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Quick Tip */}
+                <Text
+                  style={{
+                    color: "#666",
+                    fontSize: 12,
+                    marginTop: 20,
+                    textAlign: "center",
+                    fontStyle: "italic",
+                  }}
+                >
+                  Tip: Chat with passengers to coordinate ride details.
+                </Text>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
 
       {/* Android Date Picker Modal */}
       {Platform.OS === "android" && showDatePicker && (
