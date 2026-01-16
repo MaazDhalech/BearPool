@@ -23,6 +23,8 @@ import {
   getDoc,
   increment,
   updateDoc,
+  setDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 import { Menu as MenuIcon } from "lucide-react-native";
 import { useEffect, useState } from "react";
@@ -53,6 +55,13 @@ export default function GroupSettings() {
   const [customReason, setCustomReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // Kick modal states
+  const [showKickModal, setShowKickModal] = useState(false);
+  const [userToKick, setUserToKick] = useState<User | null>(null);
+  const [kickReason, setKickReason] = useState("");
+  const [customKickReason, setCustomKickReason] = useState("");
+  const [kickSubmitting, setKickSubmitting] = useState(false);
+
   const deletionReasons = [
     "No longer needed",
     "Found alternative transportation",
@@ -60,6 +69,16 @@ export default function GroupSettings() {
     "Low passenger interest",
     "Technical issues",
     "Safety concerns",
+    "Other",
+  ];
+
+  const kickReasons = [
+    "Inappropriate behavior",
+    "No-show for ride",
+    "Safety concerns",
+    "Requested to leave",
+    "Violation of ride rules",
+    "Communication issues",
     "Other",
   ];
 
@@ -106,41 +125,106 @@ export default function GroupSettings() {
     fetchRideAndUsers();
   }, [rideId]);
 
+  const storeKickRecord = async (
+    kickedUserId: string,
+    kickedUserName: string,
+    reason: string,
+  ) => {
+    try {
+      const kickRecordRef = doc(
+        db,
+        "kickRecords",
+        `${rideId}_${kickedUserId}_${Date.now()}`,
+      );
+
+      await setDoc(kickRecordRef, {
+        rideId: String(rideId),
+        kickedUserId,
+        kickedUserName,
+        kickedBy: user?.id,
+        kickedByName: user?.fullName || "Unknown",
+        reason,
+        timestamp: serverTimestamp(),
+        rideFrom: ride?.from || "Unknown",
+        rideTo: ride?.to || "Unknown",
+        rideDate: ride?.date || "Unknown",
+      });
+
+      console.log("Kick record stored successfully");
+    } catch (error) {
+      console.error("Error storing kick record:", error);
+    }
+  };
+
   const handleKick = async (uid: string) => {
     if (!rideId) return;
-    Alert.alert("Remove Member", "Are you sure?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Remove",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            const rideRef = doc(db, "rides", String(rideId));
 
-            // First get current ride data
-            const rideSnap = await getDoc(rideRef);
-            if (!rideSnap.exists()) throw new Error("Ride not found");
+    const userToRemove = users.find((u) => u.id === uid);
+    if (!userToRemove) return;
 
-            const currentSeats = rideSnap.data().seats || 0;
-            console.log("Current seats before update:", currentSeats);
+    // Show kick reason modal
+    setUserToKick(userToRemove);
+    setShowKickModal(true);
+  };
 
-            await updateDoc(rideRef, {
-              memberIds: arrayRemove(uid),
-              seats: increment(1),
-            });
+  const proceedWithKick = async () => {
+    if (!userToKick || !rideId) return;
 
-            // Verify update
-            const updatedSnap = await getDoc(rideRef);
-            console.log("Seats after update:", updatedSnap.data()?.seats);
+    if (!kickReason) {
+      Alert.alert("Error", "Please select a reason for removing this member.");
+      return;
+    }
 
-            setUsers((prev) => prev.filter((u) => u.id !== uid));
-          } catch (error) {
-            console.error("Error removing member:", error);
-            Alert.alert("Error", "Failed to remove member");
-          }
-        },
-      },
-    ]);
+    if (kickReason === "Other" && !customKickReason.trim()) {
+      Alert.alert("Error", "Please provide a reason for removal.");
+      return;
+    }
+
+    const finalReason = kickReason === "Other" ? customKickReason : kickReason;
+
+    setKickSubmitting(true);
+
+    try {
+      const rideRef = doc(db, "rides", String(rideId));
+
+      // First get current ride data
+      const rideSnap = await getDoc(rideRef);
+      if (!rideSnap.exists()) throw new Error("Ride not found");
+
+      const currentSeats = rideSnap.data().seats || 0;
+      console.log("Current seats before update:", currentSeats);
+
+      await updateDoc(rideRef, {
+        memberIds: arrayRemove(userToKick.id),
+        seats: increment(1),
+      });
+
+      // Store kick record in Firebase
+      await storeKickRecord(
+        userToKick.id,
+        userToKick.name || "Unknown",
+        finalReason,
+      );
+
+      // Verify update
+      const updatedSnap = await getDoc(rideRef);
+      console.log("Seats after update:", updatedSnap.data()?.seats);
+
+      setUsers((prev) => prev.filter((u) => u.id !== userToKick.id));
+
+      // Close modal and reset
+      setShowKickModal(false);
+      setUserToKick(null);
+      setKickReason("");
+      setCustomKickReason("");
+
+      Alert.alert("Success", "Member removed successfully");
+    } catch (error) {
+      console.error("Error removing member:", error);
+      Alert.alert("Error", "Failed to remove member");
+    } finally {
+      setKickSubmitting(false);
+    }
   };
 
   const handleAssignHost = (newHostId: string) => {
@@ -646,6 +730,157 @@ This ride has been permanently deleted from the system.
         </VStack>
       </ScrollView>
 
+      {/* Kick Member Modal */}
+      <Modal
+        visible={showKickModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => !kickSubmitting && setShowKickModal(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0, 0, 0, 0.8)",
+            justifyContent: "center",
+            padding: 20,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#1e1e1e",
+              borderRadius: 16,
+              padding: 24,
+              maxHeight: "80%",
+            }}
+          >
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Heading color="white" size="lg" mb={2}>
+                Remove Member
+              </Heading>
+              {userToKick && (
+                <Text color="white" mb={4} fontSize="$lg">
+                  {userToKick.name} (@{userToKick.username})
+                </Text>
+              )}
+
+              <Text color="#a0a0a0" mb={6}>
+                Please select a reason for removing this member. This will be
+                stored for record keeping.
+              </Text>
+
+              <VStack space="md" mb={6}>
+                <Text color="white" fontWeight="bold" fontSize={16}>
+                  Select a reason:
+                </Text>
+
+                {kickReasons.map((reason) => (
+                  <TouchableOpacity
+                    key={reason}
+                    onPress={() => setKickReason(reason)}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      padding: 12,
+                      backgroundColor:
+                        kickReason === reason ? "#2a2a2a" : "#252525",
+                      borderRadius: 8,
+                      marginBottom: 8,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: 10,
+                        borderWidth: 2,
+                        borderColor: kickReason === reason ? "#ff5555" : "#666",
+                        backgroundColor:
+                          kickReason === reason ? "#ff5555" : "transparent",
+                        marginRight: 12,
+                      }}
+                    />
+                    <Text color="white" flex={1}>
+                      {reason}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </VStack>
+
+              {kickReason === "Other" && (
+                <VStack space="sm" mb={6}>
+                  <Text color="white" fontWeight="bold">
+                    Please specify:
+                  </Text>
+                  <TextInput
+                    style={{
+                      backgroundColor: "#252525",
+                      borderColor: "#333",
+                      borderWidth: 1,
+                      borderRadius: 8,
+                      color: "white",
+                      padding: 12,
+                      minHeight: 100,
+                      textAlignVertical: "top",
+                      fontSize: 16,
+                    }}
+                    placeholderTextColor="#666"
+                    multiline
+                    onChangeText={setCustomKickReason}
+                    value={customKickReason}
+                    placeholder="Enter your reason for removing this member..."
+                  />
+                </VStack>
+              )}
+
+              <VStack space="sm">
+                <Button
+                  onPress={proceedWithKick}
+                  disabled={kickSubmitting || !kickReason}
+                  bg="#ff5555"
+                  opacity={kickSubmitting || !kickReason ? 0.6 : 1}
+                >
+                  {kickSubmitting ? (
+                    <HStack space="sm" alignItems="center">
+                      <Box
+                        width={20}
+                        height={20}
+                        borderRadius={10}
+                        borderWidth={2}
+                        borderColor="white"
+                        borderTopColor="transparent"
+                        style={{ transform: [{ rotate: "360deg" }] }}
+                      />
+                      <Text color="white">Removing...</Text>
+                    </HStack>
+                  ) : (
+                    <Text color="white" fontWeight="bold">
+                      Remove Member
+                    </Text>
+                  )}
+                </Button>
+
+                <Button
+                  onPress={() => {
+                    if (!kickSubmitting) {
+                      setShowKickModal(false);
+                      setUserToKick(null);
+                      setKickReason("");
+                      setCustomKickReason("");
+                    }
+                  }}
+                  disabled={kickSubmitting}
+                  variant="outline"
+                  borderColor="#666"
+                  bg="transparent"
+                >
+                  <Text color="#a0a0a0">Cancel</Text>
+                </Button>
+              </VStack>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* Deletion Feedback Modal */}
       <Modal
         visible={showDeleteModal}
@@ -726,7 +961,6 @@ This ride has been permanently deleted from the system.
                   </TouchableOpacity>
                 ))}
               </VStack>
-
               {deletionReason === "Other" && (
                 <VStack space="sm" mb={6}>
                   <Text color="white" fontWeight="bold">

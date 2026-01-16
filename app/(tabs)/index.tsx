@@ -708,38 +708,52 @@ export default function HomeScreen() {
     });
   };
 
-  const filteredRides = rides.filter((ride) => {
-    // Hide archived rides
-    if (ride.archived) {
-      return false;
-    }
+  const filteredRides = rides
+    .filter((ride) => {
+      // Hide archived rides
+      if (ride.archived) {
+        return false;
+      }
 
-    // Hide rides that are more than 5 days old (based on ride date/time)
-    if (shouldHideRideBasedOnDateTime(ride)) {
-      return false;
-    }
+      // Hide rides that are more than 5 days old (based on ride date/time)
+      if (shouldHideRideBasedOnDateTime(ride)) {
+        return false;
+      }
 
-    const qs = searchQuery.toLowerCase();
-    const matchesSearch =
-      ride.from.toLowerCase().includes(qs) ||
-      ride.to.toLowerCase().includes(qs);
+      const qs = searchQuery.toLowerCase();
+      const matchesSearch =
+        ride.from.toLowerCase().includes(qs) ||
+        ride.to.toLowerCase().includes(qs);
 
-    if (!matchesSearch) {
-      return false;
-    }
+      if (!matchesSearch) {
+        return false;
+      }
 
-    const requiresGender = ride.genderPref !== "N";
-    const missingGender = requiresGender && !userGender;
-    const mismatchedGender =
-      requiresGender && !!userGender && ride.genderPref !== userGender;
-    const isRestricted = missingGender || mismatchedGender;
+      const requiresGender = ride.genderPref !== "N";
+      const missingGender = requiresGender && !userGender;
+      const mismatchedGender =
+        requiresGender && !!userGender && ride.genderPref !== userGender;
+      const isRestricted = missingGender || mismatchedGender;
 
-    if (!showRestrictedRides && isRestricted) {
-      return false;
-    }
+      if (!showRestrictedRides && isRestricted) {
+        return false;
+      }
 
-    return true;
-  });
+      return true;
+    })
+    .sort((a, b) => {
+      // Sort by actual ride date/time, closest first
+      const dateA = parseRideDateTime(a.date, a.time);
+      const dateB = parseRideDateTime(b.date, b.time);
+
+      // If either date is invalid, put it at the end
+      if (!dateA && !dateB) return 0;
+      if (!dateA) return 1;
+      if (!dateB) return -1;
+
+      // Sort ascending (closest/earliest first)
+      return dateA.getTime() - dateB.getTime();
+    });
 
   const toggleSortOrder = () =>
     setSortOrder((prev) => (prev === "newest" ? "oldest" : "newest"));
