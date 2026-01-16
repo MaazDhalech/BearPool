@@ -1,7 +1,10 @@
 import { db } from "@/services/firebaseConfig";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
-import { format, isValid, parse } from "date-fns";
+import DateTimePicker, {
+  DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
+import { format } from "date-fns";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
@@ -9,11 +12,13 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -35,8 +40,13 @@ export default function EditRideScreen() {
 
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
+  const [date, setDate] = useState<Date>(() => {
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(8, 0, 0, 0);
+    return tomorrow;
+  });
   const [seats, setSeats] = useState("1");
   const [notes, setNotes] = useState("");
   const [genderPref, setGenderPref] = useState("N");
@@ -44,16 +54,22 @@ export default function EditRideScreen() {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
 
+  // Picker states
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+
   const allowedGenderPrefOptions = useMemo(() => {
-    const options: Array<{ label: string; value: "N" | "M" | "F" | "NB" }> = [{ label: "No preference", value: "N" as const }];
+    const options: Array<{ label: string; value: "N" | "M" | "F" | "NB" }> = [
+      { label: "No preference", value: "N" as const },
+    ];
     if (userGender) {
       options.push({
         label:
           userGender === "M"
             ? "Men only"
             : userGender === "F"
-            ? "Women only"
-            : "Non-binary only",
+              ? "Women only"
+              : "Non-binary only",
         value: userGender,
       });
     }
@@ -77,7 +93,7 @@ export default function EditRideScreen() {
     if (filter.check(text)) {
       Alert.alert(
         "Inappropriate Content",
-        `Please remove inappropriate language from the ${fieldName} field.`
+        `Please remove inappropriate language from the ${fieldName} field.`,
       );
       return false;
     }
@@ -88,67 +104,94 @@ export default function EditRideScreen() {
     return filter.clean(text);
   };
 
-  function validateAndFormatDate(dateStr: string): string | null {
-    const cleanedDateStr = dateStr
-      .replace(/(\d+)(st|nd|rd|th)/gi, "$1")
-      .replace(/,?\s+(\d{4})$/, " $1")
-      .trim();
-
-    const formatsWithYear = [
-      "MMMM d, yyyy",
-      "MMM d, yyyy",
-      "MMMM d yyyy",
-      "MMM d yyyy",
-    ];
-
-    for (const fmt of formatsWithYear) {
-      const parsedDate = parse(cleanedDateStr, fmt, new Date());
-      if (isValid(parsedDate)) {
-        return format(parsedDate, "MMMM d");
+  // Date picker handler
+  const handleDateChange = (
+    event: DateTimePickerEvent,
+    selectedDate?: Date,
+  ) => {
+    // Android handling
+    if (Platform.OS === "android") {
+      if (event.type === "set" && selectedDate) {
+        // Keep the time from existing date, just change the date part
+        const newDate = new Date(selectedDate);
+        newDate.setHours(date.getHours(), date.getMinutes(), 0, 0);
+        setDate(newDate);
       }
+      // Close the picker for both "set" and "dismissed" events
+      setShowDatePicker(false);
+      return;
     }
 
-    const formatsWithoutYear = ["MMMM d", "MMM d"];
-    for (const fmt of formatsWithoutYear) {
-      const parsedDate = parse(cleanedDateStr, fmt, new Date());
-      if (isValid(parsedDate)) {
-        return format(parsedDate, "MMMM d");
+    // iOS handling - always update the date
+    if (selectedDate) {
+      // Keep the time from existing date, just change the date part
+      const newDate = new Date(selectedDate);
+      newDate.setHours(date.getHours(), date.getMinutes(), 0, 0);
+      setDate(newDate);
+    }
+  };
+
+  // Time picker handler
+  const handleTimeChange = (
+    event: DateTimePickerEvent,
+    selectedTime?: Date,
+  ) => {
+    // Android handling
+    if (Platform.OS === "android") {
+      if (event.type === "set" && selectedTime) {
+        // Keep the date from existing date, just change the time part
+        const newDate = new Date(date);
+        newDate.setHours(
+          selectedTime.getHours(),
+          selectedTime.getMinutes(),
+          0,
+          0,
+        );
+        setDate(newDate);
       }
+      // Close the picker for both "set" and "dismissed" events
+      setShowTimePicker(false);
+      return;
     }
 
-    return null;
-  }
-
-  function validateAndFormatTime(timeStr: string): string | null {
-    const parts = timeStr.split(/[-–]/).map((p) => p.trim());
-
-    const parseTime = (str: string) => {
-      let norm = str.toLowerCase().replace(/\s+/g, "");
-      if (!norm.match(/:\d{2}/)) {
-        norm = norm.replace(/(\d+)(am|pm)/, "$1:00$2");
-      }
-      const parsed = parse(norm, "h:mma", new Date());
-      return isValid(parsed) ? format(parsed, "h:mm a") : null;
-    };
-
-    if (parts.length === 1) {
-      return parseTime(parts[0]);
-    } else if (parts.length === 2) {
-      const start = parseTime(parts[0]);
-      const end = parseTime(parts[1]);
-      if (start && end) return `${start} - ${end}`;
+    // iOS handling - always update the time
+    if (selectedTime) {
+      // Keep the date from existing date, just change the time part
+      const newDate = new Date(date);
+      newDate.setHours(
+        selectedTime.getHours(),
+        selectedTime.getMinutes(),
+        0,
+        0,
+      );
+      setDate(newDate);
     }
+  };
 
-    return null;
-  }
+  // Show date picker
+  const showDatePickerModal = () => {
+    setShowDatePicker(true);
+  };
+
+  // Show time picker
+  const showTimePickerModal = () => {
+    setShowTimePicker(true);
+  };
 
   // === Real-time input filtering ===
-  const handleTextChange = (text: string, setter: (value: string) => void, maxLength?: number) => {
+  const handleTextChange = (
+    text: string,
+    setter: (value: string) => void,
+    maxLength?: number,
+  ) => {
     if (maxLength && text.length > maxLength) return;
 
     // Block profanity in real-time
     if (filter.check(text)) {
-      Alert.alert("Inappropriate Content", "Please avoid using inappropriate language.");
+      Alert.alert(
+        "Inappropriate Content",
+        "Please avoid using inappropriate language.",
+      );
       return;
     }
 
@@ -177,11 +220,47 @@ export default function EditRideScreen() {
 
         setFrom(rideData.from || "");
         setTo(rideData.to || "");
-        setDate(rideData.date || "");
-        setTime(rideData.time || "");
         setSeats(String(rideData.seats || 1));
         setNotes(rideData.notes || "");
         setGenderPref(rideData.genderPref || "N");
+
+        // Parse date and time from existing ride data
+        if (rideData.date && rideData.time) {
+          try {
+            // Combine date and time into a single Date object
+            const currentYear = new Date().getFullYear();
+            const dateStr = `${rideData.date}, ${currentYear}`;
+            const timeStr = rideData.time.split(" - ")[0]; // Take first time if it's a range
+
+            // Parse the date (format like "June 20, 2024")
+            const parsedDate = new Date(dateStr);
+
+            // Parse the time (format like "4:00 PM")
+            const timeMatch = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+            if (timeMatch) {
+              let hours = parseInt(timeMatch[1]);
+              const minutes = parseInt(timeMatch[2]);
+              const period = timeMatch[3].toUpperCase();
+
+              if (period === "PM" && hours < 12) hours += 12;
+              if (period === "AM" && hours === 12) hours = 0;
+
+              parsedDate.setHours(hours, minutes, 0, 0);
+            }
+
+            if (!isNaN(parsedDate.getTime())) {
+              setDate(parsedDate);
+            }
+          } catch (error) {
+            console.error("Error parsing existing date/time:", error);
+            // Fallback to default date
+            const now = new Date();
+            const tomorrow = new Date(now);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(8, 0, 0, 0);
+            setDate(tomorrow);
+          }
+        }
       } catch (error) {
         console.error("Error loading ride data:", error);
         Alert.alert("Error", "Failed to load ride data");
@@ -216,7 +295,7 @@ export default function EditRideScreen() {
 
   // === Save changes ===
   const handleSaveChanges = async () => {
-    if (!from || !to || !date || !time || !seats) {
+    if (!from || !to || !seats) {
       Alert.alert("Error", "Please fill out all required fields");
       return;
     }
@@ -225,15 +304,13 @@ export default function EditRideScreen() {
     if (!validateContent(to, "To")) return;
     if (!validateContent(notes, "Additional Notes")) return;
 
-    const formattedDate = validateAndFormatDate(date);
-    if (!formattedDate) {
-      Alert.alert("Invalid Date", "Please enter a valid date like 'June 20th, 2025' or 'Jun 20 2025'.");
-      return;
-    }
-
-    const formattedTime = validateAndFormatTime(time);
-    if (!formattedTime) {
-      Alert.alert("Invalid Time", "Please enter a valid time like '4:00 PM' or time range like '4:00–6:00 PM'.");
+    // Validate that date is in the future
+    const now = new Date();
+    if (date <= now) {
+      Alert.alert(
+        "Invalid Date",
+        "Please select a date and time in the future.",
+      );
       return;
     }
 
@@ -252,8 +329,8 @@ export default function EditRideScreen() {
       await updateDoc(rideRef, {
         from: cleanedFrom,
         to: cleanedTo,
-        date: formattedDate,
-        time: formattedTime,
+        date: format(date, "MMMM d"),
+        time: format(date, "h:mm a"),
         seats: Number(getSafeSeats()),
         notes: cleanedNotes,
         genderPref,
@@ -272,12 +349,25 @@ export default function EditRideScreen() {
 
   if (initialLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: "#121212", justifyContent: "center", alignItems: "center" }}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "#121212",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
         <ActivityIndicator size="large" color="#3a7bd5" />
-        <Text style={{ color: "#ffffff", marginTop: 16 }}>Loading ride details...</Text>
+        <Text style={{ color: "#ffffff", marginTop: 16 }}>
+          Loading ride details...
+        </Text>
       </View>
     );
   }
+
+  // Format date for display
+  const formattedDate = format(date, "MMMM d, yyyy");
+  const formattedTime = format(date, "h:mm a");
 
   return (
     <KeyboardAvoidingView
@@ -303,7 +393,9 @@ export default function EditRideScreen() {
         >
           <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
-        <Text style={{ color: "#ffffff", fontSize: 20, fontWeight: "600", flex: 1 }}>
+        <Text
+          style={{ color: "#ffffff", fontSize: 20, fontWeight: "600", flex: 1 }}
+        >
           Edit Ride
         </Text>
       </View>
@@ -313,40 +405,117 @@ export default function EditRideScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={{ marginBottom: 20 }}>
-          {[
-            { label: "From", value: from, setter: setFrom, placeholder: "e.g. Berkeley – Unit 1" },
-            { label: "To", value: to, setter: setTo, placeholder: "e.g. SFO Terminal 2" },
-            { label: "Date", value: date, setter: setDate, placeholder: "e.g. June 20" },
-            { label: "Time", value: time, setter: setTime, placeholder: "e.g. 4:00–6:00 PM" },
-          ].map(({ label, value, setter, placeholder }) => (
-            <View key={label} style={{ marginBottom: 16 }}>
-              <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>{label}</Text>
-              <TextInput
-                value={value}
-                placeholder={placeholder}
-                placeholderTextColor="#666"
-                onChangeText={(text) => handleTextChange(text, setter)}
-                style={{
-                  backgroundColor: "#1e1e1e",
-                  color: "#ffffff",
-                  padding: 14,
-                  borderRadius: 8,
-                  borderWidth: 1,
-                  borderColor: "#333",
-                  fontSize: 16,
-                }}
-              />
-            </View>
-          ))}
+          {/* From */}
+          <View style={{ marginBottom: 16 }}>
+            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+              From
+            </Text>
+            <TextInput
+              value={from}
+              placeholder="e.g. Berkeley – Unit 1"
+              placeholderTextColor="#666"
+              onChangeText={(text) => handleTextChange(text, setFrom)}
+              style={{
+                backgroundColor: "#1e1e1e",
+                color: "#ffffff",
+                padding: 14,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: "#333",
+                fontSize: 16,
+              }}
+            />
+          </View>
+
+          {/* To */}
+          <View style={{ marginBottom: 16 }}>
+            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+              To
+            </Text>
+            <TextInput
+              value={to}
+              placeholder="e.g. SFO Terminal 2"
+              placeholderTextColor="#666"
+              onChangeText={(text) => handleTextChange(text, setTo)}
+              style={{
+                backgroundColor: "#1e1e1e",
+                color: "#ffffff",
+                padding: 14,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: "#333",
+                fontSize: 16,
+              }}
+            />
+          </View>
+
+          {/* Date Picker */}
+          <View style={{ marginBottom: 16 }}>
+            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+              Date
+            </Text>
+            <TouchableOpacity
+              onPress={showDatePickerModal}
+              style={{
+                backgroundColor: "#1e1e1e",
+                padding: 14,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: "#333",
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <Text style={{ color: "#ffffff", fontSize: 16 }}>
+                {formattedDate}
+              </Text>
+              <Text style={{ color: "#3a7bd5", fontSize: 16 }}>📅</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Time Picker */}
+          <View style={{ marginBottom: 16 }}>
+            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+              Time
+            </Text>
+            <TouchableOpacity
+              onPress={showTimePickerModal}
+              style={{
+                backgroundColor: "#1e1e1e",
+                padding: 14,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: "#333",
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <Text style={{ color: "#ffffff", fontSize: 16 }}>
+                {formattedTime}
+              </Text>
+              <Text style={{ color: "#3a7bd5", fontSize: 16 }}>🕒</Text>
+            </TouchableOpacity>
+          </View>
 
           {/* Seats */}
           <View style={{ marginBottom: 16 }}>
             <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
               How many other people do you want in the car?
             </Text>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 8 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                marginTop: 8,
+              }}
+            >
               <TouchableOpacity
-                onPress={() => setSeats(String(Math.max(1, getSafeSeats() - 1)))}
+                onPress={() =>
+                  setSeats(String(Math.max(1, getSafeSeats() - 1)))
+                }
                 disabled={getSafeSeats() <= 1}
                 style={{
                   backgroundColor: getSafeSeats() <= 1 ? "#333" : "#3a7bd5",
@@ -358,12 +527,21 @@ export default function EditRideScreen() {
                 <Text style={{ color: "white", fontSize: 18 }}>-</Text>
               </TouchableOpacity>
 
-              <Text style={{ color: "white", fontSize: 18, minWidth: 30, textAlign: "center" }}>
+              <Text
+                style={{
+                  color: "white",
+                  fontSize: 18,
+                  minWidth: 30,
+                  textAlign: "center",
+                }}
+              >
                 {seats}
               </Text>
 
               <TouchableOpacity
-                onPress={() => setSeats(String(Math.min(5, getSafeSeats() + 1)))}
+                onPress={() =>
+                  setSeats(String(Math.min(5, getSafeSeats() + 1)))
+                }
                 disabled={getSafeSeats() >= 5}
                 style={{
                   backgroundColor: getSafeSeats() >= 5 ? "#333" : "#3a7bd5",
@@ -379,22 +557,34 @@ export default function EditRideScreen() {
 
           {/* Gender Preference */}
           <View style={{ marginBottom: 16 }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>Gender Preference</Text>
-            <Text style={{ color: "#666", fontSize: 12, marginBottom: 8 }}>
-              We only show options that match your profile to keep rides aligned with your identity. Riders who don’t match won’t see this post.
+            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+              Gender Preference
             </Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginTop: 8 }}>
+            <Text style={{ color: "#666", fontSize: 12, marginBottom: 8 }}>
+              We only show options that match your profile to keep rides aligned
+              with your identity. Riders who don't match won't see this post.
+            </Text>
+            <View
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                justifyContent: "space-between",
+                marginTop: 8,
+              }}
+            >
               {allowedGenderPrefOptions.map((option) => (
                 <TouchableOpacity
                   key={option.value}
                   onPress={() => setGenderPref(option.value)}
                   style={{
-                    backgroundColor: genderPref === option.value ? "#3a7bd5" : "#1e1e1e",
+                    backgroundColor:
+                      genderPref === option.value ? "#3a7bd5" : "#1e1e1e",
                     paddingVertical: 12,
                     paddingHorizontal: 16,
                     borderRadius: 8,
                     borderWidth: 1,
-                    borderColor: genderPref === option.value ? "#3a7bd5" : "#333",
+                    borderColor:
+                      genderPref === option.value ? "#3a7bd5" : "#333",
                     marginBottom: 8,
                     width: allowedGenderPrefOptions.length > 1 ? "48%" : "100%",
                   }}
@@ -415,12 +605,16 @@ export default function EditRideScreen() {
 
           {/* Notes */}
           <View style={{ marginBottom: 24 }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>Additional Notes</Text>
+            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+              Additional Notes
+            </Text>
             <TextInput
               value={notes}
               placeholder="Optional"
               placeholderTextColor="#666"
-              onChangeText={(text) => handleTextChange(text, setNotes, MAX_NOTES_LENGTH)}
+              onChangeText={(text) =>
+                handleTextChange(text, setNotes, MAX_NOTES_LENGTH)
+              }
               maxLength={MAX_NOTES_LENGTH}
               multiline={true}
               style={{
@@ -435,7 +629,14 @@ export default function EditRideScreen() {
                 textAlignVertical: "top",
               }}
             />
-            <Text style={{ color: "#666", fontSize: 12, marginTop: 4, textAlign: "right" }}>
+            <Text
+              style={{
+                color: "#666",
+                fontSize: 12,
+                marginTop: 4,
+                textAlign: "right",
+              }}
+            >
               {notes.length} / {MAX_NOTES_LENGTH}
             </Text>
           </View>
@@ -457,12 +658,363 @@ export default function EditRideScreen() {
               elevation: 3,
             }}
           >
-            <Text style={{ color: "white", textAlign: "center", fontWeight: "600", fontSize: 16 }}>
+            <Text
+              style={{
+                color: "white",
+                textAlign: "center",
+                fontWeight: "600",
+                fontSize: 16,
+              }}
+            >
               {loading ? "Saving..." : "Save Changes"}
             </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Android Date Picker Modal */}
+      {Platform.OS === "android" && showDatePicker && (
+        <Modal
+          visible={showDatePicker}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowDatePicker(false)}
+        >
+          <TouchableWithoutFeedback onPress={() => setShowDatePicker(false)}>
+            <View
+              style={{
+                flex: 1,
+                backgroundColor: "rgba(0,0,0,0.7)",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <TouchableWithoutFeedback>
+                <View
+                  style={{
+                    backgroundColor: "#1e1e1e",
+                    borderRadius: 16,
+                    padding: 24,
+                    width: "90%",
+                    maxWidth: 400,
+                    alignItems: "center",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "#ffffff",
+                      fontSize: 20,
+                      fontWeight: "600",
+                      marginBottom: 20,
+                    }}
+                  >
+                    Select Date
+                  </Text>
+                  <DateTimePicker
+                    value={date}
+                    mode="date"
+                    display="spinner"
+                    onChange={handleDateChange}
+                    minimumDate={new Date()}
+                    themeVariant="dark"
+                    textColor="#ffffff"
+                    style={{
+                      backgroundColor: "#1e1e1e",
+                      width: "100%",
+                      height: 180,
+                    }}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowDatePicker(false)}
+                    style={{
+                      backgroundColor: "#3a7bd5",
+                      paddingVertical: 12,
+                      paddingHorizontal: 32,
+                      borderRadius: 8,
+                      marginTop: 20,
+                      alignSelf: "stretch",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "white",
+                        textAlign: "center",
+                        fontSize: 16,
+                        fontWeight: "600",
+                      }}
+                    >
+                      Done
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
+      )}
+
+      {/* Android Time Picker Modal */}
+      {Platform.OS === "android" && showTimePicker && (
+        <Modal
+          visible={showTimePicker}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowTimePicker(false)}
+        >
+          <TouchableWithoutFeedback onPress={() => setShowTimePicker(false)}>
+            <View
+              style={{
+                flex: 1,
+                backgroundColor: "rgba(0,0,0,0.7)",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <TouchableWithoutFeedback>
+                <View
+                  style={{
+                    backgroundColor: "#1e1e1e",
+                    borderRadius: 16,
+                    padding: 24,
+                    width: "90%",
+                    maxWidth: 400,
+                    alignItems: "center",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "#ffffff",
+                      fontSize: 20,
+                      fontWeight: "600",
+                      marginBottom: 20,
+                    }}
+                  >
+                    Select Time
+                  </Text>
+                  <DateTimePicker
+                    value={date}
+                    mode="time"
+                    display="spinner"
+                    onChange={handleTimeChange}
+                    themeVariant="dark"
+                    textColor="#ffffff"
+                    style={{
+                      backgroundColor: "#1e1e1e",
+                      width: "100%",
+                      height: 180,
+                    }}
+                    is24Hour={false}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowTimePicker(false)}
+                    style={{
+                      backgroundColor: "#3a7bd5",
+                      paddingVertical: 12,
+                      paddingHorizontal: 32,
+                      borderRadius: 8,
+                      marginTop: 20,
+                      alignSelf: "stretch",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "white",
+                        textAlign: "center",
+                        fontSize: 16,
+                        fontWeight: "600",
+                      }}
+                    >
+                      Done
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
+      )}
+
+      {/* iOS Date Picker Modal - Centered */}
+      {Platform.OS === "ios" && showDatePicker && (
+        <Modal
+          visible={showDatePicker}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowDatePicker(false)}
+        >
+          <TouchableWithoutFeedback onPress={() => setShowDatePicker(false)}>
+            <View
+              style={{
+                flex: 1,
+                backgroundColor: "rgba(0,0,0,0.7)",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <TouchableWithoutFeedback>
+                <View
+                  style={{
+                    backgroundColor: "#1e1e1e",
+                    borderRadius: 16,
+                    padding: 24,
+                    width: "90%",
+                    maxWidth: 400,
+                    alignItems: "center",
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: 20,
+                      width: "100%",
+                    }}
+                  >
+                    <TouchableOpacity
+                      onPress={() => setShowDatePicker(false)}
+                      style={{ padding: 8 }}
+                    >
+                      <Text style={{ color: "#3a7bd5", fontSize: 16 }}>
+                        Cancel
+                      </Text>
+                    </TouchableOpacity>
+                    <Text
+                      style={{
+                        color: "#ffffff",
+                        fontSize: 18,
+                        fontWeight: "600",
+                      }}
+                    >
+                      Select Date
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => setShowDatePicker(false)}
+                      style={{ padding: 8 }}
+                    >
+                      <Text
+                        style={{
+                          color: "#3a7bd5",
+                          fontSize: 16,
+                          fontWeight: "600",
+                        }}
+                      >
+                        Done
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <DateTimePicker
+                    value={date}
+                    mode="date"
+                    display="spinner"
+                    onChange={handleDateChange}
+                    minimumDate={new Date()}
+                    themeVariant="dark"
+                    textColor="#ffffff"
+                    style={{
+                      backgroundColor: "#1e1e1e",
+                      width: "100%",
+                      height: 200,
+                    }}
+                  />
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
+      )}
+
+      {/* iOS Time Picker Modal - Centered */}
+      {Platform.OS === "ios" && showTimePicker && (
+        <Modal
+          visible={showTimePicker}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowTimePicker(false)}
+        >
+          <TouchableWithoutFeedback onPress={() => setShowTimePicker(false)}>
+            <View
+              style={{
+                flex: 1,
+                backgroundColor: "rgba(0,0,0,0.7)",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <TouchableWithoutFeedback>
+                <View
+                  style={{
+                    backgroundColor: "#1e1e1e",
+                    borderRadius: 16,
+                    padding: 24,
+                    width: "90%",
+                    maxWidth: 400,
+                    alignItems: "center",
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: 20,
+                      width: "100%",
+                    }}
+                  >
+                    <TouchableOpacity
+                      onPress={() => setShowTimePicker(false)}
+                      style={{ padding: 8 }}
+                    >
+                      <Text style={{ color: "#3a7bd5", fontSize: 16 }}>
+                        Cancel
+                      </Text>
+                    </TouchableOpacity>
+                    <Text
+                      style={{
+                        color: "#ffffff",
+                        fontSize: 18,
+                        fontWeight: "600",
+                      }}
+                    >
+                      Select Time
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => setShowTimePicker(false)}
+                      style={{ padding: 8 }}
+                    >
+                      <Text
+                        style={{
+                          color: "#3a7bd5",
+                          fontSize: 16,
+                          fontWeight: "600",
+                        }}
+                      >
+                        Done
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <DateTimePicker
+                    value={date}
+                    mode="time"
+                    display="spinner"
+                    onChange={handleTimeChange}
+                    themeVariant="dark"
+                    textColor="#ffffff"
+                    style={{
+                      backgroundColor: "#1e1e1e",
+                      width: "100%",
+                      height: 200,
+                    }}
+                    is24Hour={false}
+                  />
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
+      )}
     </KeyboardAvoidingView>
   );
 }
