@@ -740,7 +740,7 @@ export default function PostScreen() {
                         fontSize: 16,
                       }}
                     >
-                      Go to Chat
+                      View Chats
                     </Text>
                   </TouchableOpacity>
                 </View>
