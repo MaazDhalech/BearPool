@@ -13,6 +13,7 @@ import {
   Text,
   VStack,
 } from "@gluestack-ui/themed";
+import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import { router, useLocalSearchParams } from "expo-router";
 import {
   addDoc,
@@ -38,7 +39,6 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
 } from "react-native";
-import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import * as filter from "leo-profanity";
@@ -72,11 +72,23 @@ type RideInfo = {
   rideFull: boolean;
 };
 
+// Define message type
+type Message = {
+  id: string;
+  text: string;
+  senderId?: string;
+  senderName?: string;
+  avatar?: string;
+  timestamp?: Timestamp;
+  system?: boolean;
+  archivedNotice?: boolean;
+};
+
 export default function RideChatScreen() {
   const { id: rideId } = useLocalSearchParams();
   const { user } = useUser();
   const isFocused = useIsFocused();
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [rideInfo, setRideInfo] = useState<RideInfo | null>(null);
   const [userMap, setUserMap] = useState<UserMap>({});
@@ -139,7 +151,7 @@ export default function RideChatScreen() {
           activeChat: true,
           activeAt: serverTimestamp(),
         });
-      }, 27000);
+      }, 27000) as unknown as NodeJS.Timeout;
 
       return () => {
         if (readStateHeartbeatRef.current) {
@@ -705,7 +717,10 @@ export default function RideChatScreen() {
       orderBy("timestamp", "asc"),
     );
     const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const msgs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      const msgs = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Message[];
       setMessages(msgs);
 
       if (isFocused) {
@@ -714,7 +729,9 @@ export default function RideChatScreen() {
         let newestSenderId: string | null = null;
         for (const msg of msgs) {
           const isSystem = msg.system === true;
-          const ts = msg.timestamp?.toMillis?.() ? msg.timestamp.toMillis() : null;
+          const ts = msg.timestamp?.toMillis?.()
+            ? msg.timestamp.toMillis()
+            : null;
           if (!isSystem && ts !== null) {
             if (latestNonSystemTs === null || ts > latestNonSystemTs) {
               latestNonSystemTs = ts;
@@ -725,8 +742,7 @@ export default function RideChatScreen() {
 
         const isFirstLoad = !hasLoadedMessagesRef.current;
         const userSentLatest = newestSenderId && newestSenderId === user?.id;
-        const shouldMarkRead =
-          isFirstLoad || autoScroll || userSentLatest;
+        const shouldMarkRead = isFirstLoad || autoScroll || userSentLatest;
 
         if (shouldMarkRead) {
           markReadIfAllowed();
@@ -738,7 +754,7 @@ export default function RideChatScreen() {
       }
 
       const uniqueIds = Array.from(
-        new Set(msgs.map((m) => m.senderId).filter(Boolean)),
+        new Set(msgs.map((m) => m.senderId).filter(Boolean) as string[]),
       );
       const newMap = { ...userMapRef.current };
       let hasUpdates = false;
@@ -769,7 +785,14 @@ export default function RideChatScreen() {
     });
 
     return () => unsubscribe();
-  }, [rideId, autoScroll, isFocused, updateReadState, markReadIfAllowed, user?.id]);
+  }, [
+    rideId,
+    autoScroll,
+    isFocused,
+    updateReadState,
+    markReadIfAllowed,
+    user?.id,
+  ]);
 
   // === Send message with filtering and archive check ===
   const sendMessage = async (messageText: string) => {
@@ -1030,10 +1053,10 @@ export default function RideChatScreen() {
               >
                 <VStack space="sm">
                   {messages.map((msg, index) => {
-                    const isSystem = !!msg.system;
+                    const isSystem = msg.system === true;
                     const isArchivedNotice = !!msg.archivedNotice;
                     const isCurrentUser = msg.senderId === user?.id;
-                    const sender = userMap[msg.senderId] || {
+                    const sender = userMap[msg.senderId || ""] || {
                       name: msg.senderName || "Unknown",
                       avatar: msg.avatar || DEFAULT_AVATAR,
                     };
@@ -1051,7 +1074,8 @@ export default function RideChatScreen() {
                         // First message always gets a timestamp
                         showTimeDivider = true;
                       } else if (prevMsgDate) {
-                        const timeDiff = currentMsgDate - prevMsgDate;
+                        const timeDiff =
+                          currentMsgDate.getTime() - prevMsgDate.getTime();
                         const hourInMs = 60 * 60 * 1000;
 
                         // Check if different days
@@ -1156,7 +1180,9 @@ export default function RideChatScreen() {
                         >
                           {!isCurrentUser && (
                             <TouchableOpacity
-                              onPress={() => handleUserPress(msg.senderId)}
+                              onPress={() =>
+                                handleUserPress(msg.senderId || "")
+                              }
                               activeOpacity={0.7}
                             >
                               <Avatar size="sm" bgColor="#1e1e1e">
@@ -1176,7 +1202,9 @@ export default function RideChatScreen() {
                           >
                             {!isCurrentUser && (
                               <TouchableOpacity
-                                onPress={() => handleUserPress(msg.senderId)}
+                                onPress={() =>
+                                  handleUserPress(msg.senderId || "")
+                                }
                                 activeOpacity={0.7}
                               >
                                 <Text fontSize="$xs" color="#aaaaaa" mb="$1">

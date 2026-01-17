@@ -6,7 +6,7 @@ import DateTimePicker, {
 } from "@react-native-community/datetimepicker";
 import { format } from "date-fns";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { deleteDoc, doc, getDoc, updateDoc } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -50,9 +50,25 @@ export default function EditRideScreen() {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
 
+  // Deletion states
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletionReason, setDeletionReason] = useState("");
+  const [customReason, setCustomReason] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
   // Picker states
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+
+  const deletionReasons = [
+    "No longer needed",
+    "Found alternative transportation",
+    "Change in plans",
+    "Low passenger interest",
+    "Technical issues",
+    "Safety concerns",
+    "Other",
+  ];
 
   const allowedGenderPrefOptions = useMemo(() => {
     const options: Array<{ label: string; value: "N" | "M" | "F" | "NB" }> = [
@@ -340,6 +356,78 @@ export default function EditRideScreen() {
       Alert.alert("Error", "Failed to update ride. Please try again.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // === Delete ride ===
+  const handleDeleteRide = () => {
+    Alert.alert(
+      "Delete Ride",
+      "Are you sure you want to delete this ride? This action cannot be undone.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => setShowDeleteModal(true),
+        },
+      ],
+    );
+  };
+
+  const handleSubmitDeletion = async () => {
+    if (!deletionReason) {
+      Alert.alert("Error", "Please select a reason for deleting the ride.");
+      return;
+    }
+
+    if (deletionReason === "Other" && !customReason.trim()) {
+      Alert.alert("Error", "Please provide a reason for deletion.");
+      return;
+    }
+
+    const finalReason =
+      deletionReason === "Other" ? customReason : deletionReason;
+
+    setDeleting(true);
+    try {
+      if (!id) {
+        throw new Error("No ride ID provided");
+      }
+
+      const rideRef = doc(db, "rides", id as string);
+
+      // First verify the ride exists
+      const rideSnap = await getDoc(rideRef);
+      if (!rideSnap.exists()) {
+        throw new Error("Ride not found");
+      }
+
+      // Delete the ride document
+      await deleteDoc(rideRef);
+
+      Alert.alert("Success", "Ride deleted successfully!", [
+        {
+          text: "OK",
+          onPress: () => {
+            // Navigate back to chats or home screen
+            router.replace("/(tabs)/chats");
+          },
+        },
+      ]);
+    } catch (error) {
+      console.error("Error deleting ride:", error);
+      Alert.alert("Error", "Failed to delete ride. Please try again.", [
+        { text: "OK", style: "default" },
+      ]);
+    } finally {
+      setDeleting(false);
+      setShowDeleteModal(false);
+      setDeletionReason("");
+      setCustomReason("");
     }
   };
 
@@ -652,6 +740,7 @@ export default function EditRideScreen() {
               shadowOpacity: 0.3,
               shadowRadius: 4,
               elevation: 3,
+              marginBottom: 12,
             }}
           >
             <Text
@@ -665,8 +754,254 @@ export default function EditRideScreen() {
               {loading ? "Saving..." : "Save Changes"}
             </Text>
           </TouchableOpacity>
+
+          {/* Delete Button */}
+          <TouchableOpacity
+            onPress={handleDeleteRide}
+            activeOpacity={0.8}
+            disabled={loading}
+            style={{
+              backgroundColor: "transparent",
+              padding: 16,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: "#ff5555",
+              opacity: loading ? 0.7 : 1,
+            }}
+          >
+            <Text
+              style={{
+                color: "#ff5555",
+                textAlign: "center",
+                fontWeight: "600",
+                fontSize: 16,
+              }}
+            >
+              Delete Ride
+            </Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Deletion Feedback Modal */}
+      <Modal
+        visible={showDeleteModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => !deleting && setShowDeleteModal(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0, 0, 0, 0.8)",
+            justifyContent: "center",
+            padding: 20,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#1e1e1e",
+              borderRadius: 16,
+              padding: 24,
+              maxHeight: "80%",
+            }}
+          >
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text
+                style={{
+                  color: "white",
+                  fontSize: 20,
+                  fontWeight: "600",
+                  marginBottom: 2,
+                }}
+              >
+                Delete Ride
+              </Text>
+              {from && to ? (
+                <Text
+                  style={{ color: "white", marginBottom: 16, fontSize: 18 }}
+                >
+                  {from} → {to}
+                </Text>
+              ) : (
+                <Text
+                  style={{ color: "white", marginBottom: 16, fontSize: 18 }}
+                >
+                  Untitled Ride
+                </Text>
+              )}
+
+              <Text
+                style={{ color: "#a0a0a0", marginBottom: 24, fontSize: 14 }}
+              >
+                Please help us improve by telling us why you're deleting this
+                ride.
+              </Text>
+
+              <View style={{ marginBottom: 24 }}>
+                <Text
+                  style={{
+                    color: "white",
+                    fontWeight: "600",
+                    fontSize: 16,
+                    marginBottom: 12,
+                  }}
+                >
+                  Select a reason for deletion:
+                </Text>
+
+                {deletionReasons.map((reason) => (
+                  <TouchableOpacity
+                    key={reason}
+                    onPress={() => setDeletionReason(reason)}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      padding: 12,
+                      backgroundColor:
+                        deletionReason === reason ? "#2a2a2a" : "#252525",
+                      borderRadius: 8,
+                      marginBottom: 8,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: 10,
+                        borderWidth: 2,
+                        borderColor:
+                          deletionReason === reason ? "#ff5555" : "#666",
+                        backgroundColor:
+                          deletionReason === reason ? "#ff5555" : "transparent",
+                        marginRight: 12,
+                      }}
+                    />
+                    <Text style={{ color: "white", flex: 1, fontSize: 16 }}>
+                      {reason}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {deletionReason === "Other" && (
+                <View style={{ marginBottom: 24 }}>
+                  <Text
+                    style={{
+                      color: "white",
+                      fontWeight: "600",
+                      fontSize: 16,
+                      marginBottom: 8,
+                    }}
+                  >
+                    Please specify:
+                  </Text>
+                  <TextInput
+                    style={{
+                      backgroundColor: "#252525",
+                      borderColor: "#333",
+                      borderWidth: 1,
+                      borderRadius: 8,
+                      color: "white",
+                      padding: 12,
+                      minHeight: 100,
+                      textAlignVertical: "top",
+                      fontSize: 16,
+                    }}
+                    placeholderTextColor="#666"
+                    multiline
+                    onChangeText={setCustomReason}
+                    value={customReason}
+                    placeholder="Enter your reason for deleting this ride..."
+                  />
+                </View>
+              )}
+
+              <View style={{ gap: 12 }}>
+                <TouchableOpacity
+                  onPress={handleSubmitDeletion}
+                  disabled={deleting || !deletionReason}
+                  style={{
+                    backgroundColor: "#ff5555",
+                    padding: 16,
+                    borderRadius: 8,
+                    opacity: deleting || !deletionReason ? 0.6 : 1,
+                  }}
+                >
+                  {deleting ? (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 20,
+                          height: 20,
+                          borderRadius: 10,
+                          borderWidth: 2,
+                          borderColor: "white",
+                          borderTopColor: "transparent",
+                        }}
+                      />
+                      <Text
+                        style={{
+                          color: "white",
+                          marginLeft: 8,
+                          fontSize: 16,
+                          fontWeight: "600",
+                        }}
+                      >
+                        Deleting...
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text
+                      style={{
+                        color: "white",
+                        textAlign: "center",
+                        fontSize: 16,
+                        fontWeight: "600",
+                      }}
+                    >
+                      Delete Ride
+                    </Text>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    if (!deleting) {
+                      setShowDeleteModal(false);
+                      setDeletionReason("");
+                      setCustomReason("");
+                    }
+                  }}
+                  disabled={deleting}
+                  style={{
+                    backgroundColor: "transparent",
+                    padding: 16,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: "#666",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "#a0a0a0",
+                      textAlign: "center",
+                      fontSize: 16,
+                    }}
+                  >
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       {/* Android Date Picker Modal */}
       {Platform.OS === "android" && showDatePicker && (
