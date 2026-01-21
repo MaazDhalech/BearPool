@@ -1,5 +1,6 @@
 import { NotificationOptInModal } from "@/components/NotificationOptInModal";
 import { useNotificationOptInPrompt } from "@/hooks/useNotificationOptInPrompt";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { db } from "@/services/firebaseConfig";
 import { useAuth } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
@@ -77,6 +78,7 @@ export default function RideDetailsPage() {
 
   const { shouldPrompt, requestPermission, openSettings, markDismissed } =
     useNotificationOptInPrompt(userId);
+  const { registerForPush } = usePushNotifications();
 
   const handleEnableNotifications = async () => {
     try {
@@ -87,6 +89,9 @@ export default function RideDetailsPage() {
 
       const status = await requestPermission();
       setNotifDenied(status === "denied");
+      if (status === "granted") {
+        await registerForPush?.();
+      }
     } catch (error) {
       console.error("Notification prompt failed", error);
     } finally {
@@ -234,11 +239,15 @@ export default function RideDetailsPage() {
       };
 
       const res = await shouldPrompt();
+      console.log("[notif prompt][join] decision", res);
       if (res.shouldShow) {
         setNotifDenied(res.permissionStatus === "denied");
         pendingNavRef.current = goToChat;
         setShowNotifPrompt(true);
       } else {
+        if (res.permissionStatus === "granted") {
+          await registerForPush?.();
+        }
         goToChat();
       }
     } catch (err) {

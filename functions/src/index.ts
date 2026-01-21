@@ -64,7 +64,7 @@ const removeInvalidToken = async (
     if (data.pushTokens && typeof data.pushTokens === "object") {
       const newMap: Record<string, string> = {};
       for (const [key, val] of Object.entries(data.pushTokens)) {
-        if (val !== token) {
+        if (typeof val === "string" && val !== token) {
           newMap[key] = val;
         } else {
           changed = true;
@@ -90,9 +90,9 @@ const sendPush = async (target: PushTarget, payload: any) => {
       body: JSON.stringify({ to: token, ...payload }),
     });
 
-    const json = await res.json();
+    const json: any = await res.json();
     const details = Array.isArray(json?.data) ? json.data[0] : json?.data;
-    const status = details?.status ?? json?.status;
+    const status = details?.status ?? (json as any)?.status;
 
     if (status === "ok") {
       logger.info(`📨 Push sent to ${target.userId}`, { token, status });
@@ -124,16 +124,29 @@ export const onRideMessageCreated = onDocumentCreated(
       return;
     }
 
-    const messageTimestamp: admin.firestore.Timestamp =
-      message.timestamp instanceof admin.firestore.Timestamp
-        ? message.timestamp
-        : event.data?.createTime
-          ? admin.firestore.Timestamp.fromMillis(
-              new Date(event.data.createTime).getTime()
-            )
-          : event.time
-            ? admin.firestore.Timestamp.fromDate(new Date(event.time))
-            : admin.firestore.Timestamp.now();
+    let messageTimestamp: admin.firestore.Timestamp;
+    if (message.timestamp instanceof admin.firestore.Timestamp) {
+      messageTimestamp = message.timestamp;
+    } else if (
+      event.data?.createTime instanceof admin.firestore.Timestamp
+    ) {
+      messageTimestamp = event.data.createTime;
+    } else if (
+      event.data?.createTime &&
+      typeof (event.data.createTime as any).toMillis === "function"
+    ) {
+      messageTimestamp = admin.firestore.Timestamp.fromMillis(
+        (event.data.createTime as any).toMillis()
+      );
+    } else if (typeof event.time === "string") {
+      messageTimestamp = admin.firestore.Timestamp.fromDate(new Date(event.time));
+    } else if (typeof (event as any)?.timestamp === "string") {
+      messageTimestamp = admin.firestore.Timestamp.fromDate(
+        new Date((event as any).timestamp)
+      );
+    } else {
+      messageTimestamp = admin.firestore.Timestamp.now();
+    }
 
     const rideSnap = await db.collection("rides").doc(rideId).get();
     const rideData = rideSnap.data();
@@ -181,9 +194,18 @@ export const onRideMessageCreated = onDocumentCreated(
         continue;
       }
 
+      const rideLabel =
+        rideData?.from && rideData?.to
+          ? `${rideData.from} → ${rideData.to}`
+          : "Ride chat";
+      const senderLabel =
+        typeof message.senderName === "string" && message.senderName.length > 0
+          ? message.senderName
+          : "New message";
+
       const payload = {
         sound: "default",
-        title: "New message",
+        title: `${rideLabel} — ${senderLabel}`,
         body: formatBody(String(message.text || "")),
         data: {
           type: "chat_message",

@@ -1,3 +1,4 @@
+import React from "react";
 import { db } from "@/services/firebaseConfig";
 import { useUser } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
@@ -1154,7 +1155,7 @@ export default function RideChatScreen() {
                     }
 
                     return (
-                      <>
+                      <React.Fragment key={`msg-frag-${msg.id}`}>
                         {showTimeDivider && (
                           <Box
                             key={`divider-${msg.id}`}
@@ -1250,7 +1251,7 @@ export default function RideChatScreen() {
                             )}
                           </VStack>
                         </HStack>
-                      </>
+                      </React.Fragment>
                     );
                   })}
                 </VStack>

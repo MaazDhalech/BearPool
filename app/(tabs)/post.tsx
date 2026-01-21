@@ -1,5 +1,6 @@
 import { NotificationOptInModal } from "@/components/NotificationOptInModal";
 import { useNotificationOptInPrompt } from "@/hooks/useNotificationOptInPrompt";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { db } from "@/services/firebaseConfig";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import DateTimePicker, {
@@ -16,7 +17,7 @@ import {
   increment,
   setDoc,
 } from "firebase/firestore";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -57,6 +58,7 @@ export default function PostScreen() {
   const [loading, setLoading] = useState(false);
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
   const [notifDenied, setNotifDenied] = useState(false);
+  const pendingSuccessRef = useRef<(() => void) | null>(null);
 
   // Picker states
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -67,7 +69,8 @@ export default function PostScreen() {
   const [lastRideId, setLastRideId] = useState<string | null>(null);
 
   const { shouldPrompt, requestPermission, openSettings, markDismissed } =
-    useNotificationOptInPrompt(user?.id);
+    useNotificationOptInPrompt(userId);
+  const { registerForPush } = usePushNotifications();
 
   const getSafeSeats = () => {
     const parsed = parseInt(seats, 10);
@@ -87,9 +90,18 @@ export default function PostScreen() {
 
   const triggerNotificationPrompt = async () => {
     const res = await shouldPrompt();
+    console.log("[notif prompt][create] decision", res);
     if (res.shouldShow) {
       setNotifDenied(res.permissionStatus === "denied");
       setShowNotifPrompt(true);
+    } else {
+      if (res.permissionStatus === "granted") {
+        // Permission already granted: ensure token registration happens
+        await registerForPush?.();
+      }
+      // If no prompt, run any pending success action now
+      pendingSuccessRef.current?.();
+      pendingSuccessRef.current = null;
     }
   };
 
@@ -295,8 +307,8 @@ export default function PostScreen() {
       setLastRideId(rideDocRef.id);
 
       clearForm();
-      // Show success popup instead of immediately routing
-      setShowSuccessPopup(true);
+      // Queue success popup, then run notification prompt. The popup appears after prompt completes.
+      pendingSuccessRef.current = () => setShowSuccessPopup(true);
       triggerNotificationPrompt();
     } catch (error) {
       console.error("Post error:", error);
@@ -349,10 +361,15 @@ export default function PostScreen() {
 
       const status = await requestPermission();
       setNotifDenied(status === "denied");
+      if (status === "granted") {
+        await registerForPush?.();
+      }
     } catch (error) {
       console.error("Notification prompt failed", error);
     } finally {
       setShowNotifPrompt(false);
+      pendingSuccessRef.current?.();
+      pendingSuccessRef.current = null;
     }
   };
 
@@ -363,6 +380,8 @@ export default function PostScreen() {
       console.error("Failed to mark notification prompt dismissed", error);
     } finally {
       setShowNotifPrompt(false);
+      pendingSuccessRef.current?.();
+      pendingSuccessRef.current = null;
     }
   };
 

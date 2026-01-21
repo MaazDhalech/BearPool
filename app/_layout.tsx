@@ -4,9 +4,9 @@ import { ClerkProvider } from "@clerk/clerk-expo";
 import { GluestackUIProvider } from "@gluestack-ui/themed";
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
 import Constants from "expo-constants";
-import { useFonts } from "expo-font";
 import * as Notifications from "expo-notifications";
-import { Stack } from "expo-router";
+import { useFonts } from "expo-font";
+import { Stack, useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
@@ -29,14 +29,14 @@ const publishableKey =
 
 const tokenCache = {
   getToken: (key: string) => SecureStore.getItemAsync(key),
-  saveToken: (key: string, value: string) =>
-    SecureStore.setItemAsync(key, value),
+  saveToken: (key: string, value: string) => SecureStore.setItemAsync(key, value),
 };
 
 export default function RootLayout() {
   const [loaded] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
+  const router = useRouter();
 
   const [isClerkReady, setIsClerkReady] = useState(false);
 
@@ -45,6 +45,19 @@ export default function RootLayout() {
     const timer = setTimeout(() => setIsClerkReady(true), 100);
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data as any;
+      if (data?.type === "chat_message" && data?.rideId) {
+        router.push({
+          pathname: "/(stack)/ride/[id]/chat",
+          params: { id: String(data.rideId) },
+        });
+      }
+    });
+    return () => sub.remove();
+  }, [router]);
 
   if (!loaded || !isClerkReady) {
     return (
@@ -70,17 +83,12 @@ export default function RootLayout() {
     <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
       <GluestackUIProvider config={config}>
         <ThemeProvider value={DarkTheme}>
-          <ExpoStatusBar
-            style="light"
-            translucent
-            backgroundColor="transparent"
-          />
+          <ExpoStatusBar style="light" translucent backgroundColor="transparent" />
           <View
             style={{
               flex: 1,
               backgroundColor: "#000000",
-              paddingTop:
-                Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0,
+              paddingTop: Platform.OS === "android" ? StatusBar.currentHeight ?? 0 : 0,
             }}
           >
             <Stack

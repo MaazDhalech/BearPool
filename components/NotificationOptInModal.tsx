@@ -33,6 +33,8 @@ export const NotificationOptInModal = ({
       visible={visible}
       animationType="fade"
       transparent
+      presentationStyle="overFullScreen"
+      statusBarTranslucent
       onRequestClose={onClose}
     >
       <View
