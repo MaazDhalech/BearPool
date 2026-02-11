@@ -205,6 +205,7 @@ export default function GroupSettings() {
       await updateDoc(rideRef, {
         memberIds: arrayRemove(userToKick.id),
         seats: increment(1),
+        [`kickedBy.${userToKick.id}`]: user?.id ?? null,
       });
 
       // Store kick record in the ride's kickLogs subcollection
