@@ -783,14 +783,15 @@ export default function RideChatScreen() {
                       <VStack alignItems={isCurrentUser ? "flex-end" : "flex-start"} maxWidth="80%">
                         {!isCurrentUser && (
                           <TouchableOpacity onPress={() => handleUserPress(msg.senderId || "")} activeOpacity={0.7}>
-                            <Text fontSize="$xs" color="#aaaaaa" mb="$1">
+                            <Text fontSize="$xs" color="#aaaaaa" mb="$1" pl="$2">
                               {sender.name}
                             </Text>
                           </TouchableOpacity>
                         )}
 
                         <Box
-                          px="$4"
+                          pl={isCurrentUser ? "$4" : "$0"}
+                          pr="$4"
                           py="$2"
                           bg={isCurrentUser ? "#3a7bd5" : "#1e1e1e"}
                           borderTopLeftRadius={isCurrentUser ? "$xl" : "$sm"}
@@ -798,7 +799,7 @@ export default function RideChatScreen() {
                           borderBottomLeftRadius="$xl"
                           borderBottomRightRadius="$xl"
                         >
-                          <Text color={isCurrentUser ? "#ffffff" : "#e0e0e0"} fontSize="$sm">
+                          <Text color={isCurrentUser ? "#ffffff" : "#e0e0e0"} fontSize="$sm" pl={isCurrentUser ? "$0" : "$2"}>
                             {msg.text}
                           </Text>
                         </Box>
