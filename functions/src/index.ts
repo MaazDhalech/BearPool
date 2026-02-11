@@ -242,6 +242,11 @@ export const onRideMessageCreated = onDocumentCreated(
         continue;
       }
 
+      if (userSnap.data()?.notifPrefs?.enabled === false) {
+        logger.info("Notifications disabled for user", { memberId });
+        continue;
+      }
+
       const tokens = resolveTokens(userSnap.data());
       if (tokens.length === 0) {
         logger.info("No tokens for user", { memberId });
@@ -318,6 +323,7 @@ export const onRideMembersChanged = onDocumentUpdated(
       const messages: PushMessage[] = [];
       for (const result of results) {
         if (result.status === "rejected") continue;
+        if (result.value.data()?.notifPrefs?.enabled === false) continue;
         const tokens = resolveTokens(result.value.data());
         const uid = result.value.id;
         for (const token of tokens) {
