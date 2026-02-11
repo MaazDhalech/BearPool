@@ -17,6 +17,7 @@ import {
 import Constants from "expo-constants";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
+  addDoc,
   arrayRemove,
   deleteDoc,
   doc,
@@ -253,6 +254,22 @@ export default function GroupSettings() {
               const rideRef = doc(db, "rides", String(rideId));
               await updateDoc(rideRef, {
                 hostId: newHostId,
+              });
+
+              // Write system message — triggers push notifications via Cloud Function
+              const messagesRef = collection(
+                db,
+                "rides",
+                String(rideId),
+                "messages",
+              );
+              await addDoc(messagesRef, {
+                text: `${newHost.username} has been made the host`,
+                senderId: null,
+                senderName: "System",
+                timestamp: serverTimestamp(),
+                system: true,
+                archivedNotice: false,
               });
 
               // Update local state
@@ -635,64 +652,70 @@ This ride has been permanently deleted from the system.
                   </Text>
                 </VStack>
               </HStack>
-              <HStack space="sm" alignItems="center">
-                {isHost && u.id !== user?.id && (
-                  <>
-                    <Button
-                      size="sm"
-                      backgroundColor="#00cc88"
-                      onPress={() => handleAssignHost(u.id)}
-                    >
-                      <Text color="white">Make Host</Text>
-                    </Button>
-                    <Button
-                      size="sm"
-                      backgroundColor="#ff5555"
-                      onPress={() => handleKick(u.id)}
-                    >
-                      <Text color="white">Remove</Text>
-                    </Button>
-                  </>
-                )}
-                <Box position="relative">
-                  <Pressable
-                    onPress={() =>
-                      setOpenMenuUserId((prev) => (prev === u.id ? null : u.id))
-                    }
-                    p="$2"
-                    borderRadius="$full"
+              <Box position="relative">
+                <Pressable
+                  onPress={() =>
+                    setOpenMenuUserId((prev) => (prev === u.id ? null : u.id))
+                  }
+                  p="$2"
+                  borderRadius="$full"
+                >
+                  <Icon as={MenuIcon} size="lg" color="#a0a0a0" />
+                </Pressable>
+                {openMenuUserId === u.id && (
+                  <Box
+                    position="absolute"
+                    top="$8"
+                    right={0}
+                    bg="#2a2a2a"
+                    borderWidth={1}
+                    borderColor="#333"
+                    borderRadius="$md"
+                    px="$3"
+                    py="$2"
+                    zIndex={10}
+                    minWidth={150}
                   >
-                    <Icon as={MenuIcon} size="lg" color="#a0a0a0" />
-                  </Pressable>
-                  {openMenuUserId === u.id && (
-                    <Box
-                      position="absolute"
-                      top="$8"
-                      right={0}
-                      bg="#2a2a2a"
-                      borderWidth={1}
-                      borderColor="#333"
-                      borderRadius="$md"
-                      px="$3"
-                      py="$2"
-                      zIndex={10}
-                      minWidth={150}
+                    <Pressable
+                      onPress={() => {
+                        setOpenMenuUserId(null);
+                        handleViewProfile(u.id);
+                      }}
+                      p="$2"
+                      borderRadius="$sm"
+                      $pressed={{ bg: "#3a3a3a" }}
                     >
-                      <Pressable
-                        onPress={() => {
-                          setOpenMenuUserId(null);
-                          handleViewProfile(u.id);
-                        }}
-                        p="$2"
-                        borderRadius="$sm"
-                        $pressed={{ bg: "#3a3a3a" }}
-                      >
-                        <Text color="white">View Profile</Text>
-                      </Pressable>
-                    </Box>
-                  )}
-                </Box>
-              </HStack>
+                      <Text color="white">View Profile</Text>
+                    </Pressable>
+                    {isHost && u.id !== user?.id && (
+                      <>
+                        <Pressable
+                          onPress={() => {
+                            setOpenMenuUserId(null);
+                            handleAssignHost(u.id);
+                          }}
+                          p="$2"
+                          borderRadius="$sm"
+                          $pressed={{ bg: "#3a3a3a" }}
+                        >
+                          <Text color="#00cc88">Make Host</Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => {
+                            setOpenMenuUserId(null);
+                            handleKick(u.id);
+                          }}
+                          p="$2"
+                          borderRadius="$sm"
+                          $pressed={{ bg: "#3a3a3a" }}
+                        >
+                          <Text color="#ff5555">Remove</Text>
+                        </Pressable>
+                      </>
+                    )}
+                  </Box>
+                )}
+              </Box>
             </HStack>
           ))}
 

@@ -290,8 +290,9 @@ export const onRideMembersChanged = onDocumentUpdated(
 
     const joined = newMembers.filter((uid) => !prevMembers.includes(uid));
     const left = prevMembers.filter((uid) => !newMembers.includes(uid));
+    const hostChanged = before.hostId !== after.hostId && !!after.hostId;
 
-    if (joined.length === 0 && left.length === 0) return;
+    if (joined.length === 0 && left.length === 0 && !hostChanged) return;
 
     const messagesRef = db.collection("rides").doc(rideId).collection("messages");
     const rideLabel =
@@ -326,7 +327,46 @@ export const onRideMembersChanged = onDocumentUpdated(
       return messages;
     };
 
+    // Filter out recipients who are actively viewing the chat right now
+    const filterActiveChat = async (recipientIds: string[]): Promise<string[]> => {
+      const results = await Promise.allSettled(
+        recipientIds.map(async (uid) => {
+          const snap = await db.collection("rides").doc(rideId).collection("readState").doc(uid).get();
+          const readState = snap.data() || {};
+          const suppress = readState.activeChat === true && isRecent(readState.activeAt);
+          return { uid, suppress };
+        })
+      );
+      return results
+        .filter((r): r is PromiseFulfilledResult<{ uid: string; suppress: boolean }> =>
+          r.status === "fulfilled" && !r.value.suppress
+        )
+        .map((r) => r.value.uid);
+    };
+
     await Promise.all([
+      // Notify all members when the host changes
+      ...(hostChanged
+        ? [
+            (async () => {
+              const newHostName = await resolveUsername(after.hostId);
+              const text = `${newHostName} has been made the host`;
+
+              // Notify all members including the new host
+              const recipients = await filterActiveChat(newMembers);
+              if (recipients.length > 0) {
+                const messages = await buildPushMessages(recipients, {
+                  sound: "default",
+                  title: rideLabel,
+                  body: text,
+                  data: { type: "host_changed", rideId },
+                });
+                if (messages.length > 0) await sendPushBatch(messages);
+              }
+              logger.info(`Host changed to ${newHostName} in ride ${rideId}`);
+            })(),
+          ]
+        : []),
       ...joined.map(async (uid) => {
         const name = await resolveUsername(uid);
         const text = `${name} has joined the ride`;
@@ -340,8 +380,9 @@ export const onRideMembersChanged = onDocumentUpdated(
         });
         logger.info(`System message: ${name} joined ride ${rideId}`);
 
-        // Notify all members who were already in the ride (excluding the joiner)
-        const recipients = prevMembers.filter((id) => id !== uid);
+        // Notify members already in the ride, excluding joiner and anyone actively viewing
+        const candidateRecipients = prevMembers.filter((id) => id !== uid);
+        const recipients = await filterActiveChat(candidateRecipients);
         if (recipients.length > 0) {
           const messages = await buildPushMessages(recipients, {
             sound: "default",
@@ -366,8 +407,9 @@ export const onRideMembersChanged = onDocumentUpdated(
         });
         logger.info(`System message: ${name} left ride ${rideId}`);
 
-        // Notify all members still in the ride
-        const recipients = newMembers.filter((id) => id !== uid);
+        // Notify members still in the ride, excluding anyone actively viewing
+        const candidateRecipients = newMembers.filter((id) => id !== uid);
+        const recipients = await filterActiveChat(candidateRecipients);
         if (recipients.length > 0) {
           const messages = await buildPushMessages(recipients, {
             sound: "default",
