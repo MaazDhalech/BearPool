@@ -25,10 +25,16 @@ import {
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   AppState,
   AppStateStatus,
+  Linking,
+  Modal,
   Platform,
   StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 
@@ -114,6 +120,18 @@ const RATED_RIDES_KEY = "rated_rides";
 const RATE_LATER_RIDES_KEY = "rate_later_rides";
 const FEEDBACK_COOLDOWN_KEY = "feedback_cooldown";
 
+const APP_STORE_URL = "https://apps.apple.com/ph/app/bearpool/id6747465780";
+
+function compareVersions(a: string, b: string): number {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const diff = (pa[i] || 0) - (pb[i] || 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
 function RootLayoutContent() {
   const { userId: clerkUserId, isLoaded: isAuthLoaded } = useAuth();
   const [loaded] = useFonts({
@@ -122,6 +140,7 @@ function RootLayoutContent() {
   const router = useRouter();
 
   const [isClerkReady, setIsClerkReady] = useState(false);
+  const [showForceUpdate, setShowForceUpdate] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [currentRide, setCurrentRide] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -470,6 +489,25 @@ function RootLayoutContent() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Force update check — runs after auth is loaded so Firestore rules allow the read
+  useEffect(() => {
+    if (!isAuthLoaded) return;
+    const checkVersion = async () => {
+      try {
+        const configDoc = await getDoc(doc(db, "config", "appVersion"));
+        if (!configDoc.exists()) return;
+        const minRequired: string = configDoc.data()?.minRequiredVersion;
+        const current: string = Constants.expoConfig?.version ?? "0.0.0";
+        if (minRequired && compareVersions(current, minRequired) < 0) {
+          setShowForceUpdate(true);
+        }
+      } catch (e) {
+        // Silently fail — don't block the app if Firestore is unreachable
+      }
+    };
+    checkVersion();
+  }, [isAuthLoaded]);
+
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as any;
@@ -521,6 +559,24 @@ function RootLayoutContent() {
         </Stack>
       </View>
 
+      {/* Force Update Modal */}
+      <Modal visible={showForceUpdate} transparent animationType="fade">
+        <View style={forceUpdateStyles.backdrop}>
+          <View style={forceUpdateStyles.card}>
+            <Text style={forceUpdateStyles.title}>Update Required</Text>
+            <Text style={forceUpdateStyles.body}>
+              A new version of BearPool is available with important improvements. Please update to continue.
+            </Text>
+            <TouchableOpacity
+              style={forceUpdateStyles.button}
+              onPress={() => Linking.openURL(APP_STORE_URL)}
+            >
+              <Text style={forceUpdateStyles.buttonText}>Update Now</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Ride Feedback Modal */}
       <RideFeedbackModal
         visible={showFeedback}
@@ -532,6 +588,46 @@ function RootLayoutContent() {
     </>
   );
 }
+
+const forceUpdateStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.85)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 32,
+  },
+  card: {
+    backgroundColor: "#1e1e1e",
+    borderRadius: 16,
+    padding: 28,
+    alignItems: "center",
+  },
+  title: {
+    color: "#ffffff",
+    fontSize: 20,
+    fontWeight: "700",
+    marginBottom: 12,
+  },
+  body: {
+    color: "#a0a0a0",
+    fontSize: 15,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  button: {
+    backgroundColor: "#3a7bd5",
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 40,
+  },
+  buttonText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+});
 
 export default function RootLayout() {
   const [isClerkReady, setIsClerkReady] = useState(false);

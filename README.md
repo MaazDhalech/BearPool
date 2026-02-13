@@ -310,7 +310,7 @@ Expo Router file-system routing with three route groups:
 
 | File | Responsibility |
 |------|---------------|
-| [app/_layout.tsx](app/_layout.tsx) | Root: providers, global feedback modal (polls Firestore every 5 min), notification tap handler |
+| [app/_layout.tsx](app/_layout.tsx) | Root: providers, global feedback modal (polls Firestore every 5 min), notification tap handler, force update gate |
 | [app/(tabs)/index.tsx](app/(tabs)/index.tsx) | Home feed with real-time subscription, join ride logic, all client-side filtering |
 | [app/(tabs)/post.tsx](app/(tabs)/post.tsx) | Ride creation form (profanity filtered, date/time pickers, notification opt-in after post) |
 | [app/(tabs)/chats.tsx](app/(tabs)/chats.tsx) | Chat list with avatar caching, active + archived sections |
@@ -408,7 +408,41 @@ npx expo start --android
 |---------|-------------|-----|
 | `development` | Internal | Dev client build |
 | `preview` | Internal | QA/testing |
-| `production` | Store | App Store / Play Store, auto-increments version |
+| `production` | Store | App Store / Play Store |
+
+**Build number management (bare workflow)**: EAS reads `CFBundleVersion` from `ios/BearPool/Info.plist` — **not** from `app.config.js`. Before each new App Store submission, increment both:
+1. `buildNumber` in `app.config.js`
+2. `CFBundleVersion` in `ios/BearPool/Info.plist`
+
+### EAS Update (OTA)
+
+JS/asset-only changes can be shipped over-the-air without a new App Store submission. OTA updates are delivered to all builds with a matching `runtimeVersion` (currently `"1.1.0"`).
+
+```bash
+# Push an OTA update to production
+eas update --channel production --message "Description of change"
+```
+
+Native changes (new plugins, new permissions, native package upgrades) still require a full `eas build` + `eas submit`.
+
+### Force Update Gate
+
+A Firestore document at `config/appVersion` gates old app versions:
+
+```json
+{ "minRequiredVersion": "1.1.0" }
+```
+
+- On startup (after auth loads), the app fetches this document and compares `minRequiredVersion` against the installed `Constants.expoConfig?.version`.
+- If the installed version is below the minimum, a **non-dismissible modal** blocks the app and links to the App Store.
+- To gate a version: update `minRequiredVersion` in Firestore — no app update required.
+- **Firestore rules**: the `config` collection must allow public reads:
+  ```
+  match /config/{docId} {
+    allow read: if true;
+    allow write: if false;
+  }
+  ```
 
 ### Firebase Functions
 ```bash

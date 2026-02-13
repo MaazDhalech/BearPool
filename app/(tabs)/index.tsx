@@ -53,6 +53,7 @@ type Ride = {
   archivedAt: Timestamp | null;
   startTime: Timestamp | null;
   isActive: boolean;
+  isTest: boolean;
 };
 
 type User = {
@@ -219,6 +220,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
   const [userGender, setUserGender] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [blockedUsers, setBlockedUsers] = useState<string[]>([]);
   const [showRestrictedRides, setShowRestrictedRides] = useState(false);
@@ -233,6 +235,7 @@ export default function HomeScreen() {
       if (userDoc.exists()) {
         const data = userDoc.data();
         setUserGender(data.gender || null);
+        setIsAdmin(data.isAdmin === true);
       }
     } catch (err) {
       console.error("Error fetching user gender:", err);
@@ -345,6 +348,7 @@ export default function HomeScreen() {
               archivedAt: data.archivedAt ?? null,
               startTime: data.startTime ?? null,
               isActive: data.isActive ?? true,
+              isTest: data.isTest ?? false,
             };
 
             return processedRide;
@@ -715,6 +719,11 @@ export default function HomeScreen() {
         return false;
       }
 
+      // Hide test rides from non-admins
+      if (ride.isTest && !isAdmin) {
+        return false;
+      }
+
       // Hide rides that are more than 5 days old (based on ride date/time)
       if (shouldHideRideBasedOnDateTime(ride)) {
         return false;
@@ -742,17 +751,16 @@ export default function HomeScreen() {
       return true;
     })
     .sort((a, b) => {
-      // Sort by actual ride date/time, closest first
       const dateA = parseRideDateTime(a.date, a.time);
       const dateB = parseRideDateTime(b.date, b.time);
 
-      // If either date is invalid, put it at the end
       if (!dateA && !dateB) return 0;
       if (!dateA) return 1;
       if (!dateB) return -1;
 
-      // Sort ascending (closest/earliest first)
-      return dateA.getTime() - dateB.getTime();
+      const diff = dateA.getTime() - dateB.getTime();
+      // "newest" = closest date first (ascending), "oldest" = farthest date first (descending)
+      return sortOrder === "newest" ? diff : -diff;
     });
 
   const toggleSortOrder = () =>
@@ -895,9 +903,18 @@ export default function HomeScreen() {
                 alignItems="center"
                 mb="$2"
               >
-                <Text fontWeight="$bold" fontSize="$md" color="white">
-                  {ride.from} → {ride.to}
-                </Text>
+                <HStack alignItems="center" space="sm" flex={1}>
+                  <Text fontWeight="$bold" fontSize="$md" color="white">
+                    {ride.from} → {ride.to}
+                  </Text>
+                  {ride.isTest && (
+                    <Box bg="#ff6b00" px="$2" py="$0.5" borderRadius="$full">
+                      <Text color="white" fontSize="$xs" fontWeight="$bold">
+                        TEST
+                      </Text>
+                    </Box>
+                  )}
+                </HStack>
                 {ride.hostId === userId && (
                   <Box position="relative">
                     <Pressable
