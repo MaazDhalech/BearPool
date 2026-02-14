@@ -403,6 +403,7 @@ export default function HomeScreen() {
           archivedAt: data.archivedAt ?? null,
           startTime: data.startTime ?? null,
           isActive: data.isActive ?? true,
+          isTest: data.isTest ?? false,
         };
       });
 
