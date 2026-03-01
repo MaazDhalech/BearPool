@@ -24,6 +24,7 @@ import {
   Modal,
   Platform,
   ScrollView,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -55,6 +56,8 @@ export default function PostScreen() {
   const [notes, setNotes] = useState("");
   const [genderPref, setGenderPref] = useState("N");
   const [userGender, setUserGender] = useState<"M" | "F" | "NB" | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isTestRide, setIsTestRide] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
   const [notifDenied, setNotifDenied] = useState(false);
@@ -86,6 +89,7 @@ export default function PostScreen() {
     setSeats("1");
     setNotes("");
     setGenderPref("N");
+    setIsTestRide(false);
   };
 
   const triggerNotificationPrompt = async () => {
@@ -203,6 +207,7 @@ export default function PostScreen() {
         const userDoc = await getDoc(doc(db, "users", userId));
         if (userDoc.exists()) {
           setUserGender(userDoc.data()?.gender ?? null);
+          setIsAdmin(userDoc.data()?.isAdmin === true);
         } else {
           setUserGender(null);
         }
@@ -301,6 +306,7 @@ export default function PostScreen() {
         rideFull: false,
         isActive: true,
         genderPref,
+        isTest: isAdmin && isTestRide,
       });
 
       // Save the ride document ID to state
@@ -642,6 +648,38 @@ export default function PostScreen() {
               {notes.length} / {MAX_NOTES_LENGTH}
             </Text>
           </View>
+
+          {/* Test ride toggle — admin only */}
+          {isAdmin && (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                backgroundColor: "#2a1500",
+                borderWidth: 1,
+                borderColor: "#ff6b00",
+                borderRadius: 12,
+                padding: 16,
+                marginBottom: 16,
+              }}
+            >
+              <View style={{ flex: 1, marginRight: 16 }}>
+                <Text style={{ color: "#ff6b00", fontWeight: "600", fontSize: 15 }}>
+                  Test Ride
+                </Text>
+                <Text style={{ color: "#a0703a", fontSize: 13, marginTop: 2 }}>
+                  Only visible to admins
+                </Text>
+              </View>
+              <Switch
+                value={isTestRide}
+                onValueChange={setIsTestRide}
+                trackColor={{ false: "#444", true: "#ff6b00" }}
+                thumbColor="#ffffff"
+              />
+            </View>
+          )}
 
           {/* Submit */}
           <TouchableOpacity

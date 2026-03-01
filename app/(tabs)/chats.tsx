@@ -28,7 +28,8 @@ const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
 
 export default function ChatsScreen() {
-  const [chatGroups, setChatGroups] = useState<any[]>([]);
+  const [activeGroups, setActiveGroups] = useState<any[]>([]);
+  const [archivedGroups, setArchivedGroups] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,16 +38,12 @@ export default function ChatsScreen() {
   const router = useRouter();
 
   const unsubRidesRef = useRef<(() => void) | null>(null);
-  const userCache = useRef<{ [uid: string]: { id: string; avatar: string } }>(
-    {},
-  );
+  const userCache = useRef<{ [uid: string]: { id: string; avatar: string } }>({});
   let readCounter = 0;
 
   useEffect(() => {
     if (!userId) return;
-
     setupListeners();
-
     return () => {
       unsubRidesRef.current?.();
     };
@@ -83,7 +80,8 @@ export default function ChatsScreen() {
     unsubRidesRef.current = onSnapshot(
       ridesQ,
       async (rideSnap) => {
-        const groups: any[] = [];
+        const active: any[] = [];
+        const archived: any[] = [];
 
         for (const docSnap of rideSnap.docs) {
           const ride = docSnap.data();
@@ -94,16 +92,24 @@ export default function ChatsScreen() {
             title: `${ride.from} → ${ride.to}`,
             members: [] as any[],
             joinedAt: (ride.createdAt as any)?.toMillis() || 0,
+            archived: ride.archived ?? false,
+            date: ride.date ?? "",
+            time: ride.time ?? "",
           };
 
           const ids: string[] = ride.memberIds || [];
           const members = await Promise.all(ids.map((uid) => getUserData(uid)));
           group.members = members.filter(Boolean);
 
-          groups.push(group);
+          if (group.archived) {
+            archived.push(group);
+          } else {
+            active.push(group);
+          }
         }
 
-        setChatGroups(groups);
+        setActiveGroups(active);
+        setArchivedGroups(archived);
         setLoading(false);
         setRefreshing(false);
       },
@@ -121,12 +127,67 @@ export default function ChatsScreen() {
     setupListeners();
   };
 
-  const handlePress = async (rideId: string) => {
+  const handlePress = (rideId: string) => {
     router.push({
       pathname: "/(stack)/ride/[id]/chat",
       params: { id: rideId },
     });
   };
+
+  const renderGroup = (grp: any, muted = false) => (
+    <Pressable
+      key={grp.id}
+      borderRadius="$lg"
+      bg={muted ? "#161616" : "#1e1e1e"}
+      p="$4"
+      borderWidth="$1"
+      borderColor={muted ? "#222" : "#333"}
+      opacity={muted ? 0.7 : 1}
+      onPress={() => handlePress(grp.id)}
+    >
+      <VStack space="xs">
+        <HStack justifyContent="space-between" alignItems="center">
+          <Text fontWeight="$bold" fontSize="$md" color={muted ? "#888" : "white"}>
+            {grp.title}
+          </Text>
+          {muted && (
+            <Text color="#555" fontSize="$xs">
+              Archived
+            </Text>
+          )}
+        </HStack>
+        {grp.date ? (
+          <Text color="#555" fontSize="$xs">
+            {grp.date} · {grp.time}
+          </Text>
+        ) : null}
+        <Text color="#666" fontSize="$xs" italic>
+          Tap to view chat →
+        </Text>
+        <HStack space="sm" mt="$2">
+          {grp.members.slice(0, 5).map((u: any) => (
+            <Avatar key={u.id} size="sm" bgColor="#121212">
+              <AvatarImage source={{ uri: u.avatar }} alt="" />
+            </Avatar>
+          ))}
+          {grp.members.length > 5 && (
+            <Box
+              bg="#3a7bd5"
+              borderRadius="$full"
+              w="$6"
+              h="$6"
+              alignItems="center"
+              justifyContent="center"
+            >
+              <Text color="white" fontSize="$xs">
+                +{grp.members.length - 5}
+              </Text>
+            </Box>
+          )}
+        </HStack>
+      </VStack>
+    </Pressable>
+  );
 
   return (
     <ScrollView
@@ -153,55 +214,26 @@ export default function ChatsScreen() {
           <Text color="#ff6666" textAlign="center">
             {error}
           </Text>
-        ) : chatGroups.length === 0 ? (
+        ) : activeGroups.length === 0 && archivedGroups.length === 0 ? (
           <Text color="#888" textAlign="center">
-            You’re not part of any ride groups yet.
+            You're not part of any ride groups yet.
           </Text>
         ) : (
           <VStack space="lg">
-            {chatGroups.map((grp) => (
-              <Pressable
-                key={grp.id}
-                borderRadius="$lg"
-                bg="#1e1e1e"
-                p="$4"
-                borderWidth="$1"
-                borderColor="#333"
-                onPress={() => handlePress(grp.id)}
-              >
-                <VStack space="xs">
-                  <HStack justifyContent="space-between" alignItems="center">
-                    <Text fontWeight="$bold" fontSize="$md" color="white">
-                      {grp.title}
-                    </Text>
-                  </HStack>
-                  <Text color="#666" fontSize="$xs" italic>
-                    Tap to view chat →
-                  </Text>
-                  <HStack space="sm" mt="$2">
-                    {grp.members.slice(0, 5).map((u: any) => (
-                      <Avatar key={u.id} size="sm" bgColor="#121212">
-                        <AvatarImage source={{ uri: u.avatar }} alt="" />
-                      </Avatar>
-                    ))}
-                    {grp.members.length > 5 && (
-                      <Box
-                        bg="#3a7bd5"
-                        borderRadius="$full"
-                        w="$6"
-                        h="$6"
-                        alignItems="center"
-                        justifyContent="center"
-                      >
-                        <Text color="white" fontSize="$xs">
-                          +{grp.members.length - 5}
-                        </Text>
-                      </Box>
-                    )}
-                  </HStack>
-                </VStack>
-              </Pressable>
-            ))}
+            {activeGroups.length > 0 && (
+              <VStack space="md">
+                {activeGroups.map((grp) => renderGroup(grp))}
+              </VStack>
+            )}
+
+            {archivedGroups.length > 0 && (
+              <VStack space="md" mt={activeGroups.length > 0 ? "$4" : "$0"}>
+                <Text color="#555" fontSize="$sm" fontWeight="$semibold" letterSpacing={1}>
+                  PAST RIDES
+                </Text>
+                {archivedGroups.map((grp) => renderGroup(grp, true))}
+              </VStack>
+            )}
           </VStack>
         )}
       </Box>

@@ -21,6 +21,9 @@ import {
   VStack,
 } from "@gluestack-ui/themed";
 import Constants from "expo-constants";
+import * as Device from "expo-device";
+import * as Linking from "expo-linking";
+import * as Notifications from "expo-notifications";
 import { useRouter } from "expo-router";
 import {
   arrayRemove,
@@ -29,6 +32,7 @@ import {
   getDoc,
   getDocs,
   query,
+  setDoc,
   updateDoc,
   where
 } from "firebase/firestore";
@@ -46,8 +50,13 @@ import { useEffect, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
+  Modal as RNModal,
   Platform,
+  StyleSheet,
+  Switch,
   TouchableOpacity,
+  TouchableWithoutFeedback,
+  View as RNView,
 } from "react-native";
 
 // Default avatar image
@@ -136,6 +145,12 @@ export default function SettingsScreen() {
   const [loadingBlockedUsers, setLoadingBlockedUsers] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
 
+  // Notification settings
+  const [showNotifSettings, setShowNotifSettings] = useState(false);
+  const [notifEnabled, setNotifEnabled] = useState(false);
+  const [notifPermissionStatus, setNotifPermissionStatus] = useState<"granted" | "denied" | "undetermined">("undetermined");
+  const [savingNotif, setSavingNotif] = useState(false);
+
   // Fetch user data
   useEffect(() => {
     if (!clerkUserId) return;
@@ -151,6 +166,8 @@ export default function SettingsScreen() {
             ...userData,
             blockedUsers: userData.blockedUsers || [],
           });
+          setNotifEnabled(userData.notifPrefs?.enabled === true);
+          setNotifPermissionStatus(userData.notifPrefs?.permissionStatus || "undetermined");
         }
       } catch (error) {
         console.error("Error fetching user data:", error);
@@ -342,12 +359,91 @@ const performAccountDeletion = async () => {
     router.push("/(stack)/settings/privacy-policy");
   };
 
-  const handleNotificationSettings = () => {
-    // Navigate to notification settings or show coming soon
-    Alert.alert(
-      "Coming Soon",
-      "Notification settings will be available in a future update."
-    );
+  const handleNotificationSettings = async () => {
+    // Sync live permission status before showing the modal
+    const { status } = await Notifications.getPermissionsAsync();
+    const normalized = status === "granted" ? "granted" : status === "denied" ? "denied" : "undetermined";
+    setNotifPermissionStatus(normalized);
+    // If permission is gone (revoked in system settings), reflect that
+    if (normalized !== "granted" && notifEnabled) {
+      setNotifEnabled(false);
+    }
+    setShowNotifSettings(true);
+  };
+
+  const handleNotifToggle = async (value: boolean) => {
+    if (!clerkUserId) return;
+    setSavingNotif(true);
+
+    try {
+      if (value) {
+        // Enabling — check/request permission
+        const { status } = await Notifications.getPermissionsAsync();
+
+        if (status === "denied") {
+          // Can't request again; send user to system settings
+          Alert.alert(
+            "Notifications Blocked",
+            "You've previously denied notifications. Please enable them in your device Settings.",
+            [
+              { text: "Cancel", style: "cancel" },
+              { text: "Open Settings", onPress: () => Linking.openSettings() },
+            ]
+          );
+          return;
+        }
+
+        let finalStatus = status;
+        if (status !== "granted") {
+          const { status: newStatus } = await Notifications.requestPermissionsAsync();
+          finalStatus = newStatus;
+        }
+
+        if (finalStatus !== "granted") {
+          setSavingNotif(false);
+          return;
+        }
+
+        // Register token
+        const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+        const token = await Notifications.getExpoPushTokenAsync(
+          projectId ? { projectId } : undefined
+        );
+
+        const deviceKey =
+          Device.osInternalBuildId ||
+          Device.osBuildFingerprint ||
+          Device.modelId ||
+          Device.modelName ||
+          "unknown-device";
+
+        await setDoc(
+          doc(db, "users", clerkUserId),
+          {
+            expoPushToken: token.data,
+            pushTokens: { [deviceKey]: token.data },
+            notifPrefs: { enabled: true, permissionStatus: "granted" },
+          },
+          { merge: true }
+        );
+
+        setNotifEnabled(true);
+        setNotifPermissionStatus("granted");
+      } else {
+        // Disabling
+        await setDoc(
+          doc(db, "users", clerkUserId),
+          { notifPrefs: { enabled: false } },
+          { merge: true }
+        );
+        setNotifEnabled(false);
+      }
+    } catch (error) {
+      console.error("Failed to update notification preference", error);
+      Alert.alert("Error", "Failed to update notification settings.");
+    } finally {
+      setSavingNotif(false);
+    }
   };
 
   const handleHelpSupport = () => {
@@ -537,7 +633,91 @@ const performAccountDeletion = async () => {
             </ModalBody>
           </ModalContent>
         </Modal>
+
+        {/* Notification Settings — native bottom sheet */}
+        <RNModal
+          visible={showNotifSettings}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowNotifSettings(false)}
+        >
+          <TouchableWithoutFeedback onPress={() => setShowNotifSettings(false)}>
+            <RNView style={styles.notifBackdrop} />
+          </TouchableWithoutFeedback>
+          <RNView style={styles.notifSheet}>
+            <RNView style={styles.notifHandle} />
+            <HStack justifyContent="space-between" alignItems="center" mb="$5">
+              <Heading size="lg" color="white">Notifications</Heading>
+              <TouchableOpacity onPress={() => setShowNotifSettings(false)}>
+                <Icon as={CloseIcon} color="#a0a0a0" size="lg" />
+              </TouchableOpacity>
+            </HStack>
+
+            <RNView style={styles.notifRow}>
+              <RNView style={{ flex: 1, marginRight: 16 }}>
+                <Text color="white" fontWeight="$semibold" fontSize="$md">Push Notifications</Text>
+                <Text color="#a0a0a0" fontSize="$sm" mt="$1">
+                  Ride updates, chat messages, member activity
+                </Text>
+              </RNView>
+              <Switch
+                value={notifEnabled}
+                onValueChange={handleNotifToggle}
+                disabled={savingNotif}
+                trackColor={{ false: "#444", true: "#3a7bd5" }}
+                thumbColor="#ffffff"
+              />
+            </RNView>
+
+            {notifPermissionStatus === "denied" && !notifEnabled && (
+              <RNView style={styles.notifWarning}>
+                <Text color="#ff9800" fontSize="$sm" mb="$3">
+                  Notifications are blocked in your device settings.
+                </Text>
+                <Button size="sm" bg="#3a7bd5" onPress={() => Linking.openSettings()}>
+                  <ButtonText color="white">Open Device Settings</ButtonText>
+                </Button>
+              </RNView>
+            )}
+          </RNView>
+        </RNModal>
       </Box>
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  notifBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+  },
+  notifSheet: {
+    backgroundColor: "#1e1e1e",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 40,
+  },
+  notifHandle: {
+    width: 36,
+    height: 4,
+    backgroundColor: "#555",
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 20,
+  },
+  notifRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#2a2a2a",
+    borderRadius: 12,
+    padding: 16,
+  },
+  notifWarning: {
+    backgroundColor: "#2a2a2a",
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 12,
+  },
+});
