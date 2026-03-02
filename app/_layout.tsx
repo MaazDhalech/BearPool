@@ -550,7 +550,7 @@ function RootLayoutContent() {
         <Stack
           screenOptions={{
             headerShown: false,
-            gestureEnabled: false,
+            gestureEnabled: true,
             contentStyle: {
               backgroundColor: "#000000",
             },

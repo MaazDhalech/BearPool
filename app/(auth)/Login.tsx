@@ -5,7 +5,7 @@
 
 import { ACCENT } from "@/constants/Colors";
 import { useSignIn } from "@clerk/clerk-expo";
-import { Link, useRouter } from "expo-router";
+import { Link, Stack, useRouter } from "expo-router";
 import React from "react";
 import {
   ActivityIndicator,
@@ -212,6 +212,8 @@ export default function Login() {
   };
 
   return (
+    <>
+    <Stack.Screen options={{ gestureEnabled: false }} />
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={s.root}
@@ -319,6 +321,7 @@ export default function Login() {
         </View>
       </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
+    </>
   );
 }
 

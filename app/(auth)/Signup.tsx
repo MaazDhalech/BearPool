@@ -2,7 +2,7 @@ import TOSOverlay from "@/components/TOSOverlay";
 import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
 import { useSignUp } from "@clerk/clerk-expo";
-import { Link, useRouter } from "expo-router";
+import { Link, Stack, useRouter } from "expo-router";
 import { doc, setDoc } from "firebase/firestore";
 import * as filter from "leo-profanity";
 import React from "react";
@@ -375,12 +375,21 @@ export default function Signup() {
   };
 
   return (
+    <>
+    <Stack.Screen options={{ gestureEnabled: !loading && !verifying }} />
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={s.root}
     >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={[s.mainContainer, { paddingTop: insets.top }]}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={s.backButton}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <MaterialCommunityIcons name="chevron-left" size={28} color={palette.ink} />
+          </TouchableOpacity>
           <ScrollView
             contentContainerStyle={s.scrollContent}
             keyboardShouldPersistTaps="handled"
@@ -596,6 +605,7 @@ export default function Signup() {
         </View>
       </Modal>
     </KeyboardAvoidingView>
+    </>
   );
 }
 
@@ -607,6 +617,11 @@ const s = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: palette.bg,
+  },
+  backButton: {
+    paddingVertical: 8,
+    paddingHorizontal: SPACING.md * SCALE,
+    alignSelf: "flex-start",
   },
   mainContainer: {
     flex: 1,

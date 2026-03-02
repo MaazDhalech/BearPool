@@ -8,7 +8,7 @@ import DateTimePicker, {
   DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
 import { format } from "date-fns";
-import { useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import {
   Timestamp,
   addDoc,
@@ -393,6 +393,8 @@ export default function PostScreen() {
   };
 
   return (
+    <>
+    <Stack.Screen options={{ gestureEnabled: false }} />
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={{ flex: 1, backgroundColor: "#121212" }}
@@ -1211,5 +1213,6 @@ export default function PostScreen() {
         </Modal>
       )}
     </KeyboardAvoidingView>
+    </>
   );
 }

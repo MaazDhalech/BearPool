@@ -6,7 +6,7 @@ import DateTimePicker, {
   DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
 import { format } from "date-fns";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { deleteDoc, doc, getDoc, updateDoc } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -455,6 +455,8 @@ export default function EditRideScreen() {
   const formattedTime = format(date, "h:mm a");
 
   return (
+    <>
+    <Stack.Screen options={{ gestureEnabled: !loading }} />
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={{ flex: 1, backgroundColor: "#121212" }}
@@ -1349,5 +1351,6 @@ export default function EditRideScreen() {
         </Modal>
       )}
     </KeyboardAvoidingView>
+    </>
   );
 }

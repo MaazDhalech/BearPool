@@ -15,7 +15,7 @@ import {
   VStack,
 } from "@gluestack-ui/themed";
 import Constants from "expo-constants";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
   addDoc,
   collection,
@@ -217,6 +217,8 @@ export default function ReportUserScreen() {
   }
 
   return (
+    <>
+    <Stack.Screen options={{ gestureEnabled: !submitting }} />
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -338,5 +340,6 @@ export default function ReportUserScreen() {
         </ScrollView>
       </Box>
     </KeyboardAvoidingView>
+    </>
   );
 }

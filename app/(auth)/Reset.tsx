@@ -1,7 +1,7 @@
 import { ACCENT } from "@/constants/Colors";
 import { useSignIn } from "@clerk/clerk-expo";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import React from "react";
 import {
   ActivityIndicator,
@@ -252,12 +252,22 @@ export default function ResetPassword() {
   };
 
   return (
+    <>
+    <Stack.Screen options={{ gestureEnabled: !loading }} />
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={s.root}
     >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={[s.mainContainer, { paddingTop: insets.top }]}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={s.backButton}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <MaterialCommunityIcons name="chevron-left" size={28} color={palette.ink} />
+          </TouchableOpacity>
+          <View style={s.centerContent}>
           {/* ── Header Area (No Image) ── */}
           <View style={s.header}>
             <Text style={s.brandTitle}>Reset Password</Text>
@@ -334,9 +344,11 @@ export default function ResetPassword() {
               <Text style={s.footerText}>Back to Sign In</Text>
             </TouchableOpacity>
           </View>
+          </View>
         </View>
       </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
+    </>
   );
 }
 
@@ -353,7 +365,14 @@ const s = StyleSheet.create({
     flex: 1,
     paddingHorizontal: SPACING.md * SCALE,
     paddingBottom: SPACING.md * SCALE,
-    // Header padding removed to allow vertical centering
+  },
+  backButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    alignSelf: "flex-start",
+  },
+  centerContent: {
+    flex: 1,
     justifyContent: "center",
   },
   header: {
