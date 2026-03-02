@@ -3,10 +3,12 @@ import { db } from "@/services/firebaseConfig";
 import { useSignUp } from "@clerk/clerk-expo";
 import { Link, useRouter } from "expo-router";
 import { doc, setDoc } from "firebase/firestore";
+import { Eye, EyeOff } from "lucide-react-native";
 import React from "react";
 import {
   GestureResponderEvent,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   Text,
@@ -14,6 +16,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import "react-native-get-random-values";
 
 import * as filter from "leo-profanity";
@@ -40,6 +43,7 @@ type GenderOption = Gender | "PNTS"; // UI options, includes Prefer Not To Say
 export default function Signup() {
   const { isLoaded, signUp, setActive } = useSignUp();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [emailAddress, setEmailAddress] = React.useState("");
   const [username, setUsername] = React.useState("");
@@ -55,6 +59,15 @@ export default function Signup() {
   const [showVerification, setShowVerification] = React.useState(false);
   const [verificationCode, setVerificationCode] = React.useState("");
   const [signUpAttempt, setSignUpAttempt] = React.useState<any>(null);
+  const [loading, setLoading] = React.useState(false);
+  const [verifying, setVerifying] = React.useState(false);
+  const [verifyError, setVerifyError] = React.useState("");
+  const [resending, setResending] = React.useState(false);
+  const [showPassword, setShowPassword] = React.useState(false);
+  const [confirmPassword, setConfirmPassword] = React.useState("");
+  const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
+  const passwordRef = React.useRef<TextInput>(null);
+  const confirmPasswordRef = React.useRef<TextInput>(null);
 
   // --- TOS Agreement ---
   const [tosAccepted, setTosAccepted] = React.useState(false);
@@ -69,8 +82,9 @@ export default function Signup() {
   };
 
   const onSignUpPress = async () => {
-    if (!isLoaded) return;
+    if (!isLoaded || loading) return;
     setError("");
+    setLoading(true);
 
     // TOS must be accepted
     if (!tosAccepted) {
@@ -123,6 +137,13 @@ export default function Signup() {
       return;
     }
 
+    // Passwords must match
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      setLoading(false);
+      return;
+    }
+
     // Password rules
     const passwordRegex =
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/;
@@ -150,14 +171,23 @@ export default function Signup() {
     } catch (err: any) {
       console.error("Sign Up Error:", err);
       setError(err?.errors?.[0]?.message || "Signup failed. Try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
   const onVerifyPress = async () => {
-    if (!verificationCode || !signUpAttempt) {
-      setError("Verification code is required.");
+    if (!verificationCode) {
+      setVerifyError("Please enter the verification code.");
       return;
     }
+    if (!signUpAttempt) {
+      setVerifyError("Something went wrong. Please go back and try again.");
+      return;
+    }
+
+    setVerifying(true);
+    setVerifyError("");
 
     try {
       const completeSignUp =
@@ -172,7 +202,6 @@ export default function Signup() {
 
         const clerkId = completeSignUp.createdUserId;
 
-        // Map UI gender option -> stored gender value
         const genderValue: Gender | null =
           genderOption === null || genderOption === "PNTS"
             ? null
@@ -185,7 +214,7 @@ export default function Signup() {
           email: emailAddress.toLowerCase(),
           first_name: cleanText(firstName.trim()),
           last_name: cleanText(lastName.trim()),
-          gender: genderValue, // stored as "M" | "F" | "NB" | null
+          gender: genderValue,
           createdAt: new Date(),
           ridesJoined: 0,
           ridesHosted: 0,
@@ -195,11 +224,30 @@ export default function Signup() {
 
         router.replace("/");
       } else {
-        setError("Verification failed. Please check the code.");
+        setVerifyError("Verification failed. Please check the code.");
       }
     } catch (err) {
       console.error("Verification Error:", err);
-      setError("Invalid code. Please try again.");
+      setVerifyError("Invalid code. Please try again.");
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const onResendPress = async () => {
+    if (!signUpAttempt || resending) return;
+    setResending(true);
+    setVerifyError("");
+    try {
+      await signUpAttempt.prepareEmailAddressVerification({
+        strategy: "email_code",
+      });
+      setVerifyError("Code resent — check your email.");
+    } catch (err) {
+      console.error("Resend Error:", err);
+      setVerifyError("Failed to resend code. Please try again.");
+    } finally {
+      setResending(false);
     }
   };
 
@@ -248,7 +296,7 @@ export default function Signup() {
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={{ flex: 1, backgroundColor: "#121212" }}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}
+      keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
     >
       <ScrollView
         contentContainerStyle={{
@@ -442,20 +490,124 @@ export default function Signup() {
           </View>
 
           {/* Password */}
-          <View style={{ marginBottom: 24 }}>
+          <View style={{ marginBottom: 16 }}>
             <Text
               style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}
             >
               Password
             </Text>
-            <TextInput
-              value={password}
-              placeholder="Create a password"
-              placeholderTextColor="#666"
-              secureTextEntry
-              onChangeText={setPassword}
-              style={inputStyle}
-            />
+            <View style={{ position: "relative" }}>
+              {showPassword ? (
+                <TextInput
+                  ref={passwordRef}
+                  value={password}
+                  placeholder="Create a password"
+                  placeholderTextColor="#666"
+                  secureTextEntry={false}
+                  onChangeText={setPassword}
+                  style={[inputStyle, { paddingRight: 48 }]}
+                />
+              ) : (
+                <TextInput
+                  ref={passwordRef}
+                  value={password}
+                  placeholder="Create a password"
+                  placeholderTextColor="#666"
+                  secureTextEntry={true}
+                  onChangeText={setPassword}
+                  style={[inputStyle, { paddingRight: 48 }]}
+                />
+              )}
+              <TouchableOpacity
+                onPress={() => {
+                  setShowPassword((v) => !v);
+                  setTimeout(() => passwordRef.current?.focus(), 50);
+                }}
+                activeOpacity={1}
+                style={{
+                  position: "absolute",
+                  right: 14,
+                  top: 0,
+                  bottom: 0,
+                  justifyContent: "center",
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                {showPassword
+                  ? <EyeOff size={20} color="#a0a0a0" />
+                  : <Eye size={20} color="#a0a0a0" />
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Confirm Password */}
+          <View style={{ marginBottom: 24 }}>
+            <Text
+              style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}
+            >
+              Confirm Password
+            </Text>
+            <View style={{ position: "relative" }}>
+              {showConfirmPassword ? (
+                <TextInput
+                  ref={confirmPasswordRef}
+                  value={confirmPassword}
+                  placeholder="Re-enter your password"
+                  placeholderTextColor="#666"
+                  secureTextEntry={false}
+                  onChangeText={setConfirmPassword}
+                  style={[
+                    inputStyle,
+                    { paddingRight: 48 },
+                    confirmPassword.length > 0 && password !== confirmPassword
+                      ? { borderColor: "#ff4444" }
+                      : {},
+                  ]}
+                />
+              ) : (
+                <TextInput
+                  ref={confirmPasswordRef}
+                  value={confirmPassword}
+                  placeholder="Re-enter your password"
+                  placeholderTextColor="#666"
+                  secureTextEntry={true}
+                  onChangeText={setConfirmPassword}
+                  style={[
+                    inputStyle,
+                    { paddingRight: 48 },
+                    confirmPassword.length > 0 && password !== confirmPassword
+                      ? { borderColor: "#ff4444" }
+                      : {},
+                  ]}
+                />
+              )}
+              <TouchableOpacity
+                onPress={() => {
+                  setShowConfirmPassword((v) => !v);
+                  setTimeout(() => confirmPasswordRef.current?.focus(), 50);
+                }}
+                activeOpacity={1}
+                style={{
+                  position: "absolute",
+                  right: 14,
+                  top: 0,
+                  bottom: 0,
+                  justifyContent: "center",
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                {showConfirmPassword
+                  ? <EyeOff size={20} color="#a0a0a0" />
+                  : <Eye size={20} color="#a0a0a0" />
+                }
+              </TouchableOpacity>
+            </View>
+            {confirmPassword.length > 0 && password !== confirmPassword && (
+              <Text style={{ color: "#ff7d7d", fontSize: 12, marginTop: 6 }}>
+                Passwords do not match
+              </Text>
+            )}
           </View>
 
           {/* --- TOS Checkbox --- */}
@@ -525,13 +677,14 @@ export default function Signup() {
           {/* --- Continue Button --- */}
           <TouchableOpacity
             onPress={onSignUpPress}
-            disabled={!tosAccepted}
+            disabled={!tosAccepted || loading}
             style={{
               backgroundColor: tosAccepted ? PRIMARY_BLUE : "#1e1e1e",
               padding: 16,
               borderRadius: 8,
               borderWidth: 1,
               borderColor: tosAccepted ? PRIMARY_BLUE : "#333",
+              opacity: loading ? 0.7 : 1,
               shadowColor: tosAccepted ? PRIMARY_BLUE : "transparent",
               shadowOffset: { width: 0, height: 2 },
               shadowOpacity: tosAccepted ? 0.3 : 0,
@@ -547,7 +700,7 @@ export default function Signup() {
                 fontSize: 16,
               }}
             >
-              Continue
+              {loading ? "Creating account..." : "Continue"}
             </Text>
           </TouchableOpacity>
 
@@ -584,114 +737,159 @@ export default function Signup() {
       />
 
       {/* --- Verification Modal --- */}
-      {showVerification && (
-        <View
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.95)",
-            justifyContent: "center",
-            padding: 20,
-          }}
+      <Modal
+        visible={showVerification}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowVerification(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1 }}
         >
           <View
             style={{
-              backgroundColor: "#1e1e1e",
-              borderRadius: 10,
-              padding: 24,
-              borderWidth: 1,
-              borderColor: "#333",
+              flex: 1,
+              backgroundColor: "rgba(0,0,0,0.95)",
+              justifyContent: "center",
+              padding: 20,
             }}
           >
-            <Text
+            <View
               style={{
-                color: "white",
-                fontSize: 20,
-                fontWeight: "600",
-                marginBottom: 16,
-                textAlign: "center",
-              }}
-            >
-              Verify Your Email
-            </Text>
-
-            <Text
-              style={{
-                color: "#a0a0a0",
-                marginBottom: 24,
-                textAlign: "center",
-              }}
-            >
-              We sent a verification code to{"\n"}
-              <Text style={{ fontWeight: "500" }}>
-                {emailAddress}
-              </Text>
-            </Text>
-
-            <TextInput
-              autoFocus
-              value={verificationCode}
-              onChangeText={setVerificationCode}
-              placeholder="Enter 6-digit code"
-              placeholderTextColor="#666"
-              style={{
-                backgroundColor: "#2a2a2a",
-                color: "white",
-                padding: 16,
-                borderRadius: 8,
-                marginBottom: 24,
-                fontSize: 18,
-                textAlign: "center",
+                backgroundColor: "#1e1e1e",
+                borderRadius: 10,
+                padding: 24,
                 borderWidth: 1,
                 borderColor: "#333",
-              }}
-              keyboardType="number-pad"
-              maxLength={6}
-            />
-
-            <TouchableOpacity
-              onPress={onVerifyPress}
-              style={{
-                backgroundColor: PRIMARY_BLUE,
-                padding: 16,
-                borderRadius: 8,
-                marginBottom: 16,
               }}
             >
               <Text
                 style={{
                   color: "white",
-                  textAlign: "center",
+                  fontSize: 20,
                   fontWeight: "600",
-                  fontSize: 16,
+                  marginBottom: 16,
+                  textAlign: "center",
                 }}
               >
-                Verify Email
+                Verify Your Email
               </Text>
-            </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={() => setShowVerification(false)}
-              style={{
-                padding: 12,
-              }}
-            >
               <Text
                 style={{
-                  color: PRIMARY_BLUE,
+                  color: "#a0a0a0",
+                  marginBottom: 24,
                   textAlign: "center",
-                  fontSize: 14,
                 }}
               >
-                Go Back
+                We sent a verification code to{"\n"}
+                <Text style={{ fontWeight: "500" }}>{emailAddress}</Text>
               </Text>
-            </TouchableOpacity>
+
+              <TextInput
+                autoFocus
+                value={verificationCode}
+                onChangeText={(t) => {
+                  setVerificationCode(t);
+                  if (verifyError) setVerifyError("");
+                }}
+                placeholder="Enter 6-digit code"
+                placeholderTextColor="#666"
+                style={{
+                  backgroundColor: "#2a2a2a",
+                  color: "white",
+                  padding: 16,
+                  borderRadius: 8,
+                  marginBottom: 12,
+                  fontSize: 18,
+                  textAlign: "center",
+                  borderWidth: 1,
+                  borderColor: verifyError ? "#ff4444" : "#333",
+                }}
+                keyboardType="number-pad"
+                textContentType="oneTimeCode"
+                maxLength={6}
+              />
+
+              {verifyError ? (
+                <Text
+                  style={{
+                    color: verifyError.startsWith("Code resent")
+                      ? "#4CAF50"
+                      : "#ff7d7d",
+                    textAlign: "center",
+                    fontSize: 13,
+                    marginBottom: 16,
+                  }}
+                >
+                  {verifyError}
+                </Text>
+              ) : (
+                <View style={{ marginBottom: 16 }} />
+              )}
+
+              <TouchableOpacity
+                onPress={onVerifyPress}
+                disabled={verifying}
+                style={{
+                  backgroundColor: PRIMARY_BLUE,
+                  padding: 16,
+                  borderRadius: 8,
+                  marginBottom: 12,
+                  opacity: verifying ? 0.7 : 1,
+                }}
+              >
+                <Text
+                  style={{
+                    color: "white",
+                    textAlign: "center",
+                    fontWeight: "600",
+                    fontSize: 16,
+                  }}
+                >
+                  {verifying ? "Verifying..." : "Verify Email"}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={onResendPress}
+                disabled={resending}
+                style={{ padding: 10 }}
+              >
+                <Text
+                  style={{
+                    color: resending ? "#666" : PRIMARY_BLUE,
+                    textAlign: "center",
+                    fontSize: 14,
+                  }}
+                >
+                  {resending ? "Resending..." : "Resend code"}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  setShowVerification(false);
+                  setVerificationCode("");
+                  setVerifyError("");
+                }}
+                style={{ padding: 10 }}
+              >
+                <Text
+                  style={{
+                    color: "#666",
+                    textAlign: "center",
+                    fontSize: 14,
+                  }}
+                >
+                  Go Back
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      )}
+        </KeyboardAvoidingView>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }

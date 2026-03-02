@@ -549,6 +549,7 @@ function RootLayoutContent() {
         <Stack
           screenOptions={{
             headerShown: false,
+            gestureEnabled: false,
             contentStyle: {
               backgroundColor: "#000000",
             },
