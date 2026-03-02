@@ -22,6 +22,7 @@ import { useRouter } from "expo-router";
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { Menu } from "lucide-react-native";
 import { useEffect, useState } from "react";
+import { LinearGradient } from "expo-linear-gradient";
 import { Alert, Platform, TouchableOpacity } from "react-native";
 
 import * as filter from "leo-profanity";
@@ -325,6 +326,11 @@ export default function ProfileScreen() {
 
   return (
     <Box flex={1} bg="#121212">
+      <LinearGradient
+        colors={["rgba(255, 190, 92, 0.28)", "transparent"]}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, height: 280 }}
+        pointerEvents="none"
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}

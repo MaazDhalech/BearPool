@@ -8,6 +8,7 @@ import DateTimePicker, {
   DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
 import { format } from "date-fns";
+import { LinearGradient } from "expo-linear-gradient";
 import { Stack, useRouter } from "expo-router";
 import {
   Timestamp,
@@ -399,6 +400,11 @@ export default function PostScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={{ flex: 1, backgroundColor: "#121212" }}
     >
+      <LinearGradient
+        colors={["rgba(255, 190, 92, 0.28)", "transparent"]}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, height: 280 }}
+        pointerEvents="none"
+      />
       <ScrollView
         contentContainerStyle={{ flexGrow: 1, padding: 20, paddingBottom: 120 }}
         keyboardShouldPersistTaps="handled"

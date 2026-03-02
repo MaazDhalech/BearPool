@@ -291,7 +291,12 @@ export default function Signup() {
       setSignUpAttempt(attempt);
       setShowVerification(true);
     } catch (err: any) {
-      setError(err?.errors?.[0]?.message || "Signup failed.");
+      const clerkCode = err?.errors?.[0]?.code;
+      if (clerkCode === "form_identifier_exists") {
+        setError("An account with this email already exists. Try signing in instead.");
+      } else {
+        setError(err?.errors?.[0]?.message || "Signup failed.");
+      }
     } finally {
       setLoading(false);
     }
@@ -342,7 +347,7 @@ export default function Signup() {
           tosVersion: "2025-11-15",
         });
 
-        router.replace("/");
+        router.replace("/(auth)/Welcome");
       } else {
         setVerifyError("Verification failed.");
       }
@@ -508,6 +513,27 @@ export default function Signup() {
                 onSubmitEditing={() => confirmPasswordRef.current?.focus()}
               />
 
+              {password.length > 0 && (
+                <View style={s.passwordRules}>
+                  {[
+                    { label: "At least 8 characters", met: password.length >= 8 },
+                    { label: "One uppercase letter", met: /[A-Z]/.test(password) },
+                    { label: "One lowercase letter", met: /[a-z]/.test(password) },
+                    { label: "One number", met: /\d/.test(password) },
+                    { label: "One special character (!@#$%^&*)", met: /[!@#$%^&*]/.test(password) },
+                  ].map(({ label, met }) => (
+                    <View key={label} style={s.ruleRow}>
+                      <MaterialCommunityIcons
+                        name={met ? "check-circle" : "circle-outline"}
+                        size={14 * SCALE}
+                        color={met ? "#4caf50" : palette.ghost}
+                      />
+                      <Text style={[s.ruleText, met && s.ruleMet]}>{label}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
               <FormField
                 label="Confirm Password"
                 ref={confirmPasswordRef}
@@ -518,6 +544,10 @@ export default function Signup() {
                 returnKeyType="done"
                 onSubmitEditing={onSignUpPress}
               />
+
+              {confirmPassword.length > 0 && password !== confirmPassword && (
+                <Text style={s.passwordMismatch}>Passwords do not match.</Text>
+              )}
 
               {/* TOS Checkbox */}
               <TouchableOpacity
@@ -811,5 +841,30 @@ const s = StyleSheet.create({
   resendText: {
     color: palette.accent,
     textAlign: "center",
+  },
+  passwordRules: {
+    marginTop: -SPACING.sm * SCALE,
+    marginBottom: SPACING.md * SCALE,
+    paddingHorizontal: 2 * SCALE,
+  },
+  ruleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4 * SCALE,
+  },
+  ruleText: {
+    color: palette.ghost,
+    fontSize: 13 * SCALE,
+    marginLeft: 6 * SCALE,
+  },
+  ruleMet: {
+    color: "#4caf50",
+  },
+  passwordMismatch: {
+    color: "#ff7d7d",
+    fontSize: 13 * SCALE,
+    marginTop: -SPACING.sm * SCALE,
+    marginBottom: SPACING.md * SCALE,
+    marginLeft: 2 * SCALE,
   },
 });

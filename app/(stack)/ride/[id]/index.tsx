@@ -39,6 +39,7 @@ type Ride = {
   createdAt: Timestamp;
   memberIds: string[];
   genderPref?: string;
+  hostId: string | null;
 };
 
 type Member = {
@@ -135,6 +136,7 @@ export default function RideDetailsPage() {
             createdAt: data.createdAt ?? Timestamp.now(),
             memberIds: data.memberIds ?? [],
             genderPref: data.genderPref ?? "N",
+            hostId: data.hostId ?? null,
           });
         } else {
           console.warn("No such ride!");
@@ -228,9 +230,13 @@ export default function RideDetailsPage() {
 
     try {
       const rideRef = doc(db, "rides", ride.id);
-      await updateDoc(rideRef, {
+      const updates: Record<string, any> = {
         memberIds: arrayUnion(userId),
-      });
+      };
+      if (!ride.hostId) {
+        updates.hostId = userId;
+      }
+      await updateDoc(rideRef, updates);
 
       const goToChat = () => {
         router.push({

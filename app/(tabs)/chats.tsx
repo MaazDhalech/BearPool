@@ -23,7 +23,8 @@ import {
   where,
 } from "firebase/firestore";
 import { useEffect, useRef, useState } from "react";
-import { RefreshControl } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { RefreshControl, View } from "react-native";
 
 const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
@@ -191,9 +192,15 @@ export default function ChatsScreen() {
   );
 
   return (
-    <ScrollView
-      bg="#121212"
-      contentContainerStyle={{ paddingBottom: 120 }}
+    <View style={{ flex: 1, backgroundColor: "#121212" }}>
+      <LinearGradient
+        colors={["rgba(255, 190, 92, 0.28)", "transparent"]}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, height: 280 }}
+        pointerEvents="none"
+      />
+      <ScrollView
+        style={{ backgroundColor: "transparent" }}
+        contentContainerStyle={{ paddingBottom: 120 }}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -238,6 +245,7 @@ export default function ChatsScreen() {
           </VStack>
         )}
       </Box>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }

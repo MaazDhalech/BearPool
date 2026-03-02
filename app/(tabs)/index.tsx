@@ -32,8 +32,9 @@ import {
   updateDoc,
   writeBatch,
 } from "firebase/firestore";
+import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useRef, useState } from "react";
-import { AppState, AppStateStatus, RefreshControl } from "react-native";
+import { AppState, AppStateStatus, Image, RefreshControl, TouchableOpacity, View } from "react-native";
 
 const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
@@ -769,10 +770,16 @@ export default function HomeScreen() {
     setSortOrder((prev) => (prev === "newest" ? "oldest" : "newest"));
 
   return (
+    <View style={{ flex: 1, backgroundColor: "#121212" }}>
+      <LinearGradient
+        colors={["rgba(255, 190, 92, 0.28)", "transparent"]}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, height: 280 }}
+        pointerEvents="none"
+      />
     <ScrollView
       px="$4"
       pt="$2"
-      bg="#121212"
+      style={{ backgroundColor: "transparent" }}
       contentContainerStyle={{ paddingBottom: 120 }}
       refreshControl={
         <RefreshControl
@@ -1118,11 +1125,41 @@ export default function HomeScreen() {
         })}
 
         {filteredRides.length === 0 && (
-          <Text color="#a0a0a0" textAlign="center" mt="$6">
-            No upcoming ride groups found.
-          </Text>
+          <VStack alignItems="center" mt="$8" px="$6" space="md">
+            <Image
+              source={require("../../assets/images/empty-bear.png")}
+              style={{ width: 260, height: 260 }}
+              resizeMode="contain"
+            />
+            <Text color="white" fontWeight="$bold" fontSize="$xl" textAlign="center">
+              {searchQuery ? "No rides match your search" : "No rides posted yet"}
+            </Text>
+            <Text color="#a0a0a0" textAlign="center" fontSize="$sm">
+              {searchQuery
+                ? "Try a different location or clear the search."
+                : "Be the first — post a ride and find people to split the cost with."}
+            </Text>
+            {!searchQuery && (
+              <TouchableOpacity
+                onPress={() => router.push("/(tabs)/post")}
+                activeOpacity={0.8}
+                style={{
+                  marginTop: 8,
+                  backgroundColor: ACCENT,
+                  paddingVertical: 12,
+                  paddingHorizontal: 28,
+                  borderRadius: 10,
+                }}
+              >
+                <Text color="#121212" fontWeight="$semibold" fontSize="$md">
+                  + Post a Ride
+                </Text>
+              </TouchableOpacity>
+            )}
+          </VStack>
         )}
       </VStack>
     </ScrollView>
+    </View>
   );
 }

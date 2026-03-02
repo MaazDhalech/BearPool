@@ -127,6 +127,16 @@ export default function GroupSettings() {
     fetchRideAndUsers();
   }, [rideId]);
 
+  // If the ride has no host (e.g. previous host deleted account), promote the current user
+  useEffect(() => {
+    if (!ride || !user?.id) return;
+    const memberIds: string[] = ride.memberIds ?? [];
+    if (!ride.hostId && memberIds.includes(user.id)) {
+      updateDoc(doc(db, "rides", String(rideId)), { hostId: user.id });
+      setRide((prev: any) => ({ ...prev, hostId: user.id }));
+    }
+  }, [ride?.hostId, user?.id]);
+
   const storeKickRecord = async (
     kickedUserId: string,
     kickedUserName: string,
@@ -594,7 +604,8 @@ This ride has been permanently deleted from the system.
 
   if (!ride) return null;
 
-  const isHost = user?.id === ride.hostId;
+  const memberIds: string[] = ride.memberIds ?? [];
+  const isHost = user?.id === ride.hostId || (!ride.hostId && memberIds.includes(user?.id ?? ""));
   const otherMembers = users.filter((u) => u.id !== user?.id);
   const hostCanLeave = !isHost || otherMembers.length === 0;
 

@@ -233,7 +233,7 @@ export default function Login() {
               }}
             />
             <Text style={s.brandTitle}>BearPool</Text>
-            <Text style={s.subtitle}>Sign in to continue</Text>
+            <Text style={s.subtitle}>The biggest ride-share board for Cal students.</Text>
           </View>
 
           {/* ── Form Area ── */}

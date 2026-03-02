@@ -29,9 +29,11 @@ import { useRouter } from "expo-router";
 import {
   arrayRemove,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
+  increment,
   query,
   setDoc,
   updateDoc,
@@ -298,11 +300,43 @@ export default function SettingsScreen() {
     );
   };
 
+const cleanupUserRides = async (userId: string) => {
+  const snapshot = await getDocs(
+    query(collection(db, "rides"), where("memberIds", "array-contains", userId))
+  );
+
+  await Promise.all(snapshot.docs.map(async (rideDoc) => {
+    const ride = rideDoc.data();
+    const otherMembers = (ride.memberIds as string[]).filter((id: string) => id !== userId);
+
+    if (ride.hostId === userId) {
+      if (otherMembers.length > 0) {
+        // Promote first remaining member to host
+        await updateDoc(rideDoc.ref, {
+          hostId: otherMembers[0],
+          memberIds: arrayRemove(userId),
+        });
+      } else {
+        // No other members — delete the ride entirely
+        await deleteDoc(rideDoc.ref);
+      }
+    } else {
+      // Regular member — remove and free up a seat
+      await updateDoc(rideDoc.ref, {
+        memberIds: arrayRemove(userId),
+        seats: increment(1),
+      });
+    }
+  }));
+};
+
 const performAccountDeletion = async () => {
   if (!clerkUserId) return;
   setDeletingAccount(true);
 
   try {
+    await cleanupUserRides(clerkUserId);
+
     const response = await fetch(`${BACKEND_URL}/api/delete-account`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
