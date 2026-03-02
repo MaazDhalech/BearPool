@@ -1,22 +1,161 @@
-import { useSignIn } from "@clerk/clerk-expo";
 import { ACCENT } from "@/constants/Colors";
+import { useSignIn } from "@clerk/clerk-expo";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React from "react";
 import {
+  ActivityIndicator,
   Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
+  TextInputProps,
   TouchableOpacity,
   TouchableWithoutFeedback,
-  View
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const ResetPassword = () => {
+// ─────────────────────────────────────────────
+//  DESIGN TOKENS (Imported/Copied from Login)
+// ─────────────────────────────────────────────
+const palette = {
+  bg: "#121212",
+  surface: "#1e1e1e",
+  rim: "#252525",
+  accent: ACCENT,
+  ink: "#ffffff",
+  muted: "#a1a1a6",
+  ghost: "#545456",
+};
+
+const SPACING = {
+  xs: 8,
+  sm: 16,
+  md: 24,
+  lg: 32,
+  xl: 48,
+};
+
+const BORDER_RADIUS = {
+  sm: 8,
+  md: 12,
+  lg: 16,
+};
+
+// Global Scale Factor (90%)
+const SCALE = 0.9;
+
+// ─────────────────────────────────────────────
+//  PRIMITIVES (Copied from Login.tsx)
+// ─────────────────────────────────────────────
+
+function FieldLabel({ children }: { children: string }) {
+  return <Text style={p.label}>{children}</Text>;
+}
+
+const StyledInput = React.forwardRef<
+  TextInput,
+  TextInputProps & { isPassword?: boolean }
+>(({ isPassword = false, ...props }, ref) => {
+  const [focused, setFocused] = React.useState(false);
+  const [isPasswordVisible, setIsPasswordVisible] = React.useState(false);
+
+  return (
+    <View style={[p.inputContainer, focused && p.inputFocused]}>
+      <TextInput
+        ref={ref}
+        placeholderTextColor={palette.ghost}
+        onFocus={(e) => {
+          setFocused(true);
+          props.onFocus?.(e);
+        }}
+        onBlur={(e) => {
+          setFocused(false);
+          props.onBlur?.(e);
+        }}
+        secureTextEntry={isPassword && !isPasswordVisible}
+        style={[p.input, props.style]}
+        {...props}
+      />
+      {isPassword && (
+        <TouchableOpacity
+          onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+          style={p.visibilityToggle}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <MaterialCommunityIcons
+            name={isPasswordVisible ? "eye-outline" : "eye-off-outline"}
+            size={22 * SCALE}
+            color={palette.muted}
+          />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+});
+
+StyledInput.displayName = "StyledInput";
+
+const FormField = React.forwardRef<
+  TextInput,
+  TextInputProps & { label: string; isPassword?: boolean }
+>(({ label, isPassword, ...rest }, ref) => {
+  return (
+    <View style={p.fieldWrap}>
+      <FieldLabel>{label}</FieldLabel>
+      <StyledInput ref={ref} isPassword={isPassword} {...rest} />
+    </View>
+  );
+});
+
+FormField.displayName = "FormField";
+
+const p = StyleSheet.create({
+  label: {
+    color: palette.muted,
+    fontSize: 16 * SCALE,
+    fontWeight: "600",
+    marginBottom: 8 * SCALE,
+    marginLeft: 2 * SCALE,
+  },
+  inputContainer: {
+    backgroundColor: palette.surface,
+    borderRadius: BORDER_RADIUS.md,
+    height: 60 * SCALE,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "transparent",
+    paddingHorizontal: 16 * SCALE,
+  },
+  inputFocused: {
+    borderColor: palette.accent,
+  },
+  input: {
+    color: palette.ink,
+    fontSize: 18 * SCALE,
+    flex: 1,
+    height: "100%",
+  },
+  fieldWrap: {
+    marginBottom: SPACING.md * SCALE,
+  },
+  visibilityToggle: {
+    paddingLeft: 10 * SCALE,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+});
+
+// ─────────────────────────────────────────────
+//  SCREEN
+// ─────────────────────────────────────────────
+
+export default function ResetPassword() {
   const { signIn } = useSignIn();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -25,14 +164,15 @@ const ResetPassword = () => {
   const [code, setCode] = React.useState("");
   const [newPassword, setNewPassword] = React.useState("");
   const [loading, setLoading] = React.useState(false);
-  const [activeStep, setActiveStep] = React.useState<"request" | "verify" | "reset">("request");
+  const [activeStep, setActiveStep] = React.useState<
+    "request" | "verify" | "reset"
+  >("request");
 
   const handleRequestReset = async () => {
     if (!email) {
       Alert.alert("Error", "Please enter your email");
       return;
     }
-
     setLoading(true);
     try {
       await signIn?.create({
@@ -41,7 +181,10 @@ const ResetPassword = () => {
       });
       setActiveStep("verify");
     } catch (err: any) {
-      Alert.alert("Error", err.errors?.[0]?.message || "Failed to send reset code");
+      Alert.alert(
+        "Error",
+        err.errors?.[0]?.message || "Failed to send reset code",
+      );
     } finally {
       setLoading(false);
     }
@@ -52,7 +195,6 @@ const ResetPassword = () => {
       Alert.alert("Error", "Please enter the verification code");
       return;
     }
-
     setLoading(true);
     try {
       const attempt = await signIn?.attemptFirstFactor({
@@ -64,7 +206,10 @@ const ResetPassword = () => {
         setActiveStep("reset");
       }
     } catch (err: any) {
-      Alert.alert("Error", err.errors?.[0]?.message || "Invalid verification code");
+      Alert.alert(
+        "Error",
+        err.errors?.[0]?.message || "Invalid verification code",
+      );
     } finally {
       setLoading(false);
     }
@@ -75,7 +220,6 @@ const ResetPassword = () => {
       Alert.alert("Error", "Please enter a new password");
       return;
     }
-
     setLoading(true);
     try {
       await signIn?.resetPassword({
@@ -84,243 +228,177 @@ const ResetPassword = () => {
       Alert.alert("Success", "Password reset successfully!");
       router.replace("/(auth)/Login");
     } catch (err: any) {
-      Alert.alert("Error", err.errors?.[0]?.message || "Failed to reset password");
+      Alert.alert(
+        "Error",
+        err.errors?.[0]?.message || "Failed to reset password",
+      );
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Helper to get subtitle based on step
+  const getSubtitle = () => {
+    switch (activeStep) {
+      case "request":
+        return "Enter your email to receive a reset code";
+      case "verify":
+        return `Enter code sent to ${email}`;
+      case "reset":
+        return "Create a new password";
+      default:
+        return "";
     }
   };
 
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={{ flex: 1, backgroundColor: "#121212" }}
-      keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
+      style={s.root}
     >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <ScrollView
-          contentContainerStyle={{
-            flexGrow: 1,
-            justifyContent: "center",
-            padding: 20,
-            paddingTop: insets.top + 20,
-          }}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={{ marginBottom: 20 }}>
-            <Text style={{ 
-              color: "#ffffff", 
-              fontSize: 28, 
-              fontWeight: "600", 
-              marginBottom: 30, 
-              textAlign: "center" 
-            }}>
-              Reset Password
-            </Text>
+        <View style={[s.mainContainer, { paddingTop: insets.top }]}>
+          {/* ── Header Area (No Image) ── */}
+          <View style={s.header}>
+            <Text style={s.brandTitle}>Reset Password</Text>
+            <Text style={s.subtitle}>{getSubtitle()}</Text>
+          </View>
 
+          {/* ── Form Area ── */}
+          <View style={s.formArea}>
             {activeStep === "request" && (
-              <>
-                <Text style={{ 
-                  color: "#a0a0a0", 
-                  marginBottom: 24, 
-                  textAlign: "center",
-                  fontSize: 16
-                }}>
-                  Enter your email to receive a reset code
-                </Text>
-                
-                <View style={{ marginBottom: 24 }}>
-                  <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
-                    Email Address
-                  </Text>
-                  <TextInput
-                    autoCapitalize="none"
-                    value={email}
-                    placeholder="your@email.com"
-                    placeholderTextColor="#666"
-                    onChangeText={setEmail}
-                    style={{
-                      backgroundColor: "#1e1e1e",
-                      color: "#ffffff",
-                      padding: 14,
-                      borderRadius: 8,
-                      borderWidth: 1,
-                      borderColor: "#333",
-                      fontSize: 16,
-                    }}
-                    keyboardType="email-address"
-                  />
-                </View>
-
-                <TouchableOpacity
-                  onPress={handleRequestReset}
-                  disabled={loading}
-                  style={{
-                    backgroundColor: ACCENT,
-                    padding: 16,
-                    borderRadius: 8,
-                    opacity: loading ? 0.7 : 1,
-                  }}
-                >
-                  <Text style={{ 
-                    color: "#121212", 
-                    textAlign: "center", 
-                    fontWeight: "600",
-                    fontSize: 16,
-                  }}>
-                    {loading ? "Sending..." : "Send Reset Code"}
-                  </Text>
-                </TouchableOpacity>
-              </>
+              <FormField
+                label="Email Address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+                value={email}
+                placeholder="johndoe@berkeley.edu"
+                onChangeText={setEmail}
+                onSubmitEditing={handleRequestReset}
+              />
             )}
 
             {activeStep === "verify" && (
-              <>
-                <Text style={{ 
-                  color: "#a0a0a0", 
-                  marginBottom: 24, 
-                  textAlign: "center",
-                  fontSize: 16
-                }}>
-                  Enter the verification code sent to {email}
-                </Text>
-                
-                <View style={{ marginBottom: 24 }}>
-                  <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
-                    Verification Code
-                  </Text>
-                  <TextInput
-                    value={code}
-                    placeholder="6-digit code"
-                    placeholderTextColor="#666"
-                    onChangeText={setCode}
-                    style={{
-                      backgroundColor: "#1e1e1e",
-                      color: "#ffffff",
-                      padding: 14,
-                      borderRadius: 8,
-                      borderWidth: 1,
-                      borderColor: "#333",
-                      fontSize: 16,
-                    }}
-                    keyboardType="number-pad"
-                  />
-                </View>
-
-                <TouchableOpacity
-                  onPress={handleVerifyCode}
-                  disabled={loading}
-                  style={{
-                    backgroundColor: ACCENT,
-                    padding: 16,
-                    borderRadius: 8,
-                    opacity: loading ? 0.7 : 1,
-                    marginBottom: 16,
-                  }}
-                >
-                  <Text style={{ 
-                    color: "#121212", 
-                    textAlign: "center", 
-                    fontWeight: "600",
-                    fontSize: 16,
-                  }}>
-                    {loading ? "Verifying..." : "Verify Code"}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={handleRequestReset}
-                  style={{
-                    padding: 16,
-                  }}
-                >
-                  <Text style={{ 
-                    color: ACCENT, 
-                    textAlign: "center", 
-                    fontWeight: "500",
-                    fontSize: 14,
-                  }}>
-                    Resend Code
-                  </Text>
-                </TouchableOpacity>
-              </>
+              <FormField
+                label="Verification Code"
+                keyboardType="number-pad"
+                value={code}
+                placeholder="123456"
+                onChangeText={setCode}
+                onSubmitEditing={handleVerifyCode}
+              />
             )}
 
             {activeStep === "reset" && (
-              <>
-                <Text style={{ 
-                  color: "#a0a0a0", 
-                  marginBottom: 24, 
-                  textAlign: "center",
-                  fontSize: 16
-                }}>
-                  Create a new password
-                </Text>
-                
-                <View style={{ marginBottom: 24 }}>
-                  <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
-                    New Password
-                  </Text>
-                  <TextInput
-                    value={newPassword}
-                    placeholder="Enter new password"
-                    placeholderTextColor="#666"
-                    secureTextEntry={true}
-                    onChangeText={setNewPassword}
-                    style={{
-                      backgroundColor: "#1e1e1e",
-                      color: "#ffffff",
-                      padding: 14,
-                      borderRadius: 8,
-                      borderWidth: 1,
-                      borderColor: "#333",
-                      fontSize: 16,
-                    }}
-                  />
-                </View>
-
-                <TouchableOpacity
-                  onPress={handleResetPassword}
-                  disabled={loading}
-                  style={{
-                    backgroundColor: ACCENT,
-                    padding: 16,
-                    borderRadius: 8,
-                    opacity: loading ? 0.7 : 1,
-                  }}
-                >
-                  <Text style={{ 
-                    color: "#121212", 
-                    textAlign: "center", 
-                    fontWeight: "600",
-                    fontSize: 16,
-                  }}>
-                    {loading ? "Resetting..." : "Reset Password"}
-                  </Text>
-                </TouchableOpacity>
-              </>
+              <FormField
+                label="New Password"
+                isPassword
+                value={newPassword}
+                placeholder="••••••••"
+                onChangeText={setNewPassword}
+                onSubmitEditing={handleResetPassword}
+              />
             )}
 
+            {/* CTA Button */}
+            <TouchableOpacity
+              onPress={
+                activeStep === "request"
+                  ? handleRequestReset
+                  : activeStep === "verify"
+                    ? handleVerifyCode
+                    : handleResetPassword
+              }
+              activeOpacity={0.7}
+              disabled={loading}
+              style={[s.cta, loading && s.ctaDisabled]}
+            >
+              {loading ? (
+                <ActivityIndicator color={palette.bg} size="small" />
+              ) : (
+                <Text style={s.ctaLabel}>
+                  {activeStep === "request" && "Send Reset Code"}
+                  {activeStep === "verify" && "Verify Code"}
+                  {activeStep === "reset" && "Reset Password"}
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            {/* Back to Login */}
             <TouchableOpacity
               onPress={() => router.replace("/(auth)/Login")}
-              style={{
-                padding: 16,
-                marginTop: 20,
-              }}
+              style={s.footerButton}
+              activeOpacity={0.7}
             >
-              <Text style={{ 
-                color: ACCENT, 
-                textAlign: "center", 
-                fontWeight: "500",
-                fontSize: 14,
-              }}>
-                Back to Sign In
-              </Text>
+              <Text style={s.footerText}>Back to Sign In</Text>
             </TouchableOpacity>
           </View>
-        </ScrollView>
+        </View>
       </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   );
-};
+}
 
-export default ResetPassword;
+// ─────────────────────────────────────────────
+//  STYLES
+// ─────────────────────────────────────────────
+
+const s = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: palette.bg,
+  },
+  mainContainer: {
+    flex: 1,
+    paddingHorizontal: SPACING.md * SCALE,
+    paddingBottom: SPACING.md * SCALE,
+    // Header padding removed to allow vertical centering
+    justifyContent: "center",
+  },
+  header: {
+    alignItems: "center",
+    marginBottom: SPACING.xl * SCALE,
+  },
+  brandTitle: {
+    color: palette.ink,
+    fontSize: 42 * SCALE,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  subtitle: {
+    color: palette.muted,
+    fontSize: 20 * SCALE,
+    marginTop: 6 * SCALE,
+    textAlign: "center",
+  },
+  formArea: {
+    width: "100%",
+  },
+  cta: {
+    backgroundColor: palette.accent,
+    height: 60 * SCALE,
+    borderRadius: BORDER_RADIUS.md,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: SPACING.lg * SCALE,
+  },
+  ctaDisabled: {
+    opacity: 0.7,
+  },
+  ctaLabel: {
+    color: palette.bg,
+    fontSize: 20 * SCALE,
+    fontWeight: "700",
+  },
+  footerButton: {
+    alignItems: "center",
+    marginTop: -SPACING.sm * SCALE,
+    marginBottom: SPACING.lg * SCALE,
+  },
+  footerText: {
+    color: palette.accent,
+    fontSize: 16 * SCALE,
+    fontWeight: "500",
+  },
+});

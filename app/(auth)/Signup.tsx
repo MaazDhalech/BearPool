@@ -4,41 +4,178 @@ import { db } from "@/services/firebaseConfig";
 import { useSignUp } from "@clerk/clerk-expo";
 import { Link, useRouter } from "expo-router";
 import { doc, setDoc } from "firebase/firestore";
-import { Eye, EyeOff } from "lucide-react-native";
+import * as filter from "leo-profanity";
 import React from "react";
 import {
+  ActivityIndicator,
   GestureResponderEvent,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
+  TextInputProps,
   TouchableOpacity,
-  View,
+  TouchableWithoutFeedback,
+  View
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import "react-native-get-random-values";
-
-import * as filter from "leo-profanity";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Optional: Add app-specific blocked words
 filter.add(["yourappspecificslur", "berkeleyhateword"]);
-// Optional: Remove false positives
-// filter.remove("innocentword");
 
 const isBerkeleyEmail = (email: string) => {
   return email.toLowerCase().endsWith("@berkeley.edu");
 };
 
-const DARK_BG = "#1e1e1e";
-const GREY_TEXT = "#a0a0a0";
+// ─────────────────────────────────────────────
+//  DESIGN TOKENS (Imported/Copied from Login)
+// ─────────────────────────────────────────────
+const palette = {
+  bg: "#121212",
+  surface: "#1e1e1e",
+  rim: "#252525",
+  accent: ACCENT,
+  ink: "#ffffff",
+  muted: "#a1a1a6",
+  ghost: "#545456",
+};
+
+const SPACING = {
+  xs: 8,
+  sm: 16,
+  md: 24,
+  lg: 32,
+  xl: 48,
+};
+
+const BORDER_RADIUS = {
+  sm: 8,
+  md: 12,
+  lg: 16,
+};
+
+// Global Scale Factor (90%)
+const SCALE = 0.9;
+
+// ─────────────────────────────────────────────
+//  PRIMITIVES
+// ─────────────────────────────────────────────
+
+function FieldLabel({ children }: { children: string }) {
+  return <Text style={p.label}>{children}</Text>;
+}
+
+const StyledInput = React.forwardRef<
+  TextInput,
+  TextInputProps & { isPassword?: boolean }
+>(({ isPassword = false, ...props }, ref) => {
+  const [focused, setFocused] = React.useState(false);
+  const [isPasswordVisible, setIsPasswordVisible] = React.useState(false);
+
+  return (
+    <View style={[p.inputContainer, focused && p.inputFocused]}>
+      <TextInput
+        ref={ref}
+        placeholderTextColor={palette.ghost}
+        onFocus={(e) => {
+          setFocused(true);
+          props.onFocus?.(e);
+        }}
+        onBlur={(e) => {
+          setFocused(false);
+          props.onBlur?.(e);
+        }}
+        secureTextEntry={isPassword && !isPasswordVisible}
+        style={[p.input, props.style]}
+        {...props}
+      />
+      {isPassword && (
+        <TouchableOpacity
+          onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+          style={p.visibilityToggle}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <MaterialCommunityIcons
+            name={isPasswordVisible ? "eye-outline" : "eye-off-outline"}
+            size={22 * SCALE}
+            color={palette.muted}
+          />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+});
+
+StyledInput.displayName = "StyledInput";
+
+// Explicitly importing MaterialCommunityIcons for StyledInput
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+
+const FormField = React.forwardRef<
+  TextInput,
+  TextInputProps & { label: string; isPassword?: boolean }
+>(({ label, isPassword, ...rest }, ref) => {
+  return (
+    <View style={p.fieldWrap}>
+      <FieldLabel>{label}</FieldLabel>
+      <StyledInput ref={ref} isPassword={isPassword} {...rest} />
+    </View>
+  );
+});
+
+FormField.displayName = "FormField";
+
+const p = StyleSheet.create({
+  label: {
+    color: palette.muted,
+    fontSize: 16 * SCALE,
+    fontWeight: "600",
+    marginBottom: 8 * SCALE,
+    marginLeft: 2 * SCALE,
+  },
+  inputContainer: {
+    backgroundColor: palette.surface,
+    borderRadius: BORDER_RADIUS.md,
+    height: 60 * SCALE,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "transparent",
+    paddingHorizontal: 16 * SCALE,
+  },
+  inputFocused: {
+    borderColor: palette.accent,
+  },
+  input: {
+    color: palette.ink,
+    fontSize: 18 * SCALE,
+    flex: 1,
+    height: "100%",
+  },
+  fieldWrap: {
+    marginBottom: SPACING.md * SCALE,
+  },
+  visibilityToggle: {
+    paddingLeft: 10 * SCALE,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+});
+
+// ─────────────────────────────────────────────
+//  SCREEN
+// ─────────────────────────────────────────────
 
 const BLANK_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
 
-type Gender = "M" | "F" | "NB"; // what we store in Firestore
-type GenderOption = Gender | "PNTS"; // UI options, includes Prefer Not To Say
+type Gender = "M" | "F" | "NB";
+type GenderOption = Gender | "PNTS";
 
 export default function Signup() {
   const { isLoaded, signUp, setActive } = useSignUp();
@@ -51,9 +188,9 @@ export default function Signup() {
   const [firstName, setFirstName] = React.useState("");
   const [lastName, setLastName] = React.useState("");
 
-  // UI selection state
-  const [genderOption, setGenderOption] =
-    React.useState<GenderOption | null>(null);
+  const [genderOption, setGenderOption] = React.useState<GenderOption | null>(
+    null,
+  );
 
   const [error, setError] = React.useState("");
   const [showVerification, setShowVerification] = React.useState(false);
@@ -63,13 +200,11 @@ export default function Signup() {
   const [verifying, setVerifying] = React.useState(false);
   const [verifyError, setVerifyError] = React.useState("");
   const [resending, setResending] = React.useState(false);
-  const [showPassword, setShowPassword] = React.useState(false);
   const [confirmPassword, setConfirmPassword] = React.useState("");
   const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
   const passwordRef = React.useRef<TextInput>(null);
   const confirmPasswordRef = React.useRef<TextInput>(null);
 
-  // --- TOS Agreement ---
   const [tosAccepted, setTosAccepted] = React.useState(false);
   const [showTOS, setShowTOS] = React.useState(false);
 
@@ -86,9 +221,9 @@ export default function Signup() {
     setError("");
     setLoading(true);
 
-    // TOS must be accepted
     if (!tosAccepted) {
       setError("Please accept the Terms of Service to continue.");
+      setLoading(false);
       return;
     }
 
@@ -97,7 +232,6 @@ export default function Signup() {
     const trimmedFirstName = firstName.trim();
     const trimmedLastName = lastName.trim();
 
-    // Basic required field checks
     if (
       !trimmedEmail ||
       !trimmedUsername ||
@@ -105,52 +239,40 @@ export default function Signup() {
       !trimmedLastName ||
       !password
     ) {
-      setError("Please fill out all fields before continuing.");
+      setError("Please fill out all fields.");
+      setLoading(false);
       return;
     }
 
-    // Berkeley email check
     if (!isBerkeleyEmail(trimmedEmail)) {
-      setError("Please use a valid @berkeley.edu email to sign up.");
+      setError("Please use a valid @berkeley.edu email.");
+      setLoading(false);
       return;
     }
 
-    // Profanity checks
-    if (containsProfanity(trimmedUsername)) {
-      setError(
-        "Username contains inappropriate language. Please choose a different one."
-      );
+    if (
+      containsProfanity(trimmedUsername) ||
+      containsProfanity(trimmedFirstName) ||
+      containsProfanity(trimmedLastName)
+    ) {
+      setError("Inappropriate language detected.");
+      setLoading(false);
       return;
     }
 
-    if (containsProfanity(trimmedFirstName)) {
-      setError(
-        "First name contains inappropriate language. Please enter a valid name."
-      );
-      return;
-    }
-
-    if (containsProfanity(trimmedLastName)) {
-      setError(
-        "Last name contains inappropriate language. Please enter a valid name."
-      );
-      return;
-    }
-
-    // Passwords must match
     if (password !== confirmPassword) {
       setError("Passwords do not match.");
       setLoading(false);
       return;
     }
 
-    // Password rules
     const passwordRegex =
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/;
     if (!passwordRegex.test(password)) {
       setError(
-        "Password must contain at least 8 characters, 1 uppercase, 1 lowercase, 1 number, and 1 special character."
+        "Password must be 8+ chars, 1 uppercase, 1 lowercase, 1 number, and 1 special character.",
       );
+      setLoading(false);
       return;
     }
 
@@ -169,8 +291,7 @@ export default function Signup() {
       setSignUpAttempt(attempt);
       setShowVerification(true);
     } catch (err: any) {
-      console.error("Sign Up Error:", err);
-      setError(err?.errors?.[0]?.message || "Signup failed. Try again.");
+      setError(err?.errors?.[0]?.message || "Signup failed.");
     } finally {
       setLoading(false);
     }
@@ -178,11 +299,11 @@ export default function Signup() {
 
   const onVerifyPress = async () => {
     if (!verificationCode) {
-      setVerifyError("Please enter the verification code.");
+      setVerifyError("Enter verification code.");
       return;
     }
     if (!signUpAttempt) {
-      setVerifyError("Something went wrong. Please go back and try again.");
+      setVerifyError("Something went wrong.");
       return;
     }
 
@@ -201,7 +322,6 @@ export default function Signup() {
         }
 
         const clerkId = completeSignUp.createdUserId;
-
         const genderValue: Gender | null =
           genderOption === null || genderOption === "PNTS"
             ? null
@@ -224,11 +344,10 @@ export default function Signup() {
 
         router.replace("/");
       } else {
-        setVerifyError("Verification failed. Please check the code.");
+        setVerifyError("Verification failed.");
       }
     } catch (err) {
-      console.error("Verification Error:", err);
-      setVerifyError("Invalid code. Please try again.");
+      setVerifyError("Invalid code.");
     } finally {
       setVerifying(false);
     }
@@ -242,49 +361,12 @@ export default function Signup() {
       await signUpAttempt.prepareEmailAddressVerification({
         strategy: "email_code",
       });
-      setVerifyError("Code resent — check your email.");
+      setVerifyError("Code resent.");
     } catch (err) {
-      console.error("Resend Error:", err);
-      setVerifyError("Failed to resend code. Please try again.");
+      setVerifyError("Failed to resend code.");
     } finally {
       setResending(false);
     }
-  };
-
-  const handleUsernameChange = (text: string) => {
-    setUsername(text);
-    if (text.trim() && containsProfanity(text)) {
-      setError("Username contains inappropriate language.");
-    } else if (error.includes("Username contains inappropriate language")) {
-      setError("");
-    }
-  };
-
-  const handleFirstNameChange = (text: string) => {
-    setFirstName(text);
-    if (text.trim() && containsProfanity(text)) {
-      setError("First name contains inappropriate language.");
-    } else if (error.includes("First name contains inappropriate language")) {
-      setError("");
-    }
-  };
-
-  const handleLastNameChange = (text: string) => {
-    setLastName(text);
-    if (text.trim() && containsProfanity(text)) {
-      setError("Last name contains inappropriate language.");
-    } else if (error.includes("Last name contains inappropriate language")) {
-      setError("");
-    }
-  };
-
-  const handleTOSAccept = () => {
-    setTosAccepted(true);
-    setShowTOS(false);
-  };
-
-  const toggleTosAccepted = () => {
-    setTosAccepted((prev) => !prev);
   };
 
   const openTOS = (event: GestureResponderEvent) => {
@@ -295,611 +377,424 @@ export default function Signup() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={{ flex: 1, backgroundColor: "#121212" }}
-      keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
+      style={s.root}
     >
-      <ScrollView
-        contentContainerStyle={{
-          flexGrow: 1,
-          justifyContent: "center",
-          padding: 20,
-        }}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={{ marginBottom: 20 }}>
-          <Text
-            style={{
-              color: "#ffffff",
-              fontSize: 28,
-              fontWeight: "600",
-              marginBottom: 30,
-              marginTop: 50,
-              textAlign: "center",
-            }}
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={[s.mainContainer, { paddingTop: insets.top }]}>
+          <ScrollView
+            contentContainerStyle={s.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
           >
-            Create Account
-          </Text>
-
-          {error ? (
-            <View
-              style={{
-                backgroundColor: "#2a0e0e",
-                padding: 14,
-                borderRadius: 8,
-                marginBottom: 16,
-                borderWidth: 1,
-                borderColor: "#4a1e1e",
-              }}
-            >
-              <Text style={{ color: "#ff7d7d", textAlign: "center" }}>
-                {error}
-              </Text>
+            <View style={s.header}>
+              <Text style={s.brandTitle}>Create Account</Text>
             </View>
-          ) : null}
 
-          {/* Email */}
-          <View style={{ marginBottom: 16 }}>
-            <Text
-              style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}
-            >
-              Berkeley Email
-            </Text>
-            <TextInput
-              autoCapitalize="none"
-              value={emailAddress}
-              placeholder="you@berkeley.edu"
-              placeholderTextColor="#666"
-              onChangeText={setEmailAddress}
-              style={inputStyle}
-              keyboardType="email-address"
-            />
-          </View>
+            {error ? (
+              <View style={s.errorContainer}>
+                <Text style={s.errorText}>{error}</Text>
+              </View>
+            ) : null}
 
-          {/* Username */}
-          <View style={{ marginBottom: 16 }}>
-            <Text
-              style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}
-            >
-              Username
-            </Text>
-            <TextInput
-              autoCapitalize="none"
-              value={username}
-              placeholder="Choose a username"
-              placeholderTextColor="#666"
-              onChangeText={handleUsernameChange}
-              style={inputStyle}
-            />
-          </View>
-
-          {/* Name row */}
-          <View style={{ flexDirection: "row", gap: 16, marginBottom: 16 }}>
-            <View style={{ flex: 1 }}>
-              <Text
-                style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}
-              >
-                First Name
-              </Text>
-              <TextInput
-                autoCapitalize="words"
-                value={firstName}
-                placeholder="First"
-                placeholderTextColor="#666"
-                onChangeText={handleFirstNameChange}
-                style={inputStyle}
+            <View style={s.formArea}>
+              <FormField
+                label="Berkeley Email"
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+                value={emailAddress}
+                placeholder="you@berkeley.edu"
+                onChangeText={setEmailAddress}
               />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text
-                style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}
-              >
-                Last Name
-              </Text>
-              <TextInput
-                autoCapitalize="words"
-                value={lastName}
-                placeholder="Last"
-                placeholderTextColor="#666"
-                onChangeText={handleLastNameChange}
-                style={inputStyle}
+
+              <FormField
+                label="Username"
+                autoCapitalize="none"
+                value={username}
+                placeholder="Choose a username"
+                onChangeText={setUsername}
               />
-            </View>
-          </View>
 
-          {/* --- Gender --- */}
-          <View style={{ marginBottom: 16 }}>
-            <Text
-              style={{ color: "#a0a0a0", marginBottom: 4, fontSize: 14 }}
-            >
-              Gender (optional — helps us keep riders safe)
-            </Text>
-            <Text style={{ color: "#666", marginBottom: 8, fontSize: 12 }}>
-              Share it only if you want to. We request it for community safety
-              checks and never use it anywhere else. You can ignore this today
-              and add it later.
-            </Text>
+              <View style={s.nameRow}>
+                <View style={s.nameField}>
+                  <FormField
+                    label="First Name"
+                    autoCapitalize="words"
+                    value={firstName}
+                    placeholder="First"
+                    onChangeText={setFirstName}
+                  />
+                </View>
+                <View style={s.nameField}>
+                  <FormField
+                    label="Last Name"
+                    autoCapitalize="words"
+                    value={lastName}
+                    placeholder="Last"
+                    onChangeText={setLastName}
+                  />
+                </View>
+              </View>
 
-            {/* MAIN GENDER OPTIONS */}
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              {(["M", "F", "NB"] as GenderOption[]).map((option) => {
-                const isSelected = genderOption === option;
-                return (
-                  <TouchableOpacity
-                    key={option}
-                    onPress={() => setGenderOption(option)}
-                    activeOpacity={0.95}
-                    style={{
-                      flex: 1,
-                      paddingVertical: 12,
-                      paddingHorizontal: 8,
-                      borderRadius: 8,
-                      borderWidth: 1,
-                      borderColor: isSelected ? ACCENT : "#333",
-                      backgroundColor: isSelected ? ACCENT : DARK_BG,
-                      opacity: 1,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      minHeight: 50,
-                    }}
+              {/* Gender Section */}
+              <View style={s.fieldWrap}>
+                <Text style={p.label}>Gender (optional)</Text>
+                <View style={s.genderRow}>
+                  {(["M", "F", "NB"] as GenderOption[]).map((option) => {
+                    const isSelected = genderOption === option;
+                    return (
+                      <TouchableOpacity
+                        key={option}
+                        onPress={() => setGenderOption(option)}
+                        activeOpacity={0.7}
+                        style={[
+                          s.genderButton,
+                          isSelected && s.genderButtonSelected,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            s.genderText,
+                            isSelected && s.genderTextSelected,
+                          ]}
+                        >
+                          {option === "M"
+                            ? "Male"
+                            : option === "F"
+                              ? "Female"
+                              : "Non-binary"}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <TouchableOpacity
+                  onPress={() => setGenderOption("PNTS")}
+                  activeOpacity={0.7}
+                  style={[
+                    s.genderButton,
+                    s.genderOptionFull,
+                    genderOption === "PNTS" && s.genderButtonSelected,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      s.genderText,
+                      genderOption === "PNTS" && s.genderTextSelected,
+                    ]}
                   >
-                    <Text
-                      style={{
-                        color: isSelected ? "#121212" : GREY_TEXT,
-                        fontSize: 14,
-                        fontWeight: isSelected ? "600" : "500",
-                        textAlign: "center",
-                        lineHeight: 20,
-                      }}
-                    >
-                      {option === "M"
-                        ? "Male"
-                        : option === "F"
-                        ? "Female"
-                        : "Non-binary"}
-                    </Text>
+                    Prefer not to say
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <FormField
+                label="Password"
+                ref={passwordRef}
+                isPassword
+                value={password}
+                placeholder="••••••••"
+                onChangeText={setPassword}
+                returnKeyType="next"
+                onSubmitEditing={() => confirmPasswordRef.current?.focus()}
+              />
+
+              <FormField
+                label="Confirm Password"
+                ref={confirmPasswordRef}
+                isPassword
+                value={confirmPassword}
+                placeholder="••••••••"
+                onChangeText={setConfirmPassword}
+                returnKeyType="done"
+                onSubmitEditing={onSignUpPress}
+              />
+
+              {/* TOS Checkbox */}
+              <TouchableOpacity
+                onPress={() => setTosAccepted(!tosAccepted)}
+                activeOpacity={0.7}
+                style={s.tosContainer}
+              >
+                <View style={[s.checkbox, tosAccepted && s.checkboxChecked]}>
+                  {tosAccepted && <Text style={s.checkboxText}>✓</Text>}
+                </View>
+                <Text style={s.tosText}>
+                  I agree to the{" "}
+                  <Text style={s.tosLink} onPress={openTOS}>
+                    Terms of Service
+                  </Text>
+                  .
+                </Text>
+              </TouchableOpacity>
+
+              {/* CTA Button */}
+              <TouchableOpacity
+                onPress={onSignUpPress}
+                activeOpacity={0.7}
+                disabled={!tosAccepted || loading}
+                style={[s.cta, (!tosAccepted || loading) && s.ctaDisabled]}
+              >
+                {loading ? (
+                  <ActivityIndicator color={palette.bg} size="small" />
+                ) : (
+                  <Text style={s.ctaLabel}>Continue</Text>
+                )}
+              </TouchableOpacity>
+
+              {/* Login link */}
+              <View style={s.footer}>
+                <Text style={s.footerText}>Already have an account?</Text>
+                <Link href="/(auth)/Login" asChild>
+                  <TouchableOpacity>
+                    <Text style={s.linkText}>Sign in</Text>
                   </TouchableOpacity>
-                );
-              })}
+                </Link>
+              </View>
             </View>
-
-            {/* PREFER NOT TO SAY */}
-            <TouchableOpacity
-              onPress={() => setGenderOption("PNTS")}
-              activeOpacity={0.95}
-              style={{
-                marginTop: 8,
-                padding: 12,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: genderOption === "PNTS" ? ACCENT : "#333",
-                backgroundColor: genderOption === "PNTS" ? ACCENT : DARK_BG,
-                opacity: 1,
-                alignItems: "center",
-              }}
-            >
-              <Text
-                style={{
-                  color: genderOption === "PNTS" ? "#121212" : GREY_TEXT,
-                  fontSize: 14,
-                  fontWeight: genderOption === "PNTS" ? "600" : "400",
-                }}
-              >
-                Prefer not to say
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Password */}
-          <View style={{ marginBottom: 16 }}>
-            <Text
-              style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}
-            >
-              Password
-            </Text>
-            <View style={{ position: "relative" }}>
-              {showPassword ? (
-                <TextInput
-                  ref={passwordRef}
-                  value={password}
-                  placeholder="Create a password"
-                  placeholderTextColor="#666"
-                  secureTextEntry={false}
-                  onChangeText={setPassword}
-                  style={[inputStyle, { paddingRight: 48 }]}
-                />
-              ) : (
-                <TextInput
-                  ref={passwordRef}
-                  value={password}
-                  placeholder="Create a password"
-                  placeholderTextColor="#666"
-                  secureTextEntry={true}
-                  onChangeText={setPassword}
-                  style={[inputStyle, { paddingRight: 48 }]}
-                />
-              )}
-              <TouchableOpacity
-                onPress={() => {
-                  setShowPassword((v) => !v);
-                  setTimeout(() => passwordRef.current?.focus(), 50);
-                }}
-                activeOpacity={1}
-                style={{
-                  position: "absolute",
-                  right: 14,
-                  top: 0,
-                  bottom: 0,
-                  justifyContent: "center",
-                }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                {showPassword
-                  ? <EyeOff size={20} color="#a0a0a0" />
-                  : <Eye size={20} color="#a0a0a0" />
-                }
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Confirm Password */}
-          <View style={{ marginBottom: 24 }}>
-            <Text
-              style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}
-            >
-              Confirm Password
-            </Text>
-            <View style={{ position: "relative" }}>
-              {showConfirmPassword ? (
-                <TextInput
-                  ref={confirmPasswordRef}
-                  value={confirmPassword}
-                  placeholder="Re-enter your password"
-                  placeholderTextColor="#666"
-                  secureTextEntry={false}
-                  onChangeText={setConfirmPassword}
-                  style={[
-                    inputStyle,
-                    { paddingRight: 48 },
-                    confirmPassword.length > 0 && password !== confirmPassword
-                      ? { borderColor: "#ff4444" }
-                      : {},
-                  ]}
-                />
-              ) : (
-                <TextInput
-                  ref={confirmPasswordRef}
-                  value={confirmPassword}
-                  placeholder="Re-enter your password"
-                  placeholderTextColor="#666"
-                  secureTextEntry={true}
-                  onChangeText={setConfirmPassword}
-                  style={[
-                    inputStyle,
-                    { paddingRight: 48 },
-                    confirmPassword.length > 0 && password !== confirmPassword
-                      ? { borderColor: "#ff4444" }
-                      : {},
-                  ]}
-                />
-              )}
-              <TouchableOpacity
-                onPress={() => {
-                  setShowConfirmPassword((v) => !v);
-                  setTimeout(() => confirmPasswordRef.current?.focus(), 50);
-                }}
-                activeOpacity={1}
-                style={{
-                  position: "absolute",
-                  right: 14,
-                  top: 0,
-                  bottom: 0,
-                  justifyContent: "center",
-                }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                {showConfirmPassword
-                  ? <EyeOff size={20} color="#a0a0a0" />
-                  : <Eye size={20} color="#a0a0a0" />
-                }
-              </TouchableOpacity>
-            </View>
-            {confirmPassword.length > 0 && password !== confirmPassword && (
-              <Text style={{ color: "#ff7d7d", fontSize: 12, marginTop: 6 }}>
-                Passwords do not match
-              </Text>
-            )}
-          </View>
-
-          {/* --- TOS Checkbox --- */}
-          <View
-            style={{
-              marginBottom: 24,
-              flexDirection: "row",
-              alignItems: "flex-start",
-            }}
-          >
-            <TouchableOpacity
-              onPress={toggleTosAccepted}
-              activeOpacity={1}
-              style={{
-                width: 24,
-                height: 24,
-                borderRadius: 6,
-                borderWidth: 2,
-                borderColor: tosAccepted ? ACCENT : "#666",
-                backgroundColor: tosAccepted
-                  ? ACCENT
-                  : "transparent",
-                marginRight: 12,
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: tosAccepted }}
-            >
-              {tosAccepted && (
-                <Text
-                  style={{
-                    color: "#ffffff",
-                    fontSize: 18,
-                    lineHeight: 18,
-                    fontWeight: "800",
-                  }}
-                >
-                  ✓
-                </Text>
-              )}
-            </TouchableOpacity>
-
-            <View style={{ flex: 1 }}>
-              <Text
-                style={{
-                  color: "#a0a0a0",
-                  fontSize: 14,
-                  lineHeight: 20,
-                }}
-              >
-                I have read and agree to the{" "}
-                <Text
-                  style={{
-                    color: ACCENT,
-                    textDecorationLine: "underline",
-                  }}
-                  onPress={openTOS}
-                >
-                  Terms of Service
-                </Text>
-                .
-              </Text>
-            </View>
-          </View>
-
-          {/* --- Continue Button --- */}
-          <TouchableOpacity
-            onPress={onSignUpPress}
-            disabled={!tosAccepted || loading}
-            style={{
-              backgroundColor: tosAccepted ? ACCENT : "#1e1e1e",
-              padding: 16,
-              borderRadius: 8,
-              borderWidth: 1,
-              borderColor: tosAccepted ? ACCENT : "#333",
-              opacity: loading ? 0.7 : 1,
-              shadowColor: tosAccepted ? ACCENT : "transparent",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: tosAccepted ? 0.3 : 0,
-              shadowRadius: tosAccepted ? 4 : 0,
-              elevation: tosAccepted ? 3 : 0,
-            }}
-          >
-            <Text
-              style={{
-                color: tosAccepted ? "#121212" : "#777",
-                textAlign: "center",
-                fontWeight: "600",
-                fontSize: 16,
-              }}
-            >
-              {loading ? "Creating account..." : "Continue"}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Login link */}
-          <View
-            style={{
-              flexDirection: "row",
-              marginTop: 24,
-              justifyContent: "center",
-              gap: 5,
-            }}
-          >
-            <Text style={{ color: "#a0a0a0" }}>
-              Already have an account?
-            </Text>
-            <Link href="/(auth)/Login" asChild>
-              <TouchableOpacity>
-                <Text
-                  style={{ color: ACCENT, fontWeight: "500" }}
-                >
-                  Sign in
-                </Text>
-              </TouchableOpacity>
-            </Link>
-          </View>
+          </ScrollView>
         </View>
-      </ScrollView>
+      </TouchableWithoutFeedback>
 
       {/* --- TOS Overlay --- */}
       <TOSOverlay
         visible={showTOS}
         onClose={() => setShowTOS(false)}
-        onAccept={handleTOSAccept}
+        onAccept={() => {
+          setTosAccepted(true);
+          setShowTOS(false);
+        }}
       />
 
       {/* --- Verification Modal --- */}
-      <Modal
-        visible={showVerification}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowVerification(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={{ flex: 1 }}
-        >
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: "rgba(0,0,0,0.95)",
-              justifyContent: "center",
-              padding: 20,
-            }}
-          >
-            <View
-              style={{
-                backgroundColor: "#1e1e1e",
-                borderRadius: 10,
-                padding: 24,
-                borderWidth: 1,
-                borderColor: "#333",
-              }}
-            >
-              <Text
-                style={{
-                  color: "white",
-                  fontSize: 20,
-                  fontWeight: "600",
-                  marginBottom: 16,
-                  textAlign: "center",
-                }}
-              >
-                Verify Your Email
-              </Text>
-
-              <Text
-                style={{
-                  color: "#a0a0a0",
-                  marginBottom: 24,
-                  textAlign: "center",
-                }}
-              >
-                We sent a verification code to{"\n"}
-                <Text style={{ fontWeight: "500" }}>{emailAddress}</Text>
-              </Text>
-
-              <TextInput
-                autoFocus
-                value={verificationCode}
-                onChangeText={(t) => {
-                  setVerificationCode(t);
-                  if (verifyError) setVerifyError("");
-                }}
-                placeholder="Enter 6-digit code"
-                placeholderTextColor="#666"
-                style={{
-                  backgroundColor: "#2a2a2a",
-                  color: "white",
-                  padding: 16,
-                  borderRadius: 8,
-                  marginBottom: 12,
-                  fontSize: 18,
-                  textAlign: "center",
-                  borderWidth: 1,
-                  borderColor: verifyError ? "#ff4444" : "#333",
-                }}
-                keyboardType="number-pad"
-                textContentType="oneTimeCode"
-                maxLength={6}
-              />
-
-              {verifyError ? (
-                <Text
-                  style={{
-                    color: verifyError.startsWith("Code resent")
-                      ? "#4CAF50"
-                      : "#ff7d7d",
-                    textAlign: "center",
-                    fontSize: 13,
-                    marginBottom: 16,
-                  }}
-                >
-                  {verifyError}
-                </Text>
-              ) : (
-                <View style={{ marginBottom: 16 }} />
-              )}
-
-              <TouchableOpacity
-                onPress={onVerifyPress}
-                disabled={verifying}
-                style={{
-                  backgroundColor: ACCENT,
-                  padding: 16,
-                  borderRadius: 8,
-                  marginBottom: 12,
-                  opacity: verifying ? 0.7 : 1,
-                }}
-              >
-                <Text
-                  style={{
-                    color: "#121212",
-                    textAlign: "center",
-                    fontWeight: "600",
-                    fontSize: 16,
-                  }}
-                >
-                  {verifying ? "Verifying..." : "Verify Email"}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={onResendPress}
-                disabled={resending}
-                style={{ padding: 10 }}
-              >
-                <Text
-                  style={{
-                    color: resending ? "#666" : ACCENT,
-                    textAlign: "center",
-                    fontSize: 14,
-                  }}
-                >
-                  {resending ? "Resending..." : "Resend code"}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => {
-                  setShowVerification(false);
-                  setVerificationCode("");
-                  setVerifyError("");
-                }}
-                style={{ padding: 10 }}
-              >
-                <Text
-                  style={{
-                    color: "#666",
-                    textAlign: "center",
-                    fontSize: 14,
-                  }}
-                >
-                  Go Back
-                </Text>
-              </TouchableOpacity>
-            </View>
+      <Modal visible={showVerification} transparent animationType="fade">
+        <View style={s.modalOverlay}>
+          <View style={s.modalContent}>
+            <Text style={s.modalTitle}>Verify Email</Text>
+            <Text style={s.modalSubtitle}>
+              Enter code sent to {emailAddress}
+            </Text>
+            <TextInput
+              autoFocus
+              value={verificationCode}
+              onChangeText={setVerificationCode}
+              placeholder="123456"
+              style={s.modalInput}
+              keyboardType="number-pad"
+              maxLength={6}
+            />
+            {verifyError ? (
+              <Text style={s.modalError}>{verifyError}</Text>
+            ) : null}
+            <TouchableOpacity onPress={onVerifyPress} style={s.cta}>
+              <Text style={s.ctaLabel}>Verify</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={onResendPress} style={s.resendButton}>
+              <Text style={s.resendText}>Resend Code</Text>
+            </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </Modal>
     </KeyboardAvoidingView>
   );
 }
 
-const inputStyle = {
-  backgroundColor: "#1e1e1e",
-  color: "#ffffff",
-  padding: 14,
-  borderRadius: 8,
-  borderWidth: 1,
-  borderColor: "#333",
-  fontSize: 16,
-};
+// ─────────────────────────────────────────────
+//  STYLES
+// ─────────────────────────────────────────────
+
+const s = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: palette.bg,
+  },
+  mainContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: SPACING.md * SCALE,
+    paddingBottom: SPACING.lg * SCALE,
+    justifyContent: "center",
+  },
+  header: {
+    alignItems: "center",
+    marginTop: SPACING.xl * SCALE,
+    marginBottom: SPACING.md * SCALE,
+  },
+  brandTitle: {
+    color: palette.ink,
+    fontSize: 32 * SCALE,
+    fontWeight: "800",
+  },
+  errorContainer: {
+    backgroundColor: "#2a0e0e",
+    padding: SPACING.sm * SCALE,
+    borderRadius: BORDER_RADIUS.sm,
+    marginBottom: SPACING.md * SCALE,
+    borderWidth: 1,
+    borderColor: "#4a1e1e",
+  },
+  errorText: {
+    color: "#ff7d7d",
+    textAlign: "center",
+  },
+  formArea: {
+    width: "100%",
+  },
+  nameRow: {
+    flexDirection: "row",
+    gap: SPACING.sm * SCALE,
+  },
+  nameField: {
+    flex: 1,
+  },
+  fieldWrap: {
+    marginBottom: SPACING.md * SCALE,
+  },
+  genderRow: {
+    flexDirection: "row",
+    gap: SPACING.xs * SCALE,
+    marginBottom: SPACING.xs * SCALE,
+  },
+  genderButton: {
+    flex: 1,
+    paddingVertical: SPACING.sm * SCALE,
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: palette.rim,
+    backgroundColor: palette.surface,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 50 * SCALE,
+  },
+  genderButtonSelected: {
+    borderColor: palette.accent,
+    backgroundColor: palette.accent,
+  },
+  genderText: {
+    color: palette.muted,
+    fontSize: 14 * SCALE,
+    fontWeight: "500",
+  },
+  genderTextSelected: {
+    color: palette.bg,
+    fontWeight: "600",
+  },
+  genderOptionFull: {
+    marginTop: 0,
+  },
+  tosContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: SPACING.lg * SCALE,
+  },
+  checkbox: {
+    width: 24 * SCALE,
+    height: 24 * SCALE,
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 2,
+    borderColor: palette.ghost,
+    marginRight: SPACING.sm * SCALE,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  checkboxChecked: {
+    backgroundColor: palette.accent,
+    borderColor: palette.accent,
+  },
+  checkboxText: {
+    color: palette.bg,
+    fontSize: 16 * SCALE,
+    fontWeight: "800",
+  },
+  tosText: {
+    color: palette.muted,
+    fontSize: 14 * SCALE,
+    flex: 1,
+  },
+  tosLink: {
+    color: palette.accent,
+    textDecorationLine: "underline",
+  },
+  cta: {
+    backgroundColor: palette.accent,
+    height: 60 * SCALE,
+    borderRadius: BORDER_RADIUS.md,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: SPACING.md * SCALE,
+  },
+  ctaDisabled: {
+    opacity: 0.5,
+    backgroundColor: palette.surface,
+    borderColor: palette.rim,
+  },
+  ctaLabel: {
+    color: palette.bg,
+    fontSize: 18 * SCALE,
+    fontWeight: "700",
+  },
+  footer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginBottom: SPACING.md * SCALE,
+  },
+  footerText: {
+    color: palette.muted,
+    fontSize: 16 * SCALE,
+    marginRight: SPACING.xs * SCALE,
+  },
+  linkText: {
+    color: palette.accent,
+    fontWeight: "600",
+    fontSize: 16 * SCALE,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.85)",
+    justifyContent: "center",
+    padding: SPACING.md * SCALE,
+  },
+  modalContent: {
+    backgroundColor: palette.surface,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.lg * SCALE,
+    borderWidth: 1,
+    borderColor: palette.rim,
+  },
+  modalTitle: {
+    color: palette.ink,
+    fontSize: 24 * SCALE,
+    fontWeight: "700",
+    textAlign: "center",
+    marginBottom: SPACING.sm * SCALE,
+  },
+  modalSubtitle: {
+    color: palette.muted,
+    textAlign: "center",
+    marginBottom: SPACING.lg * SCALE,
+  },
+  modalInput: {
+    backgroundColor: palette.bg,
+    color: palette.ink,
+    padding: SPACING.md * SCALE,
+    borderRadius: BORDER_RADIUS.sm,
+    fontSize: 18 * SCALE,
+    textAlign: "center",
+    marginBottom: SPACING.sm * SCALE,
+    borderWidth: 1,
+    borderColor: palette.rim,
+  },
+  modalError: {
+    color: "#ff7d7d",
+    textAlign: "center",
+    marginBottom: SPACING.sm * SCALE,
+  },
+  resendButton: {
+    padding: SPACING.sm * SCALE,
+  },
+  resendText: {
+    color: palette.accent,
+    textAlign: "center",
+  },
+});

@@ -3,8 +3,8 @@
 //  UI: Minimalist, floating elements on dark bg
 // ─────────────────────────────────────────────
 
-import { useSignIn } from "@clerk/clerk-expo";
 import { ACCENT } from "@/constants/Colors";
+import { useSignIn } from "@clerk/clerk-expo";
 import { Link, useRouter } from "expo-router";
 import React from "react";
 import {
@@ -68,10 +68,10 @@ function FieldLabel({ children }: { children: string }) {
   return <Text style={p.label}>{children}</Text>;
 }
 
-function StyledInput({
-  isPassword = false,
-  ...props
-}: TextInputProps & { isPassword?: boolean }) {
+const StyledInput = React.forwardRef<
+  TextInput,
+  TextInputProps & { isPassword?: boolean }
+>(({ isPassword = false, ...props }, ref) => {
   const [focused, setFocused] = React.useState(false);
   // State to manage password visibility
   const [isPasswordVisible, setIsPasswordVisible] = React.useState(false);
@@ -79,6 +79,7 @@ function StyledInput({
   return (
     <View style={[p.inputContainer, focused && p.inputFocused]}>
       <TextInput
+        ref={ref}
         placeholderTextColor={palette.ghost}
         onFocus={(e) => {
           setFocused(true);
@@ -110,20 +111,23 @@ function StyledInput({
       )}
     </View>
   );
-}
+});
 
-function FormField({
-  label,
-  isPassword,
-  ...rest
-}: TextInputProps & { label: string; isPassword?: boolean }) {
+StyledInput.displayName = "StyledInput";
+
+const FormField = React.forwardRef<
+  TextInput,
+  TextInputProps & { label: string; isPassword?: boolean }
+>(({ label, isPassword, ...rest }, ref) => {
   return (
     <View style={p.fieldWrap}>
       <FieldLabel>{label}</FieldLabel>
-      <StyledInput isPassword={isPassword} {...rest} />
+      <StyledInput ref={ref} isPassword={isPassword} {...rest} />
     </View>
   );
-}
+});
+
+FormField.displayName = "FormField";
 
 const p = StyleSheet.create({
   label: {
