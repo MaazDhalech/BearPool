@@ -1,4 +1,5 @@
 // app/_layout.tsx
+import { ACCENT } from "@/constants/Colors";
 import RideFeedbackModal from "@/components/RideFeedbackModal";
 import "@/global.css";
 import { config } from "@/gluestack-ui.config";
@@ -618,7 +619,7 @@ const forceUpdateStyles = StyleSheet.create({
     marginBottom: 24,
   },
   button: {
-    backgroundColor: "#3a7bd5",
+    backgroundColor: ACCENT,
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 40,

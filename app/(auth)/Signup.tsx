@@ -1,4 +1,5 @@
 import TOSOverlay from "@/components/TOSOverlay";
+import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
 import { useSignUp } from "@clerk/clerk-expo";
 import { Link, useRouter } from "expo-router";
@@ -30,7 +31,6 @@ const isBerkeleyEmail = (email: string) => {
   return email.toLowerCase().endsWith("@berkeley.edu");
 };
 
-const PRIMARY_BLUE = "#3a7bd5";
 const DARK_BG = "#1e1e1e";
 const GREY_TEXT = "#a0a0a0";
 
@@ -434,8 +434,8 @@ export default function Signup() {
                       paddingHorizontal: 8,
                       borderRadius: 8,
                       borderWidth: 1,
-                      borderColor: isSelected ? PRIMARY_BLUE : "#333",
-                      backgroundColor: isSelected ? PRIMARY_BLUE : DARK_BG,
+                      borderColor: isSelected ? ACCENT : "#333",
+                      backgroundColor: isSelected ? ACCENT : DARK_BG,
                       opacity: 1,
                       alignItems: "center",
                       justifyContent: "center",
@@ -444,7 +444,7 @@ export default function Signup() {
                   >
                     <Text
                       style={{
-                        color: isSelected ? "#ffffff" : GREY_TEXT,
+                        color: isSelected ? "#121212" : GREY_TEXT,
                         fontSize: 14,
                         fontWeight: isSelected ? "600" : "500",
                         textAlign: "center",
@@ -471,15 +471,15 @@ export default function Signup() {
                 padding: 12,
                 borderRadius: 8,
                 borderWidth: 1,
-                borderColor: genderOption === "PNTS" ? PRIMARY_BLUE : "#333",
-                backgroundColor: genderOption === "PNTS" ? PRIMARY_BLUE : DARK_BG,
+                borderColor: genderOption === "PNTS" ? ACCENT : "#333",
+                backgroundColor: genderOption === "PNTS" ? ACCENT : DARK_BG,
                 opacity: 1,
                 alignItems: "center",
               }}
             >
               <Text
                 style={{
-                  color: genderOption === "PNTS" ? "#ffffff" : GREY_TEXT,
+                  color: genderOption === "PNTS" ? "#121212" : GREY_TEXT,
                   fontSize: 14,
                   fontWeight: genderOption === "PNTS" ? "600" : "400",
                 }}
@@ -626,9 +626,9 @@ export default function Signup() {
                 height: 24,
                 borderRadius: 6,
                 borderWidth: 2,
-                borderColor: tosAccepted ? PRIMARY_BLUE : "#666",
+                borderColor: tosAccepted ? ACCENT : "#666",
                 backgroundColor: tosAccepted
-                  ? PRIMARY_BLUE
+                  ? ACCENT
                   : "transparent",
                 marginRight: 12,
                 justifyContent: "center",
@@ -662,7 +662,7 @@ export default function Signup() {
                 I have read and agree to the{" "}
                 <Text
                   style={{
-                    color: PRIMARY_BLUE,
+                    color: ACCENT,
                     textDecorationLine: "underline",
                   }}
                   onPress={openTOS}
@@ -679,13 +679,13 @@ export default function Signup() {
             onPress={onSignUpPress}
             disabled={!tosAccepted || loading}
             style={{
-              backgroundColor: tosAccepted ? PRIMARY_BLUE : "#1e1e1e",
+              backgroundColor: tosAccepted ? ACCENT : "#1e1e1e",
               padding: 16,
               borderRadius: 8,
               borderWidth: 1,
-              borderColor: tosAccepted ? PRIMARY_BLUE : "#333",
+              borderColor: tosAccepted ? ACCENT : "#333",
               opacity: loading ? 0.7 : 1,
-              shadowColor: tosAccepted ? PRIMARY_BLUE : "transparent",
+              shadowColor: tosAccepted ? ACCENT : "transparent",
               shadowOffset: { width: 0, height: 2 },
               shadowOpacity: tosAccepted ? 0.3 : 0,
               shadowRadius: tosAccepted ? 4 : 0,
@@ -694,7 +694,7 @@ export default function Signup() {
           >
             <Text
               style={{
-                color: tosAccepted ? "white" : "#777",
+                color: tosAccepted ? "#121212" : "#777",
                 textAlign: "center",
                 fontWeight: "600",
                 fontSize: 16,
@@ -719,7 +719,7 @@ export default function Signup() {
             <Link href="/(auth)/Login" asChild>
               <TouchableOpacity>
                 <Text
-                  style={{ color: PRIMARY_BLUE, fontWeight: "500" }}
+                  style={{ color: ACCENT, fontWeight: "500" }}
                 >
                   Sign in
                 </Text>
@@ -833,7 +833,7 @@ export default function Signup() {
                 onPress={onVerifyPress}
                 disabled={verifying}
                 style={{
-                  backgroundColor: PRIMARY_BLUE,
+                  backgroundColor: ACCENT,
                   padding: 16,
                   borderRadius: 8,
                   marginBottom: 12,
@@ -842,7 +842,7 @@ export default function Signup() {
               >
                 <Text
                   style={{
-                    color: "white",
+                    color: "#121212",
                     textAlign: "center",
                     fontWeight: "600",
                     fontSize: 16,
@@ -859,7 +859,7 @@ export default function Signup() {
               >
                 <Text
                   style={{
-                    color: resending ? "#666" : PRIMARY_BLUE,
+                    color: resending ? "#666" : ACCENT,
                     textAlign: "center",
                     fontSize: 14,
                   }}

@@ -1,4 +1,5 @@
 // components/TOSOverlay.tsx
+import { ACCENT } from "@/constants/Colors";
 import {
   Box,
   Button,
@@ -270,8 +271,8 @@ export default function TOSOverlay({ visible, onClose, onAccept }: Props) {
             <Button variant="outline" onPress={onClose} flex={1} borderColor="#666">
               <Text color="#a0a0a0">Cancel</Text>
             </Button>
-            <Button bg="#3a7bd5" onPress={onAccept} flex={1} isDisabled={loading || !!error}>
-              <Text color="white" fontWeight="$semibold">
+            <Button bg={ACCENT} onPress={onAccept} flex={1} isDisabled={loading || !!error}>
+              <Text color="#121212" fontWeight="$semibold">
                 I Agree
               </Text>
             </Button>
@@ -280,8 +281,8 @@ export default function TOSOverlay({ visible, onClose, onAccept }: Props) {
           <Box mt="$3" alignItems="center">
             <Link href="/(stack)/settings/terms-of-service" asChild>
               <TouchableOpacity style={{ flexDirection: "row", alignItems: "center" }}>
-                <ExternalLink size={16} color="#3a7bd5" />
-                <Text color="#3a7bd5" ml="$1" fontSize="$sm">
+                <ExternalLink size={16} color={ACCENT} />
+                <Text color={ACCENT} ml="$1" fontSize="$sm">
                   Open full version
                 </Text>
               </TouchableOpacity>

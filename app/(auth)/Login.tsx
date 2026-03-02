@@ -1,4 +1,5 @@
 import { useSignIn } from "@clerk/clerk-expo";
+import { ACCENT } from "@/constants/Colors";
 import { Link, useRouter } from "expo-router";
 import React from "react";
 import {
@@ -127,11 +128,11 @@ export default function Login() {
               activeOpacity={0.8}
               disabled={loading}
               style={{
-                backgroundColor: "#3a7bd5",
+                backgroundColor: ACCENT,
                 padding: 16,
                 borderRadius: 8,
                 opacity: loading ? 0.7 : 1,
-                shadowColor: "#3a7bd5",
+                shadowColor: ACCENT,
                 shadowOffset: { width: 0, height: 2 },
                 shadowOpacity: 0.3,
                 shadowRadius: 4,
@@ -140,7 +141,7 @@ export default function Login() {
             >
               <Text
                 style={{
-                  color: "white",
+                  color: "#121212",
                   textAlign: "center",
                   fontWeight: "600",
                   fontSize: 16,
@@ -156,7 +157,7 @@ export default function Login() {
             >
               <Text
                 style={{
-                  color: "#3a7bd5",
+                  color: ACCENT,
                   textAlign: "center",
                   fontWeight: "500",
                   fontSize: 14,
@@ -177,7 +178,7 @@ export default function Login() {
               <Text style={{ color: "#a0a0a0" }}>Don't have an account?</Text>
               <Link href="/(auth)/Signup" asChild>
                 <TouchableOpacity>
-                  <Text style={{ color: "#3a7bd5", fontWeight: "500" }}>
+                  <Text style={{ color: ACCENT, fontWeight: "500" }}>
                     Sign up
                   </Text>
                 </TouchableOpacity>

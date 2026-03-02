@@ -1,3 +1,4 @@
+import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
 import { useAuth } from "@clerk/clerk-expo";
 import {
@@ -320,7 +321,7 @@ export default function UserProfileScreen() {
             Profile
           </Heading>
           <TouchableOpacity onPress={() => router.back()}>
-            <Text color="#3a7bd5" fontSize="$lg">Done</Text>
+            <Text color={ACCENT} fontSize="$lg">Done</Text>
           </TouchableOpacity>
         </HStack>
 

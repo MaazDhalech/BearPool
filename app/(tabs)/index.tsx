@@ -1,3 +1,4 @@
+import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
 import { useAuth } from "@clerk/clerk-expo";
 import {
@@ -803,7 +804,7 @@ export default function HomeScreen() {
           borderWidth={1}
           borderColor="#333"
         >
-          <Text color="#3a7bd5" fontSize="$2xl" fontWeight="$bold">
+          <Text color={ACCENT} fontSize="$2xl" fontWeight="$bold">
             ⇅
           </Text>
         </Pressable>
@@ -827,7 +828,7 @@ export default function HomeScreen() {
           borderColor="#333"
           backgroundColor={showRestrictedRides ? "#1e3a5f" : "#1e1e1e"}
         >
-          <Text color="#3a7bd5" fontWeight="$semibold">
+          <Text color={ACCENT} fontWeight="$semibold">
             {showRestrictedRides ? "Hide" : "Show"}
           </Text>
         </Pressable>
@@ -996,14 +997,14 @@ export default function HomeScreen() {
                     })}
                     {ride.memberIds.length > 5 && (
                       <Box
-                        bg="#3a7bd5"
+                        bg={ACCENT}
                         borderRadius="$full"
                         w="$6"
                         h="$6"
                         alignItems="center"
                         justifyContent="center"
                       >
-                        <Text color="white" fontSize="$xs">
+                        <Text color="#121212" fontSize="$xs">
                           +{ride.memberIds.length - 5}
                         </Text>
                       </Box>
@@ -1027,7 +1028,7 @@ export default function HomeScreen() {
                 {/* View Details on the left */}
                 <Button
                   size="sm"
-                  backgroundColor={isLocked || !canJoin ? "#444" : "#3a7bd5"}
+                  backgroundColor={isLocked || !canJoin ? "#444" : ACCENT}
                   onPress={() =>
                     router.push({
                       pathname: "/(stack)/ride/[id]",
@@ -1035,7 +1036,7 @@ export default function HomeScreen() {
                     })
                   }
                 >
-                  <Text color={isLocked || !canJoin ? "#888" : "white"}>
+                  <Text color={isLocked || !canJoin ? "#888" : "#121212"}>
                     View Details
                   </Text>
                 </Button>
@@ -1062,7 +1063,7 @@ export default function HomeScreen() {
                   <Button
                     size="sm"
                     variant="outline"
-                    borderColor="#3a7bd5"
+                    borderColor={ACCENT}
                     backgroundColor="transparent"
                     onPress={() =>
                       router.push({
@@ -1071,7 +1072,7 @@ export default function HomeScreen() {
                       })
                     }
                   >
-                    <Text color="#3a7bd5">View Chat</Text>
+                    <Text color={ACCENT}>View Chat</Text>
                   </Button>
                 ) : !canJoin ? (
                   <Button
@@ -1089,12 +1090,12 @@ export default function HomeScreen() {
                   <Button
                     size="sm"
                     variant="outline"
-                    borderColor="#3a7bd5"
+                    borderColor={ACCENT}
                     backgroundColor="transparent"
                     onPress={() => handleJoinRide(ride.id)}
                     isDisabled={ride.seats <= 0}
                   >
-                    <Text color={ride.seats <= 0 ? "#888" : "#3a7bd5"}>
+                    <Text color={ride.seats <= 0 ? "#888" : ACCENT}>
                       {ride.seats <= 0 ? "Full" : "Join Group"}
                     </Text>
                   </Button>

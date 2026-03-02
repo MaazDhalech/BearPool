@@ -1,3 +1,4 @@
+import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
 import { useAuth } from "@clerk/clerk-expo";
 import {
@@ -172,14 +173,14 @@ export default function ChatsScreen() {
           ))}
           {grp.members.length > 5 && (
             <Box
-              bg="#3a7bd5"
+              bg={ACCENT}
               borderRadius="$full"
               w="$6"
               h="$6"
               alignItems="center"
               justifyContent="center"
             >
-              <Text color="white" fontSize="$xs">
+              <Text color="#121212" fontSize="$xs">
                 +{grp.members.length - 5}
               </Text>
             </Box>
@@ -208,7 +209,7 @@ export default function ChatsScreen() {
 
         {loading ? (
           <HStack justifyContent="center" mt="$10">
-            <Spinner size="large" color="#3a7bd5" />
+            <Spinner size="large" color={ACCENT} />
           </HStack>
         ) : error ? (
           <Text color="#ff6666" textAlign="center">

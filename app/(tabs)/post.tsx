@@ -1,3 +1,4 @@
+import { ACCENT } from "@/constants/Colors";
 import { NotificationOptInModal } from "@/components/NotificationOptInModal";
 import { useNotificationOptInPrompt } from "@/hooks/useNotificationOptInPrompt";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -478,7 +479,7 @@ export default function PostScreen() {
               <Text style={{ color: "#ffffff", fontSize: 16 }}>
                 {formattedDate}
               </Text>
-              <Text style={{ color: "#3a7bd5", fontSize: 16 }}>📅</Text>
+              <Text style={{ color: ACCENT, fontSize: 16 }}>📅</Text>
             </TouchableOpacity>
           </View>
 
@@ -503,7 +504,7 @@ export default function PostScreen() {
               <Text style={{ color: "#ffffff", fontSize: 16 }}>
                 {formattedTime}
               </Text>
-              <Text style={{ color: "#3a7bd5", fontSize: 16 }}>🕒</Text>
+              <Text style={{ color: ACCENT, fontSize: 16 }}>🕒</Text>
             </TouchableOpacity>
           </View>
 
@@ -526,13 +527,13 @@ export default function PostScreen() {
                 }
                 disabled={getSafeSeats() <= 1}
                 style={{
-                  backgroundColor: getSafeSeats() <= 1 ? "#333" : "#3a7bd5",
+                  backgroundColor: getSafeSeats() <= 1 ? "#333" : ACCENT,
                   padding: 12,
                   borderRadius: 8,
                   marginRight: 16,
                 }}
               >
-                <Text style={{ color: "white", fontSize: 18 }}>-</Text>
+                <Text style={{ color: getSafeSeats() <= 1 ? "#a0a0a0" : "#121212", fontSize: 18 }}>-</Text>
               </TouchableOpacity>
 
               <Text
@@ -552,13 +553,13 @@ export default function PostScreen() {
                 }
                 disabled={getSafeSeats() >= 5}
                 style={{
-                  backgroundColor: getSafeSeats() >= 5 ? "#333" : "#3a7bd5",
+                  backgroundColor: getSafeSeats() >= 5 ? "#333" : ACCENT,
                   padding: 12,
                   borderRadius: 8,
                   marginLeft: 16,
                 }}
               >
-                <Text style={{ color: "white", fontSize: 18 }}>+</Text>
+                <Text style={{ color: getSafeSeats() >= 5 ? "#a0a0a0" : "#121212", fontSize: 18 }}>+</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -584,22 +585,23 @@ export default function PostScreen() {
                 <TouchableOpacity
                   key={option.value}
                   onPress={() => setGenderPref(option.value)}
+                  activeOpacity={0.8}
                   style={{
                     backgroundColor:
-                      genderPref === option.value ? "#3a7bd5" : "#1e1e1e",
+                      genderPref === option.value ? ACCENT : "#1e1e1e",
                     paddingVertical: 12,
                     paddingHorizontal: 16,
                     borderRadius: 8,
                     borderWidth: 1,
                     borderColor:
-                      genderPref === option.value ? "#3a7bd5" : "#333",
+                      genderPref === option.value ? ACCENT : "#333",
                     marginBottom: 8,
                     width: allowedGenderPrefOptions.length > 1 ? "48%" : "100%",
                   }}
                 >
                   <Text
                     style={{
-                      color: genderPref === option.value ? "white" : "#a0a0a0",
+                      color: genderPref === option.value ? "#121212" : "#a0a0a0",
                       textAlign: "center",
                       fontSize: 14,
                     }}
@@ -687,11 +689,11 @@ export default function PostScreen() {
             activeOpacity={0.8}
             disabled={loading}
             style={{
-              backgroundColor: "#3a7bd5",
+              backgroundColor: ACCENT,
               padding: 16,
               borderRadius: 8,
               opacity: loading ? 0.7 : 1,
-              shadowColor: "#3a7bd5",
+              shadowColor: ACCENT,
               shadowOffset: { width: 0, height: 2 },
               shadowOpacity: 0.3,
               shadowRadius: 4,
@@ -700,7 +702,7 @@ export default function PostScreen() {
           >
             <Text
               style={{
-                color: "white",
+                color: "#121212",
                 textAlign: "center",
                 fontWeight: "600",
                 fontSize: 16,
@@ -802,12 +804,12 @@ export default function PostScreen() {
                       paddingVertical: 14,
                       borderRadius: 8,
                       borderWidth: 1,
-                      borderColor: "#3a7bd5",
+                      borderColor: ACCENT,
                     }}
                   >
                     <Text
                       style={{
-                        color: "#3a7bd5",
+                        color: ACCENT,
                         textAlign: "center",
                         fontWeight: "600",
                         fontSize: 16,
@@ -822,14 +824,14 @@ export default function PostScreen() {
                     onPress={handleGoToChat}
                     style={{
                       flex: 1,
-                      backgroundColor: "#3a7bd5",
+                      backgroundColor: ACCENT,
                       paddingVertical: 14,
                       borderRadius: 8,
                     }}
                   >
                     <Text
                       style={{
-                        color: "white",
+                        color: "#121212",
                         textAlign: "center",
                         fontWeight: "600",
                         fontSize: 16,
@@ -920,7 +922,7 @@ export default function PostScreen() {
                   <TouchableOpacity
                     onPress={() => setShowDatePicker(false)}
                     style={{
-                      backgroundColor: "#3a7bd5",
+                      backgroundColor: ACCENT,
                       paddingVertical: 12,
                       paddingHorizontal: 32,
                       borderRadius: 8,
@@ -930,7 +932,7 @@ export default function PostScreen() {
                   >
                     <Text
                       style={{
-                        color: "white",
+                        color: "#121212",
                         textAlign: "center",
                         fontSize: 16,
                         fontWeight: "600",
@@ -1001,7 +1003,7 @@ export default function PostScreen() {
                   <TouchableOpacity
                     onPress={() => setShowTimePicker(false)}
                     style={{
-                      backgroundColor: "#3a7bd5",
+                      backgroundColor: ACCENT,
                       paddingVertical: 12,
                       paddingHorizontal: 32,
                       borderRadius: 8,
@@ -1011,7 +1013,7 @@ export default function PostScreen() {
                   >
                     <Text
                       style={{
-                        color: "white",
+                        color: "#121212",
                         textAlign: "center",
                         fontSize: 16,
                         fontWeight: "600",
@@ -1068,7 +1070,7 @@ export default function PostScreen() {
                       onPress={() => setShowDatePicker(false)}
                       style={{ padding: 8 }}
                     >
-                      <Text style={{ color: "#3a7bd5", fontSize: 16 }}>
+                      <Text style={{ color: ACCENT, fontSize: 16 }}>
                         Cancel
                       </Text>
                     </TouchableOpacity>
@@ -1087,7 +1089,7 @@ export default function PostScreen() {
                     >
                       <Text
                         style={{
-                          color: "#3a7bd5",
+                          color: ACCENT,
                           fontSize: 16,
                           fontWeight: "600",
                         }}
@@ -1159,7 +1161,7 @@ export default function PostScreen() {
                       onPress={() => setShowTimePicker(false)}
                       style={{ padding: 8 }}
                     >
-                      <Text style={{ color: "#3a7bd5", fontSize: 16 }}>
+                      <Text style={{ color: ACCENT, fontSize: 16 }}>
                         Cancel
                       </Text>
                     </TouchableOpacity>
@@ -1178,7 +1180,7 @@ export default function PostScreen() {
                     >
                       <Text
                         style={{
-                          color: "#3a7bd5",
+                          color: ACCENT,
                           fontSize: 16,
                           fontWeight: "600",
                         }}

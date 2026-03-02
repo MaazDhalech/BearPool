@@ -1,26 +1,48 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * BearPool theme colors.
+ * To change the accent color, update ACCENT here — all files import it from this constant.
  */
 
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
+export const ACCENT = "#FFBE5C";        // Primary accent
+export const ACCENT_DIM = "#E8B55A";    // Slightly darker for pressed/shadow states
+
+export const BG_PRIMARY = "#121212";  // Main screen background
+export const BG_SURFACE = "#1e1e1e";  // Cards, inputs, modals
+export const BG_RAISED = "#2a2a2a";   // Elevated surfaces, secondary cards
+
+export const TEXT_PRIMARY = "#ffffff";
+export const TEXT_SECONDARY = "#a0a0a0";
+export const TEXT_MUTED = "#666666";
+
+export const BORDER = "#333333";
+export const BORDER_SUBTLE = "#222222";
+
+export const ERROR = "#ff4444";
+export const ERROR_TEXT = "#ff7d7d";
+export const ERROR_BG = "#2a0e0e";
+export const ERROR_BORDER = "#4a1e1e";
+
+export const SUCCESS = "#4CAF50";
+
+// Legacy export shape (used by Expo template hooks)
+const tintColorDark = ACCENT;
+const tintColorLight = ACCENT;
 
 export const Colors = {
   light: {
-    text: '#11181C',
-    background: '#fff',
+    text: "#11181C",
+    background: "#fff",
     tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
+    icon: "#687076",
+    tabIconDefault: "#687076",
     tabIconSelected: tintColorLight,
   },
   dark: {
-    text: '#ECEDEE',
-    background: '#151718',
-    tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
-    tabIconSelected: tintColorDark,
+    text: TEXT_PRIMARY,
+    background: BG_PRIMARY,
+    tint: ACCENT,
+    icon: TEXT_SECONDARY,
+    tabIconDefault: TEXT_SECONDARY,
+    tabIconSelected: ACCENT,
   },
 };

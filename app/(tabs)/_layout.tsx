@@ -2,6 +2,7 @@ import { HapticTab } from "@/components/HapticTab";
 import { IconSymbol } from "@/components/ui/IconSymbol";
 import TabBarBackground from "@/components/ui/TabBarBackground";
 import { useColorScheme } from "@/hooks/useColorScheme";
+import { ACCENT } from "@/constants/Colors";
 import { useAuth } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs, useRouter } from "expo-router";
@@ -28,8 +29,8 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#FFFFFF',
-        tabBarInactiveTintColor: '#888888',
+        tabBarActiveTintColor: ACCENT,
+        tabBarInactiveTintColor: '#666666',
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarBackground: TabBarBackground,

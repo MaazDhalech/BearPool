@@ -1,3 +1,4 @@
+import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
 import { useAuth } from "@clerk/clerk-expo";
 import {
@@ -264,7 +265,7 @@ export default function ReportUserScreen() {
                         marginBottom: 8,
                         borderWidth: 1,
                         borderColor:
-                          form.reason === reason ? "#3a7bd5" : "#333",
+                          form.reason === reason ? ACCENT : "#333",
                         backgroundColor:
                           form.reason === reason ? "#1a3a7b" : "#1e1e1e",
                       }}
@@ -324,11 +325,11 @@ export default function ReportUserScreen() {
               </VStack>
 
               <Button
-                bg="#3a7bd5"
+                bg={ACCENT}
                 onPress={handleSubmit}
                 isDisabled={!canSubmit || submitting}
               >
-                <Text color="white" fontWeight="$semibold">
+                <Text color="#121212" fontWeight="$semibold">
                   {submitting ? "Submitting..." : "Submit Report"}
                 </Text>
               </Button>

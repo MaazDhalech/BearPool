@@ -1,4 +1,5 @@
 import React from "react";
+import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
 import { useUser } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
@@ -209,7 +210,7 @@ export default function RideChatScreen() {
 
   const interpolatedColor = animatedValue.interpolate({
     inputRange: [0, 1],
-    outputRange: ["#3a7bd5", "#122a58"],
+    outputRange: [ACCENT, "#2a2a2a"],
   });
 
   const filterContent = (
@@ -793,13 +794,13 @@ export default function RideChatScreen() {
                           pl={isCurrentUser ? "$4" : "$0"}
                           pr="$4"
                           py="$2"
-                          bg={isCurrentUser ? "#3a7bd5" : "#1e1e1e"}
+                          bg={isCurrentUser ? ACCENT : "#1e1e1e"}
                           borderTopLeftRadius={isCurrentUser ? "$xl" : "$sm"}
                           borderTopRightRadius={isCurrentUser ? "$sm" : "$xl"}
                           borderBottomLeftRadius="$xl"
                           borderBottomRightRadius="$xl"
                         >
-                          <Text color={isCurrentUser ? "#ffffff" : "#e0e0e0"} fontSize="$sm" pl={isCurrentUser ? "$0" : "$2"}>
+                          <Text color={isCurrentUser ? "#121212" : "#e0e0e0"} fontSize="$sm" pl={isCurrentUser ? "$0" : "$2"}>
                             {msg.text}
                           </Text>
                         </Box>

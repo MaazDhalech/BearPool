@@ -1,3 +1,4 @@
+import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
 import { useAuth } from "@clerk/clerk-expo";
 import {
@@ -664,7 +665,7 @@ const performAccountDeletion = async () => {
                 value={notifEnabled}
                 onValueChange={handleNotifToggle}
                 disabled={savingNotif}
-                trackColor={{ false: "#444", true: "#3a7bd5" }}
+                trackColor={{ false: "#444", true: ACCENT }}
                 thumbColor="#ffffff"
               />
             </RNView>
@@ -674,8 +675,8 @@ const performAccountDeletion = async () => {
                 <Text color="#ff9800" fontSize="$sm" mb="$3">
                   Notifications are blocked in your device settings.
                 </Text>
-                <Button size="sm" bg="#3a7bd5" onPress={() => Linking.openSettings()}>
-                  <ButtonText color="white">Open Device Settings</ButtonText>
+                <Button size="sm" bg={ACCENT} onPress={() => Linking.openSettings()}>
+                  <ButtonText color="#121212">Open Device Settings</ButtonText>
                 </Button>
               </RNView>
             )}

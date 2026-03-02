@@ -1,3 +1,4 @@
+import { ACCENT } from "@/constants/Colors";
 import { Ionicons } from "@expo/vector-icons";
 import { useMemo } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
@@ -106,11 +107,11 @@ export const NotificationOptInModal = ({
               style={{
                 paddingVertical: 10,
                 paddingHorizontal: 16,
-                backgroundColor: "#3a7bd5",
+                backgroundColor: ACCENT,
                 borderRadius: 10,
               }}
             >
-              <Text style={{ color: "#ffffff", fontSize: 14, fontWeight: "700" }}>
+              <Text style={{ color: "#121212", fontSize: 14, fontWeight: "700" }}>
                 {primaryLabel}
               </Text>
             </Pressable>

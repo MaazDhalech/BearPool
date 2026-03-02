@@ -1,3 +1,4 @@
+import { ACCENT } from "@/constants/Colors";
 import { NotificationOptInModal } from "@/components/NotificationOptInModal";
 import { useNotificationOptInPrompt } from "@/hooks/useNotificationOptInPrompt";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -272,8 +273,8 @@ export default function RideDetailsPage() {
         <Text fontSize="$lg" color="$red500">
           Ride not found.
         </Text>
-        <Button mt="$4" onPress={() => router.back()} bg="#3a7bd5">
-          <Text color="white">Go Back</Text>
+        <Button mt="$4" onPress={() => router.back()} bg={ACCENT}>
+          <Text color="#121212">Go Back</Text>
         </Button>
       </Box>
     );
@@ -371,7 +372,7 @@ export default function RideDetailsPage() {
             {alreadyJoined ? (
               <Button
                 size="md"
-                backgroundColor="#3a7bd5"
+                backgroundColor={ACCENT}
                 onPress={() =>
                   router.push({
                     pathname: "/(stack)/ride/[id]/chat",
@@ -379,11 +380,11 @@ export default function RideDetailsPage() {
                   })
                 }
               >
-                <Text color="white">View Chat</Text>
+                <Text color="#121212">View Chat</Text>
               </Button>
             ) : (
-              <Button size="md" backgroundColor="#3a7bd5" onPress={handleJoinRide}>
-                <Text color="white">Join Ride</Text>
+              <Button size="md" backgroundColor={ACCENT} onPress={handleJoinRide}>
+                <Text color="#121212">Join Ride</Text>
               </Button>
             )}
             </VStack>

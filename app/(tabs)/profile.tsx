@@ -1,3 +1,4 @@
+import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import {
@@ -295,10 +296,10 @@ export default function ProfileScreen() {
         <Text color="#a0a0a0">Please sign in to view your profile</Text>
         <Button
           mt="$4"
-          bg="#3a7bd5"
+          bg={ACCENT}
           onPress={() => router.push("/(auth)/Login")}
         >
-          <Text color="white">Sign In</Text>
+          <Text color="#121212">Sign In</Text>
         </Button>
       </Box>
     );
@@ -378,7 +379,7 @@ export default function ProfileScreen() {
                   )}
                 </Avatar>
                 {isEditing && (
-                  <Text mt="$2" color="#3a7bd5">
+                  <Text mt="$2" color={ACCENT}>
                     Tap to change photo
                   </Text>
                 )}
@@ -479,7 +480,7 @@ export default function ProfileScreen() {
                             borderRadius: 8,
                             borderWidth: 1,
                             borderColor:
-                              formData.gender === option ? "#3a7bd5" : "#333",
+                              formData.gender === option ? ACCENT : "#333",
                             backgroundColor:
                               formData.gender === option
                                 ? "#1a3a7b"
@@ -515,7 +516,7 @@ export default function ProfileScreen() {
                         borderRadius: 8,
                         borderWidth: 1,
                         borderColor:
-                          formData.gender === null ? "#3a7bd5" : "#333",
+                          formData.gender === null ? ACCENT : "#333",
                         backgroundColor:
                           formData.gender === null ? "#1a3a7b" : "transparent",
                         alignItems: "center",
@@ -577,8 +578,8 @@ export default function ProfileScreen() {
               <VStack space="md" mt="$8" w="100%" pb="$6">
                 {isEditing ? (
                   <>
-                    <Button bg="#3a7bd5" onPress={handleUpdateProfile}>
-                      <Text color="white" fontWeight="$semibold">
+                    <Button bg={ACCENT} onPress={handleUpdateProfile}>
+                      <Text color="#121212" fontWeight="$semibold">
                         Save Changes
                       </Text>
                     </Button>

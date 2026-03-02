@@ -1,4 +1,5 @@
 import { useSignIn } from "@clerk/clerk-expo";
+import { ACCENT } from "@/constants/Colors";
 import { useRouter } from "expo-router";
 import React from "react";
 import {
@@ -154,14 +155,14 @@ const ResetPassword = () => {
                   onPress={handleRequestReset}
                   disabled={loading}
                   style={{
-                    backgroundColor: "#3a7bd5",
+                    backgroundColor: ACCENT,
                     padding: 16,
                     borderRadius: 8,
                     opacity: loading ? 0.7 : 1,
                   }}
                 >
                   <Text style={{ 
-                    color: "white", 
+                    color: "#121212", 
                     textAlign: "center", 
                     fontWeight: "600",
                     fontSize: 16,
@@ -209,7 +210,7 @@ const ResetPassword = () => {
                   onPress={handleVerifyCode}
                   disabled={loading}
                   style={{
-                    backgroundColor: "#3a7bd5",
+                    backgroundColor: ACCENT,
                     padding: 16,
                     borderRadius: 8,
                     opacity: loading ? 0.7 : 1,
@@ -217,7 +218,7 @@ const ResetPassword = () => {
                   }}
                 >
                   <Text style={{ 
-                    color: "white", 
+                    color: "#121212", 
                     textAlign: "center", 
                     fontWeight: "600",
                     fontSize: 16,
@@ -233,7 +234,7 @@ const ResetPassword = () => {
                   }}
                 >
                   <Text style={{ 
-                    color: "#3a7bd5", 
+                    color: ACCENT, 
                     textAlign: "center", 
                     fontWeight: "500",
                     fontSize: 14,
@@ -281,14 +282,14 @@ const ResetPassword = () => {
                   onPress={handleResetPassword}
                   disabled={loading}
                   style={{
-                    backgroundColor: "#3a7bd5",
+                    backgroundColor: ACCENT,
                     padding: 16,
                     borderRadius: 8,
                     opacity: loading ? 0.7 : 1,
                   }}
                 >
                   <Text style={{ 
-                    color: "white", 
+                    color: "#121212", 
                     textAlign: "center", 
                     fontWeight: "600",
                     fontSize: 16,
@@ -307,7 +308,7 @@ const ResetPassword = () => {
               }}
             >
               <Text style={{ 
-                color: "#3a7bd5", 
+                color: ACCENT, 
                 textAlign: "center", 
                 fontWeight: "500",
                 fontSize: 14,
