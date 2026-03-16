@@ -1,11 +1,11 @@
 import { ACCENT } from "@/constants/Colors";
-import { useSignIn } from "@clerk/clerk-expo";
+import { auth } from "@/services/firebaseConfig";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Stack, useRouter } from "expo-router";
+import { sendPasswordResetEmail } from "firebase/auth";
 import React from "react";
 import {
   ActivityIndicator,
-  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -20,7 +20,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // ─────────────────────────────────────────────
-//  DESIGN TOKENS (Imported/Copied from Login)
+//  DESIGN TOKENS
 // ─────────────────────────────────────────────
 const palette = {
   bg: "#121212",
@@ -32,85 +32,47 @@ const palette = {
   ghost: "#545456",
 };
 
-const SPACING = {
-  xs: 8,
-  sm: 16,
-  md: 24,
-  lg: 32,
-  xl: 48,
-};
-
-const BORDER_RADIUS = {
-  sm: 8,
-  md: 12,
-  lg: 16,
-};
-
-// Global Scale Factor (90%)
+const SPACING = { xs: 8, sm: 16, md: 24, lg: 32, xl: 48 };
+const BORDER_RADIUS = { sm: 8, md: 12, lg: 16 };
 const SCALE = 0.9;
 
 // ─────────────────────────────────────────────
-//  PRIMITIVES (Copied from Login.tsx)
+//  PRIMITIVES
 // ─────────────────────────────────────────────
 
 function FieldLabel({ children }: { children: string }) {
   return <Text style={p.label}>{children}</Text>;
 }
 
-const StyledInput = React.forwardRef<
-  TextInput,
-  TextInputProps & { isPassword?: boolean }
->(({ isPassword = false, ...props }, ref) => {
-  const [focused, setFocused] = React.useState(false);
-  const [isPasswordVisible, setIsPasswordVisible] = React.useState(false);
-
-  return (
-    <View style={[p.inputContainer, focused && p.inputFocused]}>
-      <TextInput
-        ref={ref}
-        placeholderTextColor={palette.ghost}
-        onFocus={(e) => {
-          setFocused(true);
-          props.onFocus?.(e);
-        }}
-        onBlur={(e) => {
-          setFocused(false);
-          props.onBlur?.(e);
-        }}
-        secureTextEntry={isPassword && !isPasswordVisible}
-        style={[p.input, props.style]}
-        {...props}
-      />
-      {isPassword && (
-        <TouchableOpacity
-          onPress={() => setIsPasswordVisible(!isPasswordVisible)}
-          style={p.visibilityToggle}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <MaterialCommunityIcons
-            name={isPasswordVisible ? "eye-outline" : "eye-off-outline"}
-            size={22 * SCALE}
-            color={palette.muted}
-          />
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-});
+const StyledInput = React.forwardRef<TextInput, TextInputProps>(
+  (props, ref) => {
+    const [focused, setFocused] = React.useState(false);
+    return (
+      <View style={[p.inputContainer, focused && p.inputFocused]}>
+        <TextInput
+          ref={ref}
+          placeholderTextColor={palette.ghost}
+          onFocus={(e) => { setFocused(true); props.onFocus?.(e); }}
+          onBlur={(e) => { setFocused(false); props.onBlur?.(e); }}
+          style={[p.input, props.style]}
+          {...props}
+        />
+      </View>
+    );
+  },
+);
 
 StyledInput.displayName = "StyledInput";
 
 const FormField = React.forwardRef<
   TextInput,
-  TextInputProps & { label: string; isPassword?: boolean }
->(({ label, isPassword, ...rest }, ref) => {
-  return (
-    <View style={p.fieldWrap}>
-      <FieldLabel>{label}</FieldLabel>
-      <StyledInput ref={ref} isPassword={isPassword} {...rest} />
-    </View>
-  );
-});
+  TextInputProps & { label: string }
+>(({ label, ...rest }, ref) => (
+  <View style={p.fieldWrap}>
+    <FieldLabel>{label}</FieldLabel>
+    <StyledInput ref={ref} {...rest} />
+  </View>
+));
 
 FormField.displayName = "FormField";
 
@@ -132,23 +94,9 @@ const p = StyleSheet.create({
     borderColor: "transparent",
     paddingHorizontal: 16 * SCALE,
   },
-  inputFocused: {
-    borderColor: palette.accent,
-  },
-  input: {
-    color: palette.ink,
-    fontSize: 18 * SCALE,
-    flex: 1,
-    height: "100%",
-  },
-  fieldWrap: {
-    marginBottom: SPACING.md * SCALE,
-  },
-  visibilityToggle: {
-    paddingLeft: 10 * SCALE,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  inputFocused: { borderColor: palette.accent },
+  input: { color: palette.ink, fontSize: 18 * SCALE, flex: 1, height: "100%" },
+  fieldWrap: { marginBottom: SPACING.md * SCALE },
 });
 
 // ─────────────────────────────────────────────
@@ -156,198 +104,119 @@ const p = StyleSheet.create({
 // ─────────────────────────────────────────────
 
 export default function ResetPassword() {
-  const { signIn } = useSignIn();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
   const [email, setEmail] = React.useState("");
-  const [code, setCode] = React.useState("");
-  const [newPassword, setNewPassword] = React.useState("");
   const [loading, setLoading] = React.useState(false);
-  const [activeStep, setActiveStep] = React.useState<
-    "request" | "verify" | "reset"
-  >("request");
+  const [sent, setSent] = React.useState(false);
+  const [error, setError] = React.useState("");
 
-  const handleRequestReset = async () => {
-    if (!email) {
-      Alert.alert("Error", "Please enter your email");
+  const handleSendReset = async () => {
+    if (!email.trim()) {
+      setError("Please enter your email address.");
       return;
     }
     setLoading(true);
+    setError("");
     try {
-      await signIn?.create({
-        strategy: "reset_password_email_code",
-        identifier: email,
-      });
-      setActiveStep("verify");
+      await sendPasswordResetEmail(auth, email.trim());
+      setSent(true);
     } catch (err: any) {
-      Alert.alert(
-        "Error",
-        err.errors?.[0]?.message || "Failed to send reset code",
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyCode = async () => {
-    if (!code) {
-      Alert.alert("Error", "Please enter the verification code");
-      return;
-    }
-    setLoading(true);
-    try {
-      const attempt = await signIn?.attemptFirstFactor({
-        strategy: "reset_password_email_code",
-        code,
-      });
-
-      if (attempt?.status === "needs_new_password") {
-        setActiveStep("reset");
+      const code = err?.code;
+      if (code === "auth/user-not-found" || code === "auth/invalid-email") {
+        // Don't reveal whether email exists — show generic success
+        setSent(true);
+      } else if (code === "auth/too-many-requests") {
+        setError("Too many requests. Please try again later.");
+      } else {
+        setError(err?.message || "Failed to send reset email. Please try again.");
       }
-    } catch (err: any) {
-      Alert.alert(
-        "Error",
-        err.errors?.[0]?.message || "Invalid verification code",
-      );
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleResetPassword = async () => {
-    if (!newPassword) {
-      Alert.alert("Error", "Please enter a new password");
-      return;
-    }
-    setLoading(true);
-    try {
-      await signIn?.resetPassword({
-        password: newPassword,
-      });
-      Alert.alert("Success", "Password reset successfully!");
-      router.replace("/(auth)/Login");
-    } catch (err: any) {
-      Alert.alert(
-        "Error",
-        err.errors?.[0]?.message || "Failed to reset password",
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Helper to get subtitle based on step
-  const getSubtitle = () => {
-    switch (activeStep) {
-      case "request":
-        return "Enter your email to receive a reset code";
-      case "verify":
-        return `Enter code sent to ${email}`;
-      case "reset":
-        return "Create a new password";
-      default:
-        return "";
     }
   };
 
   return (
     <>
-    <Stack.Screen options={{ gestureEnabled: !loading }} />
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={s.root}
-    >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View style={[s.mainContainer, { paddingTop: insets.top }]}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={s.backButton}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <MaterialCommunityIcons name="chevron-left" size={28} color={palette.ink} />
-          </TouchableOpacity>
-          <View style={s.centerContent}>
-          {/* ── Header Area (No Image) ── */}
-          <View style={s.header}>
-            <Text style={s.brandTitle}>Reset Password</Text>
-            <Text style={s.subtitle}>{getSubtitle()}</Text>
-          </View>
-
-          {/* ── Form Area ── */}
-          <View style={s.formArea}>
-            {activeStep === "request" && (
-              <FormField
-                label="Email Address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-                value={email}
-                placeholder="johndoe@berkeley.edu"
-                onChangeText={setEmail}
-                onSubmitEditing={handleRequestReset}
-              />
-            )}
-
-            {activeStep === "verify" && (
-              <FormField
-                label="Verification Code"
-                keyboardType="number-pad"
-                value={code}
-                placeholder="123456"
-                onChangeText={setCode}
-                onSubmitEditing={handleVerifyCode}
-              />
-            )}
-
-            {activeStep === "reset" && (
-              <FormField
-                label="New Password"
-                isPassword
-                value={newPassword}
-                placeholder="••••••••"
-                onChangeText={setNewPassword}
-                onSubmitEditing={handleResetPassword}
-              />
-            )}
-
-            {/* CTA Button */}
+      <Stack.Screen options={{ gestureEnabled: !loading }} />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={s.root}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={[s.mainContainer, { paddingTop: insets.top }]}>
             <TouchableOpacity
-              onPress={
-                activeStep === "request"
-                  ? handleRequestReset
-                  : activeStep === "verify"
-                    ? handleVerifyCode
-                    : handleResetPassword
-              }
-              activeOpacity={0.7}
-              disabled={loading}
-              style={[s.cta, loading && s.ctaDisabled]}
+              onPress={() => router.back()}
+              style={s.backButton}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              {loading ? (
-                <ActivityIndicator color={palette.bg} size="small" />
-              ) : (
-                <Text style={s.ctaLabel}>
-                  {activeStep === "request" && "Send Reset Code"}
-                  {activeStep === "verify" && "Verify Code"}
-                  {activeStep === "reset" && "Reset Password"}
+              <MaterialCommunityIcons name="chevron-left" size={28} color={palette.ink} />
+            </TouchableOpacity>
+
+            <View style={s.centerContent}>
+              <View style={s.header}>
+                <Text style={s.brandTitle}>Reset Password</Text>
+                <Text style={s.subtitle}>
+                  {sent
+                    ? `Check your inbox at ${email}`
+                    : "Enter your Berkeley email to receive a reset link"}
                 </Text>
-              )}
-            </TouchableOpacity>
+              </View>
 
-            {/* Back to Login */}
-            <TouchableOpacity
-              onPress={() => router.replace("/(auth)/Login")}
-              style={s.footerButton}
-              activeOpacity={0.7}
-            >
-              <Text style={s.footerText}>Back to Sign In</Text>
-            </TouchableOpacity>
+              <View style={s.formArea}>
+                {error ? (
+                  <View style={s.errorContainer}>
+                    <Text style={s.errorText}>{error}</Text>
+                  </View>
+                ) : null}
+
+                {sent ? (
+                  <View style={s.successContainer}>
+                    <Text style={s.successText}>
+                      Password reset email sent! Click the link in your email to set a new password.
+                    </Text>
+                  </View>
+                ) : (
+                  <>
+                    <FormField
+                      label="Email Address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      keyboardType="email-address"
+                      value={email}
+                      placeholder="johndoe@berkeley.edu"
+                      onChangeText={setEmail}
+                      onSubmitEditing={handleSendReset}
+                    />
+
+                    <TouchableOpacity
+                      onPress={handleSendReset}
+                      activeOpacity={0.7}
+                      disabled={loading || !email}
+                      style={[s.cta, (loading || !email) && s.ctaDisabled]}
+                    >
+                      {loading ? (
+                        <ActivityIndicator color={palette.bg} size="small" />
+                      ) : (
+                        <Text style={s.ctaLabel}>Send Reset Link</Text>
+                      )}
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                <TouchableOpacity
+                  onPress={() => router.replace("/(auth)/Login")}
+                  style={s.footerButton}
+                  activeOpacity={0.7}
+                >
+                  <Text style={s.footerText}>Back to Sign In</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
-          </View>
-        </View>
-      </TouchableWithoutFeedback>
-    </KeyboardAvoidingView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </>
   );
 }
@@ -357,28 +226,15 @@ export default function ResetPassword() {
 // ─────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: palette.bg,
-  },
+  root: { flex: 1, backgroundColor: palette.bg },
   mainContainer: {
     flex: 1,
     paddingHorizontal: SPACING.md * SCALE,
     paddingBottom: SPACING.md * SCALE,
   },
-  backButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    alignSelf: "flex-start",
-  },
-  centerContent: {
-    flex: 1,
-    justifyContent: "center",
-  },
-  header: {
-    alignItems: "center",
-    marginBottom: SPACING.xl * SCALE,
-  },
+  backButton: { paddingVertical: 8, paddingHorizontal: 4, alignSelf: "flex-start" },
+  centerContent: { flex: 1, justifyContent: "center" },
+  header: { alignItems: "center", marginBottom: SPACING.xl * SCALE },
   brandTitle: {
     color: palette.ink,
     fontSize: 42 * SCALE,
@@ -387,13 +243,30 @@ const s = StyleSheet.create({
   },
   subtitle: {
     color: palette.muted,
-    fontSize: 20 * SCALE,
+    fontSize: 18 * SCALE,
     marginTop: 6 * SCALE,
     textAlign: "center",
+    lineHeight: 24,
   },
-  formArea: {
-    width: "100%",
+  formArea: { width: "100%" },
+  errorContainer: {
+    backgroundColor: "#2a0e0e",
+    padding: SPACING.sm * SCALE,
+    borderRadius: BORDER_RADIUS.sm,
+    marginBottom: SPACING.md * SCALE,
+    borderWidth: 1,
+    borderColor: "#4a1e1e",
   },
+  errorText: { color: "#ff7d7d", textAlign: "center" },
+  successContainer: {
+    backgroundColor: "#0e2a1a",
+    padding: SPACING.md * SCALE,
+    borderRadius: BORDER_RADIUS.md,
+    marginBottom: SPACING.lg * SCALE,
+    borderWidth: 1,
+    borderColor: "#1a4a2e",
+  },
+  successText: { color: "#4caf50", textAlign: "center", lineHeight: 22, fontSize: 15 * SCALE },
   cta: {
     backgroundColor: palette.accent,
     height: 60 * SCALE,
@@ -402,22 +275,8 @@ const s = StyleSheet.create({
     justifyContent: "center",
     marginBottom: SPACING.lg * SCALE,
   },
-  ctaDisabled: {
-    opacity: 0.7,
-  },
-  ctaLabel: {
-    color: palette.bg,
-    fontSize: 20 * SCALE,
-    fontWeight: "700",
-  },
-  footerButton: {
-    alignItems: "center",
-    marginTop: -SPACING.sm * SCALE,
-    marginBottom: SPACING.lg * SCALE,
-  },
-  footerText: {
-    color: palette.accent,
-    fontSize: 16 * SCALE,
-    fontWeight: "500",
-  },
+  ctaDisabled: { opacity: 0.7 },
+  ctaLabel: { color: palette.bg, fontSize: 20 * SCALE, fontWeight: "700" },
+  footerButton: { alignItems: "center", marginTop: -SPACING.sm * SCALE, marginBottom: SPACING.lg * SCALE },
+  footerText: { color: palette.accent, fontSize: 16 * SCALE, fontWeight: "500" },
 });

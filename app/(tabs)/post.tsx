@@ -3,7 +3,7 @@ import { NotificationOptInModal } from "@/components/NotificationOptInModal";
 import { useNotificationOptInPrompt } from "@/hooks/useNotificationOptInPrompt";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { db } from "@/services/firebaseConfig";
-import { useAuth, useUser } from "@clerk/clerk-expo";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import DateTimePicker, {
   DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
@@ -43,8 +43,7 @@ filter.add(["ridehate", "berkeleybully"]);
 const MAX_NOTES_LENGTH = 200;
 
 export default function PostScreen() {
-  const { userId } = useAuth();
-  const { user } = useUser();
+  const { userId } = useFirebaseAuth();
   const router = useRouter();
 
   const [from, setFrom] = useState("");
@@ -275,9 +274,6 @@ export default function PostScreen() {
 
       if (!existing.exists()) {
         await setDoc(userDocRef, {
-          name: user?.fullName || "Unknown",
-          email: user?.primaryEmailAddress?.emailAddress || "Unknown",
-          profileImage: user?.imageUrl || "",
           createdAt: Timestamp.now(),
           ridesHosted: 1,
         });
@@ -406,7 +402,7 @@ export default function PostScreen() {
         pointerEvents="none"
       />
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1, padding: 20, paddingBottom: 120 }}
+        contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 16, paddingVertical: 20, paddingBottom: 120 }}
         keyboardShouldPersistTaps="handled"
       >
         <View style={{ marginTop: 60, marginBottom: 20 }}>
@@ -414,7 +410,7 @@ export default function PostScreen() {
             style={{
               color: "#ffffff",
               fontSize: 28,
-              fontWeight: "600",
+              fontWeight: "700",
               marginBottom: 30,
               textAlign: "left",
             }}

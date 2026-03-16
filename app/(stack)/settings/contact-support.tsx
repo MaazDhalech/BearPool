@@ -1,5 +1,5 @@
 import { db } from "@/services/firebaseConfig";
-import { useAuth } from "@clerk/clerk-expo";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import {
     Box,
     Button,
@@ -29,7 +29,7 @@ import {
 } from "react-native";
 
 export default function ContactSupportScreen() {
-  const { userId: clerkUserId } = useAuth();
+  const { userId } = useFirebaseAuth();
   const router = useRouter();
 
   const [supportForm, setSupportForm] = useState({
@@ -43,11 +43,11 @@ export default function ContactSupportScreen() {
 
   // Fetch user data to pre-fill form
   useEffect(() => {
-    if (!clerkUserId) return;
+    if (!userId) return;
 
     const fetchUserData = async () => {
       try {
-        const userDocRef = doc(db, "users", clerkUserId);
+        const userDocRef = doc(db, "users", userId);
         const userSnap = await getDoc(userDocRef);
 
         if (userSnap.exists()) {
@@ -68,7 +68,7 @@ export default function ContactSupportScreen() {
     };
 
     fetchUserData();
-  }, [clerkUserId]);
+  }, [userId]);
 
   const handleGoBack = () => {
     router.back();
@@ -114,10 +114,10 @@ export default function ContactSupportScreen() {
       const result = await response.json();
 
       if (result.success) {
-        if (clerkUserId) {
+        if (userId) {
           try {
             await addDoc(collection(db, "supportRequests"), {
-              userId: clerkUserId,
+              userId: userId,
               name: supportForm.name,
               email: supportForm.email,
               subject: supportForm.subject,

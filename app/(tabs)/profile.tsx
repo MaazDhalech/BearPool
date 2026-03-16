@@ -1,6 +1,6 @@
 import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
-import { useAuth, useUser } from "@clerk/clerk-expo";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import {
   Avatar,
   AvatarImage,
@@ -35,8 +35,7 @@ const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
 
 export default function ProfileScreen() {
-  const { isLoaded, userId: clerkUserId } = useAuth();
-  const { user } = useUser();
+  const { isLoaded, userId } = useFirebaseAuth();
   const router = useRouter();
 
   const [profileData, setProfileData] = useState<any>(null);
@@ -96,11 +95,11 @@ export default function ProfileScreen() {
 
   // === Load profile data ===
   useEffect(() => {
-    if (!isLoaded || !clerkUserId || !user) return;
+    if (!isLoaded || !userId) return;
 
     const fetchUserData = async () => {
       try {
-        const userDocRef = doc(db, "users", clerkUserId);
+        const userDocRef = doc(db, "users", userId);
         const userSnap = await getDoc(userDocRef);
 
         const firebaseData = userSnap.exists()
@@ -114,7 +113,7 @@ export default function ProfileScreen() {
             }
           : {
               avatar: DEFAULT_AVATAR,
-              username: user.username || "",
+              username: "",
               ridesJoined: 0,
               ridesHosted: 0,
               createdAt: new Date(),
@@ -122,35 +121,40 @@ export default function ProfileScreen() {
               blockedUsers: [],
             };
 
-        setProfileData({
-          clerkData: {
-            email: user.primaryEmailAddress?.emailAddress || "",
-            firstName: user.firstName || "",
-            lastName: user.lastName || "",
-            username: user.username || "",
-          },
-          firebaseData,
-        });
+        setProfileData({ firebaseData });
 
         setFormData({
-          firstName: user.firstName || "",
-          lastName: user.lastName || "",
-          username: firebaseData.username || user.username || "",
+          firstName: firebaseData.first_name || "",
+          lastName: firebaseData.last_name || "",
+          username: firebaseData.username || "",
           gender: firebaseData.gender || null,
         });
       } catch (error) {
         console.error("Error fetching profile:", error);
+        setProfileData({
+          firebaseData: {
+            avatar: DEFAULT_AVATAR,
+            username: "",
+            first_name: "",
+            last_name: "",
+            email: "",
+            ridesJoined: 0,
+            ridesHosted: 0,
+            gender: null,
+            blockedUsers: [],
+          },
+        });
       } finally {
         setLoading(false);
       }
     };
 
     fetchUserData();
-  }, [isLoaded, clerkUserId, user]);
+  }, [isLoaded, userId]);
 
   // === Save profile ===
   const handleUpdateProfile = async () => {
-    if (!clerkUserId || !user) return;
+    if (!userId) return;
 
     const validations = {
       firstName: validateAndCleanText(formData.firstName, "first name"),
@@ -181,15 +185,10 @@ export default function ProfileScreen() {
         gender: formData.gender,
       };
 
-      await user.update({
-        firstName: cleanedData.firstName,
-        lastName: cleanedData.lastName,
-      });
-
       const updatedData = {
         username: cleanedData.username,
         gender: cleanedData.gender,
-        email: user.primaryEmailAddress?.emailAddress || "",
+        email: profileData.firebaseData.email || "",
         first_name: cleanedData.firstName,
         last_name: cleanedData.lastName,
         avatar: profileData.firebaseData.avatar,
@@ -199,12 +198,9 @@ export default function ProfileScreen() {
         blockedUsers: profileData.firebaseData.blockedUsers || [],
       };
 
-      await setDoc(doc(db, "users", clerkUserId), updatedData);
+      await setDoc(doc(db, "users", userId), updatedData);
 
-      setProfileData({
-        clerkData: { ...profileData.clerkData, ...cleanedData },
-        firebaseData: updatedData,
-      });
+      setProfileData({ firebaseData: updatedData });
 
       setFormData(cleanedData);
       setFormErrors({});
@@ -221,7 +217,7 @@ export default function ProfileScreen() {
 
   // === Change avatar ===
   const handleChangeAvatar = async () => {
-    if (!clerkUserId) return;
+    if (!userId) return;
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
       Alert.alert(
@@ -276,7 +272,7 @@ export default function ProfileScreen() {
       return;
     }
 
-    await updateDoc(doc(db, "users", clerkUserId), { avatar: base64 });
+    await updateDoc(doc(db, "users", userId), { avatar: base64 });
     setProfileData((p: any) => ({
       ...p,
       firebaseData: { ...p.firebaseData, avatar: base64 },
@@ -291,29 +287,11 @@ export default function ProfileScreen() {
     );
   }
 
-  if (!user) {
-    return (
-      <Box flex={1} bg="#121212" justifyContent="center" alignItems="center">
-        <Text color="#a0a0a0">Please sign in to view your profile</Text>
-        <Button
-          mt="$4"
-          bg={ACCENT}
-          onPress={() => router.push("/(auth)/Login")}
-        >
-          <Text color="#121212">Sign In</Text>
-        </Button>
-      </Box>
-    );
-  }
-
   const display = {
-    firstName:
-      profileData.firebaseData.first_name || profileData.clerkData.firstName,
-    lastName:
-      profileData.firebaseData.last_name || profileData.clerkData.lastName,
-    username:
-      profileData.firebaseData.username || profileData.clerkData.username,
-    email: profileData.clerkData.email,
+    firstName: profileData.firebaseData.first_name || "",
+    lastName: profileData.firebaseData.last_name || "",
+    username: profileData.firebaseData.username || "",
+    email: profileData.firebaseData.email || "",
     gender: profileData.firebaseData.gender,
     avatar: profileData.firebaseData.avatar,
     ridesJoined: profileData.firebaseData.ridesJoined,

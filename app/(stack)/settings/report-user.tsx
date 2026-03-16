@@ -1,11 +1,12 @@
 import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
-import { useAuth } from "@clerk/clerk-expo";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import {
   Box,
   Button,
   HStack,
   Heading,
+  Icon,
   Input,
   InputField,
   ScrollView,
@@ -41,7 +42,7 @@ const REPORT_REASONS = [
 ];
 
 export default function ReportUserScreen() {
-  const { userId: reporterId } = useAuth();
+  const { userId: reporterId } = useFirebaseAuth();
   const router = useRouter();
   const { userId: targetUserId, rideId } = useLocalSearchParams<{
     userId?: string;
@@ -233,7 +234,7 @@ export default function ReportUserScreen() {
           <Box px="$4" py="$6">
             <HStack alignItems="center" mb="$6" mt="$8">
               <TouchableOpacity onPress={() => router.back()}>
-                <ChevronLeft color="white" size={28} />
+                <Icon as={ChevronLeft} size="xl" color="white" />
               </TouchableOpacity>
               <Heading size="xl" color="white" ml="$3">
                 Report User

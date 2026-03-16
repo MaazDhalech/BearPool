@@ -1,6 +1,6 @@
 import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
-import { useAuth } from "@clerk/clerk-expo";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import {
   Avatar,
   AvatarImage,
@@ -36,7 +36,7 @@ export default function ChatsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { userId } = useAuth();
+  const { userId } = useFirebaseAuth();
   const router = useRouter();
 
   const unsubRidesRef = useRef<(() => void) | null>(null);

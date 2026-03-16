@@ -3,7 +3,7 @@ import { NotificationOptInModal } from "@/components/NotificationOptInModal";
 import { useNotificationOptInPrompt } from "@/hooks/useNotificationOptInPrompt";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { db } from "@/services/firebaseConfig";
-import { useAuth } from "@clerk/clerk-expo";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Box,
@@ -67,7 +67,7 @@ const getRelativeTime = (timestamp: Timestamp) => {
 export default function RideDetailsPage() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
-  const { userId } = useAuth();
+  const { userId } = useFirebaseAuth();
   const insets = useSafeAreaInsets();
 
   const [ride, setRide] = useState<Ride | null>(null);

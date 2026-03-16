@@ -3,21 +3,21 @@
 <plist version="1.0">
 <dict>
 	<key>CLIENT_ID</key>
-	<string>290357677941-uvdt5ap9m0en6uocp87rij5gqfpvj9h2.apps.googleusercontent.com</string>
+	<string>888067452420-h931i412b9d244e27q24at0ehmie2mvr.apps.googleusercontent.com</string>
 	<key>REVERSED_CLIENT_ID</key>
-	<string>com.googleusercontent.apps.290357677941-uvdt5ap9m0en6uocp87rij5gqfpvj9h2</string>
+	<string>com.googleusercontent.apps.888067452420-h931i412b9d244e27q24at0ehmie2mvr</string>
 	<key>API_KEY</key>
-	<string>AIzaSyDUtDON2PqgBF0VVnJo7fU6WZR_xI9Su6I</string>
+	<string>AIzaSyD0Mia5bO0fQYT7Um8BwqSjy5PU85s9yvU</string>
 	<key>GCM_SENDER_ID</key>
-	<string>290357677941</string>
+	<string>888067452420</string>
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
 	<string>com.rebu.bearpool</string>
 	<key>PROJECT_ID</key>
-	<string>bearpool-14bb5</string>
+	<string>testing-bearpool</string>
 	<key>STORAGE_BUCKET</key>
-	<string>bearpool-14bb5.firebasestorage.app</string>
+	<string>testing-bearpool.firebasestorage.app</string>
 	<key>IS_ADS_ENABLED</key>
 	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>
@@ -29,6 +29,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:290357677941:ios:52d26ea837e8b88ac1cd3c</string>
+	<string>1:888067452420:ios:982cccce7684ae345c0f51</string>
 </dict>
 </plist>

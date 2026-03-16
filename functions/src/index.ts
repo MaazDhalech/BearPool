@@ -2,6 +2,7 @@ import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -429,6 +430,30 @@ export const onRideMembersChanged = onDocumentUpdated(
     ]);
   }
 );
+
+/**
+ * Deletes a Firebase Auth account and its Firestore user document.
+ * Called from the app after client-side ride cleanup is complete.
+ */
+export const deleteAccount = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be signed in to delete account.");
+  }
+
+  const uid = request.auth.uid;
+
+  try {
+    await Promise.all([
+      admin.auth().deleteUser(uid),
+      db.collection("users").doc(uid).delete(),
+    ]);
+    logger.info(`Account deleted: ${uid}`);
+    return { success: true };
+  } catch (err) {
+    logger.error(`Failed to delete account for ${uid}`, { error: String(err) });
+    throw new HttpsError("internal", "Failed to delete account.");
+  }
+});
 
 /**
  * Checks Expo push receipts every hour to catch delivery errors that weren't

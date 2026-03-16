@@ -1,6 +1,6 @@
 // components/RideFeedbackModal.tsx
 import { db } from "@/services/firebaseConfig";
-import { useAuth } from "@clerk/clerk-expo";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import {
     Avatar,
     Box,
@@ -23,6 +23,7 @@ import {
     collection,
     doc,
     getDoc,
+    increment,
     serverTimestamp,
     updateDoc,
 } from "firebase/firestore";
@@ -74,7 +75,7 @@ export default function RideFeedbackModal({
   onRateLater,
   onFeedbackSubmit,
 }: FeedbackModalProps) {
-  const { userId: clerkUserId } = useAuth();
+  const { userId } = useFirebaseAuth();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [hostUserData, setHostUserData] = useState<UserData | null>(null);
@@ -101,7 +102,7 @@ export default function RideFeedbackModal({
 
   // Fetch user data and host data when modal opens
   useEffect(() => {
-    if (!visible || !clerkUserId || !rideInfo) {
+    if (!visible || !userId || !rideInfo) {
       setLoading(false);
       return;
     }
@@ -109,7 +110,7 @@ export default function RideFeedbackModal({
     const fetchUserData = async () => {
       try {
         // Fetch current user data
-        const userDocRef = doc(db, "users", clerkUserId);
+        const userDocRef = doc(db, "users", userId);
         const userSnap = await getDoc(userDocRef);
 
         if (userSnap.exists()) {
@@ -147,7 +148,7 @@ export default function RideFeedbackModal({
     };
 
     fetchUserData();
-  }, [visible, clerkUserId, rideInfo]);
+  }, [visible, userId, rideInfo]);
 
   const handleRatingSelect = (
     type: "overall" | "driver" | "communication" | "safety" | "punctuality",
@@ -207,7 +208,7 @@ export default function RideFeedbackModal({
   };
 
   const handleSubmit = async () => {
-    if (!rideInfo || !clerkUserId) return;
+    if (!rideInfo || !userId) return;
 
     // Validate at least overall rating is provided
     if (feedbackForm.rating === 0) {
@@ -277,7 +278,7 @@ export default function RideFeedbackModal({
 **📊 USER INFORMATION**
 • Name: ${userData.name}
 • Email: ${userData.email}
-• User ID: ${clerkUserId}
+• User ID: ${userId}
 
 ---
 
@@ -380,7 +381,7 @@ ${feedbackForm.issueDetails}
         // Save feedback to Firestore for analytics
         try {
           await addDoc(collection(db, "rideFeedback"), {
-            userId: clerkUserId,
+            userId: userId,
             rideId: rideInfo.id,
             from: rideInfo.from,
             to: rideInfo.to,
@@ -422,17 +423,10 @@ ${feedbackForm.issueDetails}
 
           // Update user's last rated ride
           try {
-            await updateDoc(doc(db, "users", clerkUserId), {
+            await updateDoc(doc(db, "users", userId), {
               lastRatedRide: rideInfo.id,
               lastRatedAt: serverTimestamp(),
-              totalRidesRated: await (async () => {
-                const userDoc = await getDoc(doc(db, "users", clerkUserId));
-                if (userDoc.exists()) {
-                  const current = userDoc.data().totalRidesRated || 0;
-                  return current + 1;
-                }
-                return 1;
-              })(),
+              totalRidesRated: increment(1),
             });
           } catch (userUpdateError) {
             console.error(

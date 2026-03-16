@@ -1,7 +1,7 @@
 import React from "react";
 import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
-import { useUser } from "@clerk/clerk-expo";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Avatar,
@@ -84,7 +84,7 @@ type Message = {
 
 export default function RideChatScreen() {
   const { id: rideId } = useLocalSearchParams();
-  const { user } = useUser();
+  const { user } = useFirebaseAuth();
   const isFocused = useIsFocused();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -141,10 +141,10 @@ export default function RideChatScreen() {
 
   const updateReadState = useCallback(
     async (payload: Record<string, any>) => {
-      if (!rideId || !user?.id) return;
+      if (!rideId || !user?.uid) return;
       try {
         await setDoc(
-          doc(db, "rides", String(rideId), "readState", user.id),
+          doc(db, "rides", String(rideId), "readState", user.uid),
           payload,
           { merge: true },
         );
@@ -152,7 +152,7 @@ export default function RideChatScreen() {
         console.error("Failed to update read state", error);
       }
     },
-    [rideId, user?.id],
+    [rideId, user?.uid],
   );
 
   const markReadIfAllowed = useCallback(() => {
@@ -164,7 +164,7 @@ export default function RideChatScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!rideId || !user?.id) return;
+      if (!rideId || !user?.uid) return;
 
       hasLoadedMessagesRef.current = false;
       updateReadState({
@@ -189,7 +189,7 @@ export default function RideChatScreen() {
           activeAt: serverTimestamp(),
         });
       };
-    }, [rideId, updateReadState, user?.id]),
+    }, [rideId, updateReadState, user?.uid]),
   );
 
   const animatePressIn = () => {
@@ -467,7 +467,7 @@ export default function RideChatScreen() {
         }
 
         const isFirstLoad = !hasLoadedMessagesRef.current;
-        const userSentLatest = newestSenderId === user?.id;
+        const userSentLatest = newestSenderId === user?.uid;
         if (isFirstLoad || autoScrollRef.current || userSentLatest) {
           markReadIfAllowed();
           hasLoadedMessagesRef.current = true;
@@ -504,10 +504,10 @@ export default function RideChatScreen() {
     });
 
     return () => unsubscribe();
-  }, [rideId, isFocused, markReadIfAllowed, user?.id]);
+  }, [rideId, isFocused, markReadIfAllowed, user?.uid]);
 
   const handleUserPress = (userId: string) => {
-    if (userId === user?.id) {
+    if (userId === user?.uid) {
       router.push("/(tabs)/profile");
     } else {
       router.push({
@@ -521,7 +521,7 @@ export default function RideChatScreen() {
     try {
       await addDoc(collection(db, "rides", String(rideId), "messages"), {
         text: messageText,
-        senderId: user?.id,
+        senderId: user?.uid,
         senderName: user?.fullName || user?.primaryEmailAddress || "Anonymous",
         avatar: user?.imageUrl || DEFAULT_AVATAR,
         timestamp: serverTimestamp(),
@@ -535,7 +535,7 @@ export default function RideChatScreen() {
 
   const handleSend = async () => {
     const trimmed = input.trim();
-    if (!trimmed || !rideId || !user?.id) return;
+    if (!trimmed || !rideId || !user?.uid) return;
 
     const { filtered, containsProfanity } = filterContent(trimmed);
     if (containsProfanity) {
@@ -698,7 +698,7 @@ export default function RideChatScreen() {
               {messages.map((msg, index) => {
                 const isSystem = msg.system === true;
                 const isArchivedNotice = !!msg.archivedNotice;
-                const isCurrentUser = msg.senderId === user?.id;
+                const isCurrentUser = msg.senderId === user?.uid;
                 const sender = userMap[msg.senderId || ""] || {
                   name: msg.senderName || "Unknown",
                   avatar: msg.avatar || DEFAULT_AVATAR,

@@ -1,6 +1,6 @@
 import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
-import { useAuth, useUser } from "@clerk/clerk-expo";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker, {
   DateTimePickerEvent,
@@ -33,8 +33,7 @@ filter.add(["ridehate", "berkeleybully"]);
 const MAX_NOTES_LENGTH = 200;
 
 export default function EditRideScreen() {
-  const { userId } = useAuth();
-  const { user } = useUser();
+  const { userId } = useFirebaseAuth();
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const insets = useSafeAreaInsets();
@@ -466,7 +465,7 @@ export default function EditRideScreen() {
       <View
         style={{
           paddingTop: insets.top,
-          paddingHorizontal: 20,
+          paddingHorizontal: 16,
           paddingBottom: 16,
           borderBottomWidth: 1,
           borderBottomColor: "#333",
@@ -481,14 +480,14 @@ export default function EditRideScreen() {
           <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
         <Text
-          style={{ color: "#ffffff", fontSize: 20, fontWeight: "600", flex: 1 }}
+          style={{ color: "#ffffff", fontSize: 20, fontWeight: "700", flex: 1 }}
         >
           Edit Ride
         </Text>
       </View>
 
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1, padding: 20, paddingBottom: 120 }}
+        contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 16, paddingVertical: 20, paddingBottom: 120 }}
         keyboardShouldPersistTaps="handled"
       >
         <View style={{ marginBottom: 20 }}>

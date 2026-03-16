@@ -1,6 +1,10 @@
 import { ACCENT } from "@/constants/Colors";
-import { db } from "@/services/firebaseConfig";
-import { useAuth } from "@clerk/clerk-expo";
+import { db, auth } from "@/services/firebaseConfig";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
+import { deleteUser, EmailAuthProvider, GoogleAuthProvider, OAuthProvider, reauthenticateWithCredential, signOut as firebaseSignOut } from "firebase/auth";
+import { GoogleSignin } from "@react-native-google-signin/google-signin";
+import * as AppleAuthentication from "expo-apple-authentication";
+import * as Crypto from "expo-crypto";
 import {
   Avatar,
   AvatarImage,
@@ -57,6 +61,7 @@ import {
   Platform,
   StyleSheet,
   Switch,
+  TextInput,
   TouchableOpacity,
   TouchableWithoutFeedback,
   View as RNView,
@@ -66,7 +71,6 @@ import {
 const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
 
-const BACKEND_URL = Constants.expoConfig?.extra?.backendUrl;
 
 interface BlockedUser {
   id: string;
@@ -138,8 +142,9 @@ const SettingsItem: React.FC<SettingsItemProps> = ({
 );
 
 export default function SettingsScreen() {
-  const { userId: clerkUserId, signOut, isLoaded } = useAuth();
+  const { userId, isLoaded } = useFirebaseAuth();
   const router = useRouter();
+  const currentProvider = auth.currentUser?.providerData[0]?.providerId ?? "password";
 
   const [profileData, setProfileData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -147,6 +152,10 @@ export default function SettingsScreen() {
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
   const [loadingBlockedUsers, setLoadingBlockedUsers] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [showReauthModal, setShowReauthModal] = useState(false);
+  const [reauthPassword, setReauthPassword] = useState("");
+  const [reauthError, setReauthError] = useState("");
+  const [reauthLoading, setReauthLoading] = useState(false);
 
   // Notification settings
   const [showNotifSettings, setShowNotifSettings] = useState(false);
@@ -156,11 +165,11 @@ export default function SettingsScreen() {
 
   // Fetch user data
   useEffect(() => {
-    if (!clerkUserId) return;
+    if (!userId) return;
 
     const fetchUserData = async () => {
       try {
-        const userDocRef = doc(db, "users", clerkUserId);
+        const userDocRef = doc(db, "users", userId);
         const userSnap = await getDoc(userDocRef);
 
         if (userSnap.exists()) {
@@ -180,11 +189,11 @@ export default function SettingsScreen() {
     };
 
     fetchUserData();
-  }, [clerkUserId]);
+  }, [userId]);
 
   // Fetch blocked users data
   const fetchBlockedUsers = async () => {
-    if (!clerkUserId || !profileData?.blockedUsers) return;
+    if (!userId || !profileData?.blockedUsers) return;
 
     setLoadingBlockedUsers(true);
     try {
@@ -228,8 +237,8 @@ export default function SettingsScreen() {
   };
 
   // Unblock a user
-  const handleUnblockUser = async (userId: string, username: string) => {
-    if (!clerkUserId) return;
+  const handleUnblockUser = async (blockedUserId: string, username: string) => {
+    if (!userId) return;
 
     Alert.alert(
       "Unblock User",
@@ -241,19 +250,17 @@ export default function SettingsScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              // Remove user from blockedUsers array
-              await updateDoc(doc(db, "users", clerkUserId), {
-                blockedUsers: arrayRemove(userId),
+              await updateDoc(doc(db, "users", userId), {
+                blockedUsers: arrayRemove(blockedUserId),
               });
 
-              // Update local state
               setBlockedUsers((prev) =>
-                prev.filter((user) => user.id !== userId)
+                prev.filter((user) => user.id !== blockedUserId)
               );
               setProfileData((prev: any) => ({
                 ...prev,
                 blockedUsers:
-                  prev.blockedUsers?.filter((id: string) => id !== userId) ||
+                  prev.blockedUsers?.filter((id: string) => id !== blockedUserId) ||
                   [],
               }));
 
@@ -270,7 +277,7 @@ export default function SettingsScreen() {
 
   // Delete account handler
   const handleDeleteAccount = async () => {
-    if (!clerkUserId) return;
+    if (!userId) return;
 
     Alert.alert(
       "Delete Account",
@@ -331,30 +338,106 @@ const cleanupUserRides = async (userId: string) => {
 };
 
 const performAccountDeletion = async () => {
-  if (!clerkUserId) return;
+  if (!userId) return;
   setDeletingAccount(true);
 
   try {
-    await cleanupUserRides(clerkUserId);
-
-    const response = await fetch(`${BACKEND_URL}/api/delete-account`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: clerkUserId }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || "Failed to delete account");
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      Alert.alert("Error", "Session expired. Please sign in again.");
+      setDeletingAccount(false);
+      return;
     }
 
-    await signOut();
+    await cleanupUserRides(userId);
+    await deleteDoc(doc(db, "users", userId));
+    await deleteUser(currentUser);
+
     router.replace("/(auth)/Login");
     Alert.alert("Deleted", "Your account is gone forever.");
   } catch (error: any) {
-    Alert.alert("Error", error.message || "Something went wrong");
+    if (error?.code === "auth/requires-recent-login") {
+      setShowReauthModal(true);
+    } else {
+      Alert.alert("Error", error.message || "Something went wrong");
+    }
   } finally {
     setDeletingAccount(false);
+  }
+};
+
+const handleReauthAndDelete = async () => {
+  const currentUser = auth.currentUser;
+  if (!currentUser) return;
+
+  const providerId = currentUser.providerData[0]?.providerId;
+
+  if (providerId === "google.com") {
+    // Re-authenticate with Google
+    try {
+      await GoogleSignin.hasPlayServices();
+      await GoogleSignin.signIn();
+      const { idToken } = await GoogleSignin.getTokens();
+      if (!idToken) throw new Error("No ID token from Google");
+      const credential = GoogleAuthProvider.credential(idToken);
+      await reauthenticateWithCredential(currentUser, credential);
+      setShowReauthModal(false);
+      await performAccountDeletion();
+    } catch (error: any) {
+      if (error?.code !== "SIGN_IN_CANCELLED") {
+        Alert.alert("Error", error.message || "Google re-authentication failed.");
+      }
+    }
+    return;
+  }
+
+  if (providerId === "apple.com") {
+    // Re-authenticate with Apple
+    try {
+      const nonce = Crypto.randomUUID().replace(/-/g, "");
+      const hashedNonce = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        nonce
+      );
+      const appleCredential = await AppleAuthentication.signInAsync({
+        requestedScopes: [AppleAuthentication.AppleAuthenticationScope.EMAIL],
+        nonce: hashedNonce,
+      });
+      const provider = new OAuthProvider("apple.com");
+      const credential = provider.credential({
+        idToken: appleCredential.identityToken!,
+        rawNonce: nonce,
+      });
+      await reauthenticateWithCredential(currentUser, credential);
+      setShowReauthModal(false);
+      await performAccountDeletion();
+    } catch (error: any) {
+      if (error?.code !== "ERR_REQUEST_CANCELED") {
+        Alert.alert("Error", error.message || "Apple re-authentication failed.");
+      }
+    }
+    return;
+  }
+
+  // Email/password
+  if (!reauthPassword) return;
+  setReauthLoading(true);
+  setReauthError("");
+  try {
+    const credential = EmailAuthProvider.credential(currentUser.email!, reauthPassword);
+    await reauthenticateWithCredential(currentUser, credential);
+    setShowReauthModal(false);
+    setReauthPassword("");
+    await performAccountDeletion();
+  } catch (error: any) {
+    const code = error?.code;
+    if (code === "auth/wrong-password" || code === "auth/invalid-credential") {
+      setReauthError("Incorrect password. Please try again.");
+    } else {
+      setReauthError(error.message || "Re-authentication failed.");
+    }
+  } finally {
+    setReauthLoading(false);
   }
 };
 
@@ -379,7 +462,7 @@ const performAccountDeletion = async () => {
         style: "destructive",
         onPress: async () => {
           try {
-            await signOut();
+            await firebaseSignOut(auth);
             router.replace("/(auth)/Login");
           } catch (err) {
             console.error("Error signing out:", err);
@@ -407,7 +490,7 @@ const performAccountDeletion = async () => {
   };
 
   const handleNotifToggle = async (value: boolean) => {
-    if (!clerkUserId) return;
+    if (!userId) return;
     setSavingNotif(true);
 
     try {
@@ -453,7 +536,7 @@ const performAccountDeletion = async () => {
           "unknown-device";
 
         await setDoc(
-          doc(db, "users", clerkUserId),
+          doc(db, "users", userId),
           {
             expoPushToken: token.data,
             pushTokens: { [deviceKey]: token.data },
@@ -467,7 +550,7 @@ const performAccountDeletion = async () => {
       } else {
         // Disabling
         await setDoc(
-          doc(db, "users", clerkUserId),
+          doc(db, "users", userId),
           { notifPrefs: { enabled: false } },
           { merge: true }
         );
@@ -716,6 +799,57 @@ const performAccountDeletion = async () => {
             )}
           </RNView>
         </RNModal>
+
+        {/* Re-auth modal for account deletion */}
+        <RNModal
+          visible={showReauthModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => { setShowReauthModal(false); setReauthPassword(""); setReauthError(""); }}
+        >
+          <TouchableWithoutFeedback onPress={() => { setShowReauthModal(false); setReauthPassword(""); setReauthError(""); }}>
+            <RNView style={styles.reauthBackdrop} />
+          </TouchableWithoutFeedback>
+          <RNView style={styles.reauthCentered} pointerEvents="box-none">
+          <RNView style={styles.reauthSheet}>
+            <Text style={styles.reauthTitle}>Confirm Your Identity</Text>
+            <Text style={styles.reauthSubtitle}>
+              {currentProvider === "google.com"
+                ? "Re-sign in with Google to confirm account deletion."
+                : currentProvider === "apple.com"
+                ? "Re-sign in with Apple to confirm account deletion."
+                : "For security, re-enter your password to delete your account."}
+            </Text>
+            {currentProvider === "password" && (
+              <TextInput
+                style={styles.reauthInput}
+                placeholder="Your password"
+                placeholderTextColor="#555"
+                secureTextEntry
+                value={reauthPassword}
+                onChangeText={setReauthPassword}
+                autoFocus
+              />
+            )}
+            {reauthError ? <Text style={styles.reauthError}>{reauthError}</Text> : null}
+            <TouchableOpacity
+              onPress={handleReauthAndDelete}
+              disabled={reauthLoading || (currentProvider === "password" && !reauthPassword)}
+              style={[styles.reauthBtn, (reauthLoading || (currentProvider === "password" && !reauthPassword)) && styles.reauthBtnDisabled]}
+            >
+              <Text style={styles.reauthBtnText}>
+                {reauthLoading
+                  ? "Verifying…"
+                  : currentProvider === "google.com"
+                  ? "Continue with Google"
+                  : currentProvider === "apple.com"
+                  ? "Continue with Apple"
+                  : "Delete My Account"}
+              </Text>
+            </TouchableOpacity>
+          </RNView>
+          </RNView>
+        </RNModal>
       </Box>
     </KeyboardAvoidingView>
   );
@@ -754,5 +888,65 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginTop: 12,
+  },
+  reauthBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.7)",
+  },
+  reauthCentered: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+  },
+  reauthSheet: {
+    backgroundColor: "#1e1e1e",
+    borderRadius: 20,
+    marginHorizontal: 24,
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 28,
+  },
+  reauthTitle: {
+    color: "#ffffff",
+    fontSize: 18,
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+  reauthSubtitle: {
+    color: "#a0a0a0",
+    fontSize: 14,
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  reauthInput: {
+    backgroundColor: "#2a2a2a",
+    borderRadius: 10,
+    height: 50,
+    paddingHorizontal: 16,
+    color: "#ffffff",
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: "#333",
+    marginBottom: 12,
+  },
+  reauthError: {
+    color: "#ff7d7d",
+    fontSize: 13,
+    marginBottom: 12,
+  },
+  reauthBtn: {
+    backgroundColor: "#cc0000",
+    borderRadius: 10,
+    height: 50,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 4,
+  },
+  reauthBtnDisabled: {
+    opacity: 0.5,
+  },
+  reauthBtnText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "700",
   },
 });

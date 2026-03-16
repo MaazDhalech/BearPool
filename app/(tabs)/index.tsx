@@ -1,6 +1,6 @@
 import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
-import { useAuth } from "@clerk/clerk-expo";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import {
   Avatar,
   AvatarImage,
@@ -214,7 +214,7 @@ const hasRideStarted = (ride: Ride): boolean => {
 export default function HomeScreen() {
   const router = useRouter();
   const toast = useToast();
-  const { userId } = useAuth();
+  const { userId } = useFirebaseAuth();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [rides, setRides] = useState<Ride[]>([]);

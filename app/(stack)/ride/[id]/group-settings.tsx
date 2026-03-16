@@ -1,5 +1,5 @@
 import { db } from "@/services/firebaseConfig";
-import { useUser } from "@clerk/clerk-expo";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Avatar,
@@ -45,7 +45,7 @@ type User = {
 
 export default function GroupSettings() {
   const { id: rideId } = useLocalSearchParams();
-  const { user } = useUser();
+  const { user } = useFirebaseAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -129,13 +129,13 @@ export default function GroupSettings() {
 
   // If the ride has no host (e.g. previous host deleted account), promote the current user
   useEffect(() => {
-    if (!ride || !user?.id) return;
+    if (!ride || !user?.uid) return;
     const memberIds: string[] = ride.memberIds ?? [];
-    if (!ride.hostId && memberIds.includes(user.id)) {
-      updateDoc(doc(db, "rides", String(rideId)), { hostId: user.id });
-      setRide((prev: any) => ({ ...prev, hostId: user.id }));
+    if (!ride.hostId && memberIds.includes(user.uid)) {
+      updateDoc(doc(db, "rides", String(rideId)), { hostId: user.uid });
+      setRide((prev: any) => ({ ...prev, hostId: user.uid }));
     }
-  }, [ride?.hostId, user?.id]);
+  }, [ride?.hostId, user?.uid]);
 
   const storeKickRecord = async (
     kickedUserId: string,
@@ -158,7 +158,7 @@ export default function GroupSettings() {
         rideId: String(rideId),
         kickedUserId,
         kickedUserName,
-        kickedBy: user?.id,
+        kickedBy: user?.uid,
         kickedByName: user?.fullName || "Unknown",
         reason,
         timestamp: serverTimestamp(),
@@ -216,7 +216,7 @@ export default function GroupSettings() {
       await updateDoc(rideRef, {
         memberIds: arrayRemove(userToKick.id),
         seats: increment(1),
-        [`kickedBy.${userToKick.id}`]: user?.id ?? null,
+        [`kickedBy.${userToKick.id}`]: user?.uid ?? null,
       });
 
       // Store kick record in the ride's kickLogs subcollection
@@ -337,7 +337,7 @@ export default function GroupSettings() {
       const hostUser = users.find((u) => u.id === ride.hostId);
       const hostName = hostUser?.name || "Unknown";
       const hostEmail =
-        user.primaryEmailAddress?.emailAddress || "Not provided";
+        user?.email || "Not provided";
 
       // Create detailed message using the actual data structure from your ride posting
       const message = `
@@ -345,7 +345,7 @@ RIDE DELETION REPORT
 ================================
 BASIC INFO:
 - Ride ID: ${rideId}
-- Deleted By: ${user.fullName || "Unknown"} (${hostEmail})
+- Deleted By: ${user?.displayName || "Unknown"} (${hostEmail})
 - Deletion Time: ${new Date().toLocaleString()}
 - Deletion Reason: ${reason}
 
@@ -415,9 +415,9 @@ This ride has been permanently deleted from the system.
   };
 
   const handleDeleteRide = async (skipFeedback = false) => {
-    if (!rideId || !user?.id) return;
+    if (!rideId || !user?.uid) return;
 
-    const isHost = user?.id === ride.hostId;
+    const isHost = user?.uid === ride.hostId;
 
     // Only allow host to delete the ride
     if (!isHost) {
@@ -501,10 +501,10 @@ This ride has been permanently deleted from the system.
   };
 
   const handleLeaveGroup = async () => {
-    if (!rideId || !user?.id) return;
+    if (!rideId || !user?.uid) return;
 
-    const isHost = user?.id === ride.hostId;
-    const otherMembers = users.filter((u) => u.id !== user?.id);
+    const isHost = user?.uid === ride.hostId;
+    const otherMembers = users.filter((u) => u.id !== user?.uid);
 
     // If host is trying to leave and there are other members, show assign host options
     if (isHost && otherMembers.length > 0) {
@@ -572,7 +572,7 @@ This ride has been permanently deleted from the system.
               console.log("Current seats before update:", currentSeats);
 
               await updateDoc(rideRef, {
-                memberIds: arrayRemove(user.id),
+                memberIds: arrayRemove(user.uid),
                 seats: increment(1),
               });
 
@@ -592,7 +592,7 @@ This ride has been permanently deleted from the system.
   };
 
   const handleViewProfile = (targetId: string) => {
-    if (targetId === user?.id) {
+    if (targetId === user?.uid) {
       router.push("/(tabs)/profile");
     } else {
       router.push({
@@ -605,8 +605,8 @@ This ride has been permanently deleted from the system.
   if (!ride) return null;
 
   const memberIds: string[] = ride.memberIds ?? [];
-  const isHost = user?.id === ride.hostId || (!ride.hostId && memberIds.includes(user?.id ?? ""));
-  const otherMembers = users.filter((u) => u.id !== user?.id);
+  const isHost = user?.uid === ride.hostId || (!ride.hostId && memberIds.includes(user?.uid ?? ""));
+  const otherMembers = users.filter((u) => u.id !== user?.uid);
   const hostCanLeave = !isHost || otherMembers.length === 0;
 
   return (
@@ -698,7 +698,7 @@ This ride has been permanently deleted from the system.
                     >
                       <Text color="white">View Profile</Text>
                     </Pressable>
-                    {isHost && u.id !== user?.id && (
+                    {isHost && u.id !== user?.uid && (
                       <>
                         <Pressable
                           onPress={() => {
