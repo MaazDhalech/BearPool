@@ -16,10 +16,10 @@ import { Link, Stack, useRouter } from "expo-router";
 import {
   GoogleAuthProvider,
   OAuthProvider,
+  deleteUser,
   linkWithCredential,
   signInWithCredential,
   signInWithEmailAndPassword,
-  signOut,
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import React from "react";
@@ -310,10 +310,10 @@ export default function Login() {
 
       const result = await signInWithCredential(auth, firebaseCredential);
 
-      // Enforce @berkeley.edu on first sign-in (subsequent sign-ins won't expose email)
+      // Enforce @berkeley.edu — delete the created account and reject if not berkeley
       const appleEmail = result.user.email;
-      if (appleEmail && !isBerkeleyEmail(appleEmail)) {
-        await signOut(auth);
+      if (!appleEmail || !isBerkeleyEmail(appleEmail)) {
+        await deleteUser(result.user);
         setError("Only @berkeley.edu Apple accounts are allowed.");
         return;
       }
@@ -328,7 +328,7 @@ export default function Login() {
       if (err.code === "ERR_REQUEST_CANCELED") {
         // user cancelled
       } else {
-        setError(err?.message || "Apple sign-in failed.");
+        setError("Apple sign-in failed. Please try again.");
       }
     } finally {
       setAppleLoading(false);
