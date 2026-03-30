@@ -174,7 +174,8 @@ export default function ResetPassword() {
                 {sent ? (
                   <View style={s.successContainer}>
                     <Text style={s.successText}>
-                      Password reset email sent! Click the link in your email to set a new password.
+                      Password reset email sent! Click the link in your email to set a new password.{"\n\n"}
+                      Can't find it? Check your spam folder.
                     </Text>
                   </View>
                 ) : (
