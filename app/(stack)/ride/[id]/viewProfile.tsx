@@ -1,6 +1,6 @@
 import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
-import { useAuth } from "@clerk/clerk-expo";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import {
     Avatar,
     AvatarImage,
@@ -32,7 +32,7 @@ const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
 
 export default function UserProfileScreen() {
-  const { isLoaded, userId: currentUserId } = useAuth();
+  const { isLoaded, userId: currentUserId } = useFirebaseAuth();
   const router = useRouter();
   const { userId, id: rideIdParam } = useLocalSearchParams();
   

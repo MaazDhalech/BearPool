@@ -1,5 +1,9 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
+# Migration scripts
+scripts/migration/service-account.json
+scripts/migration/.env
+
 # dependencies
 node_modules/
 

@@ -1,5 +1,6 @@
+import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
-import { useAuth } from "@clerk/clerk-expo";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import {
     Box,
     Button,
@@ -28,8 +29,10 @@ import {
     TouchableOpacity,
 } from "react-native";
 
+const MAX_MESSAGE_LENGTH = 1000;
+
 export default function ContactSupportScreen() {
-  const { userId: clerkUserId } = useAuth();
+  const { userId } = useFirebaseAuth();
   const router = useRouter();
 
   const [supportForm, setSupportForm] = useState({
@@ -43,11 +46,11 @@ export default function ContactSupportScreen() {
 
   // Fetch user data to pre-fill form
   useEffect(() => {
-    if (!clerkUserId) return;
+    if (!userId) return;
 
     const fetchUserData = async () => {
       try {
-        const userDocRef = doc(db, "users", clerkUserId);
+        const userDocRef = doc(db, "users", userId);
         const userSnap = await getDoc(userDocRef);
 
         if (userSnap.exists()) {
@@ -68,7 +71,7 @@ export default function ContactSupportScreen() {
     };
 
     fetchUserData();
-  }, [clerkUserId]);
+  }, [userId]);
 
   const handleGoBack = () => {
     router.back();
@@ -114,10 +117,10 @@ export default function ContactSupportScreen() {
       const result = await response.json();
 
       if (result.success) {
-        if (clerkUserId) {
+        if (userId) {
           try {
             await addDoc(collection(db, "supportRequests"), {
-              userId: clerkUserId,
+              userId: userId,
               name: supportForm.name,
               email: supportForm.email,
               subject: supportForm.subject,
@@ -257,21 +260,31 @@ export default function ContactSupportScreen() {
               </VStack>
 
               <VStack space="sm">
-                <Text color="white" fontSize="$sm" fontWeight="$semibold">
-                  Message
-                </Text>
+                <HStack justifyContent="space-between" alignItems="center">
+                  <Text color="white" fontSize="$sm" fontWeight="$semibold">
+                    Message
+                  </Text>
+                  {supportForm.message.length > MAX_MESSAGE_LENGTH * 0.8 && (
+                    <Text
+                      style={{
+                        color: supportForm.message.length >= MAX_MESSAGE_LENGTH ? "#ff5555" : "#a0a0a0",
+                        fontSize: 11,
+                      }}
+                    >
+                      {supportForm.message.length}/{MAX_MESSAGE_LENGTH}
+                    </Text>
+                  )}
+                </HStack>
                 <Textarea bg="#2a2a2a" borderColor="#333" minHeight="$32">
                   <TextareaInput
                     placeholder="Please describe your issue or question in detail. Include any relevant information that might help us assist you better."
                     color="white"
                     placeholderTextColor="#a0a0a0"
                     value={supportForm.message}
-                    onChangeText={(text) =>
-                      setSupportForm((prev) => ({
-                        ...prev,
-                        message: text,
-                      }))
-                    }
+                    onChangeText={(text) => {
+                      if (text.length <= MAX_MESSAGE_LENGTH)
+                        setSupportForm((prev) => ({ ...prev, message: text }));
+                    }}
                     multiline
                     textAlignVertical="top"
                   />
@@ -279,7 +292,7 @@ export default function ContactSupportScreen() {
               </VStack>
 
               <Button
-                bg="#9C27B0"
+                bg={ACCENT}
                 onPress={handleSupportSubmit}
                 disabled={submitingSupport}
                 mt="$4"
@@ -287,11 +300,11 @@ export default function ContactSupportScreen() {
               >
                 {submitingSupport ? (
                   <HStack space="sm" alignItems="center">
-                    <Spinner size="small" color="white" />
-                    <ButtonText color="white">Submitting...</ButtonText>
+                    <Spinner size="small" color="#121212" />
+                    <ButtonText color="#121212">Submitting...</ButtonText>
                   </HStack>
                 ) : (
-                  <ButtonText color="white" fontSize="$md" fontWeight="$semibold">
+                  <ButtonText color="#121212" fontSize="$md" fontWeight="$semibold">
                     Submit Support Request
                   </ButtonText>
                 )}

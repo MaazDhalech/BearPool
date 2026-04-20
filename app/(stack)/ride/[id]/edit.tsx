@@ -1,6 +1,6 @@
 import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
-import { useAuth, useUser } from "@clerk/clerk-expo";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker, {
   DateTimePickerEvent,
@@ -33,8 +33,7 @@ filter.add(["ridehate", "berkeleybully"]);
 const MAX_NOTES_LENGTH = 200;
 
 export default function EditRideScreen() {
-  const { userId } = useAuth();
-  const { user } = useUser();
+  const { userId } = useFirebaseAuth();
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const insets = useSafeAreaInsets();
@@ -315,7 +314,7 @@ export default function EditRideScreen() {
 
     if (!validateContent(from, "From")) return;
     if (!validateContent(to, "To")) return;
-    if (!validateContent(notes, "Additional Notes")) return;
+    if (!validateContent(notes, "Notes")) return;
 
     // Validate that date is in the future
     const now = new Date();
@@ -466,7 +465,7 @@ export default function EditRideScreen() {
       <View
         style={{
           paddingTop: insets.top,
-          paddingHorizontal: 20,
+          paddingHorizontal: 16,
           paddingBottom: 16,
           borderBottomWidth: 1,
           borderBottomColor: "#333",
@@ -481,14 +480,14 @@ export default function EditRideScreen() {
           <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
         <Text
-          style={{ color: "#ffffff", fontSize: 20, fontWeight: "600", flex: 1 }}
+          style={{ color: "#ffffff", fontSize: 20, fontWeight: "700", flex: 1 }}
         >
           Edit Ride
         </Text>
       </View>
 
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1, padding: 20, paddingBottom: 120 }}
+        contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 16, paddingVertical: 20, paddingBottom: 120 }}
         keyboardShouldPersistTaps="handled"
       >
         <View style={{ marginBottom: 20 }}>
@@ -666,7 +665,7 @@ export default function EditRideScreen() {
                   activeOpacity={0.8}
                   style={{
                     backgroundColor:
-                      genderPref === option.value ? ACCENT : "#1e1e1e",
+                      genderPref === option.value ? "#2e2610" : "#1e1e1e",
                     paddingVertical: 12,
                     paddingHorizontal: 16,
                     borderRadius: 8,
@@ -679,9 +678,10 @@ export default function EditRideScreen() {
                 >
                   <Text
                     style={{
-                      color: genderPref === option.value ? "#121212" : "#a0a0a0",
+                      color: genderPref === option.value ? ACCENT : "#a0a0a0",
                       textAlign: "center",
                       fontSize: 14,
+                      fontWeight: genderPref === option.value ? "600" : "400",
                     }}
                   >
                     {option.label}
@@ -694,7 +694,7 @@ export default function EditRideScreen() {
           {/* Notes */}
           <View style={{ marginBottom: 24 }}>
             <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
-              Additional Notes
+              Notes
             </Text>
             <TextInput
               value={notes}
@@ -937,22 +937,13 @@ export default function EditRideScreen() {
                         flexDirection: "row",
                         alignItems: "center",
                         justifyContent: "center",
+                        gap: 8,
                       }}
                     >
-                      <View
-                        style={{
-                          width: 20,
-                          height: 20,
-                          borderRadius: 10,
-                          borderWidth: 2,
-                          borderColor: "white",
-                          borderTopColor: "transparent",
-                        }}
-                      />
+                      <ActivityIndicator size="small" color="white" />
                       <Text
                         style={{
                           color: "white",
-                          marginLeft: 8,
                           fontSize: 16,
                           fontWeight: "600",
                         }}

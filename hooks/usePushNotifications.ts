@@ -1,5 +1,5 @@
 import { db } from "@/services/firebaseConfig";
-import { useAuth } from "@clerk/clerk-expo";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import Constants from "expo-constants";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
@@ -29,7 +29,7 @@ export const usePushNotifications = (options: Options = {}): PushNotificationSta
   const notificationListener = useRef<ReturnType<typeof Notifications.addNotificationReceivedListener> | null>(null);
   const responseListener = useRef<ReturnType<typeof Notifications.addNotificationResponseReceivedListener> | null>(null);
 
-  const { userId } = useAuth();
+  const { userId } = useFirebaseAuth();
 
   const registerForPushNotificationsAsync = useCallback(async () => {
     if (!Device.isDevice) {

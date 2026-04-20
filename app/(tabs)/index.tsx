@@ -1,6 +1,10 @@
 import { ACCENT } from "@/constants/Colors";
+import { TYPE } from "@/constants/Typography";
+import { SPACE } from "@/constants/Spacing";
+import { FadeSlideIn } from "@/components/FadeSlideIn";
+import { SpringPressable } from "@/components/SpringPressable";
 import { db } from "@/services/firebaseConfig";
-import { useAuth } from "@clerk/clerk-expo";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import {
   Avatar,
   AvatarImage,
@@ -33,6 +37,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef, useState } from "react";
 import { AppState, AppStateStatus, Image, RefreshControl, TouchableOpacity, View } from "react-native";
 
@@ -145,38 +150,30 @@ const parseRideDateTime = (dateStr: string, timeStr: string): Date | null => {
 // === Archive checking utilities ===
 const shouldHideRideBasedOnDateTime = (ride: Ride): boolean => {
   try {
-    // Always hide archived rides
-    if (ride.archived) {
-      return true;
-    }
+    if (ride.archived) return true;
 
-    // Parse ride date/time
     const rideDateTime = parseRideDateTime(ride.date, ride.time);
-    if (!rideDateTime) {
-      console.warn(`Could not parse date/time for ride ${ride.id}`);
-      return false;
-    }
+    if (!rideDateTime) return false;
 
-    const now = new Date();
-
-    // Hide if ride date/time is more than 5 days in the past
-    const daysSinceRide = Math.floor(
-      (now.getTime() - rideDateTime.getTime()) / (1000 * 60 * 60 * 24),
-    );
-
-    if (daysSinceRide > 5) {
-      return true;
-    }
-
-    return false;
-  } catch (error) {
-    console.error("Error checking ride date/time:", error);
+    const hoursSinceRide = (new Date().getTime() - rideDateTime.getTime()) / (1000 * 60 * 60);
+    return hoursSinceRide >= 24;
+  } catch {
     return false;
   }
 };
 
-// REMOVED COMPLETELY: shouldArchiveRideBasedOnDateTime function
-// We will NOT check if rides should be archived anymore
+const autoArchiveStartedRides = (rides: Ride[]): void => {
+  const now = new Date();
+  for (const ride of rides) {
+    if (ride.archived || ride.isTest) continue;
+    const rideDateTime = parseRideDateTime(ride.date, ride.time);
+    if (!rideDateTime) continue;
+    const hoursSince = (now.getTime() - rideDateTime.getTime()) / (1000 * 60 * 60);
+    if (hoursSince >= 24) {
+      archiveRide(ride.id);
+    }
+  }
+};
 
 const archiveRide = async (rideId: string): Promise<void> => {
   try {
@@ -214,7 +211,7 @@ const hasRideStarted = (ride: Ride): boolean => {
 export default function HomeScreen() {
   const router = useRouter();
   const toast = useToast();
-  const { userId } = useAuth();
+  const { userId } = useFirebaseAuth();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [rides, setRides] = useState<Ride[]>([]);
@@ -356,8 +353,7 @@ export default function HomeScreen() {
             return processedRide;
           });
 
-          // REMOVED: checkAndArchiveOldRides call
-          // We will NOT automatically archive rides
+          autoArchiveStartedRides(rideData);
 
           // Filter out rides with blocked users
           const filteredRideData = filterRidesWithBlockedUsers(rideData);
@@ -409,8 +405,7 @@ export default function HomeScreen() {
         };
       });
 
-      // REMOVED: checkAndArchiveOldRides call
-      // We will NOT automatically archive rides
+      autoArchiveStartedRides(rideData);
 
       // Filter out rides with blocked users
       const filteredRideData = filterRidesWithBlockedUsers(rideData);
@@ -470,29 +465,6 @@ export default function HomeScreen() {
     await fetchBlockedUsers();
     await fetchRidesManually();
     setRefreshing(false);
-  };
-
-  const [toastMessage, setToastMessage] = useState<{
-    type: string;
-    title: string;
-    description: string;
-  } | null>(null);
-
-  // Simple toast alternative
-  const showToast = (
-    type: "success" | "error" | "warning",
-    title: string,
-    description: string,
-  ) => {
-    console.log(`${type.toUpperCase()}: ${title} - ${description}`);
-
-    // Try the original toast, but fallback if it fails
-    try {
-      setToastMessage({ type, title, description });
-      setTimeout(() => setToastMessage(null), 3000);
-    } catch (error) {
-      console.error("Toast error:", error);
-    }
   };
 
   const showGenderRestrictionToast = (
@@ -596,7 +568,7 @@ export default function HomeScreen() {
               <Text color="white" fontWeight="$bold">
                 Ride Full
               </Text>
-              <Text color="white">No seats available for this ride.</Text>
+              <Text color="white">This ride is full.</Text>
             </Box>
           ),
         });
@@ -675,9 +647,9 @@ export default function HomeScreen() {
         render: () => (
           <Box bg="$green600" px="$4" py="$3" borderRadius="$md">
             <Text color="white" fontWeight="$bold">
-              Joined Ride
+              You're in
             </Text>
-            <Text color="white">You've successfully joined the ride.</Text>
+            <Text color="white">Head to the chat to connect with your group.</Text>
           </Box>
         ),
       });
@@ -698,9 +670,7 @@ export default function HomeScreen() {
             <Text color="white" fontWeight="$bold">
               Join Failed
             </Text>
-            <Text color="white">
-              {String(err) || "Could not join this ride. Try again."}
-            </Text>
+            <Text color="white">Could not join this ride. Please try again.</Text>
           </Box>
         ),
       });
@@ -776,390 +746,354 @@ export default function HomeScreen() {
         style={{ position: "absolute", top: 0, left: 0, right: 0, height: 280 }}
         pointerEvents="none"
       />
-    <ScrollView
-      px="$4"
-      pt="$2"
-      style={{ backgroundColor: "transparent" }}
-      contentContainerStyle={{ paddingBottom: 120 }}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          tintColor="#a0a0a0"
-        />
-      }
-    >
-      <Heading size="xl" color="white" mb="$6" mt="$16">
-        Upcoming Ride Groups
-      </Heading>
-
-      <HStack alignItems="center" space="md" mb="$6">
-        <Input flex={1} size="md" borderColor="#333" backgroundColor="#1e1e1e">
-          <InputField
-            placeholder="Search by location or destination..."
-            placeholderTextColor="#666"
-            color="white"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
+      <ScrollView
+        style={{ backgroundColor: "transparent" }}
+        contentContainerStyle={{ paddingHorizontal: SPACE.lg, paddingBottom: 120 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor="#a0a0a0"
           />
-        </Input>
-        <Pressable
-          onPress={toggleSortOrder}
-          p="$2"
-          bg="#1e1e1e"
-          borderRadius="$md"
-          borderWidth={1}
-          borderColor="#333"
-        >
-          <Text color={ACCENT} fontSize="$2xl" fontWeight="$bold">
-            ⇅
-          </Text>
-        </Pressable>
-      </HStack>
-
-      <HStack
-        alignItems="center"
-        justifyContent="space-between"
-        mb="$4"
-        px="$2"
+        }
       >
-        <Text color="#a0a0a0" fontSize="$sm">
-          Gender-restricted rides
-        </Text>
-        <Pressable
-          onPress={() => setShowRestrictedRides((prev) => !prev)}
-          px="$3"
-          py="$2"
-          borderRadius="$md"
-          borderWidth={1}
-          borderColor="#333"
-          backgroundColor={showRestrictedRides ? "#1e3a5f" : "#1e1e1e"}
-        >
-          <Text color={ACCENT} fontWeight="$semibold">
-            {showRestrictedRides ? "Hide" : "Show"}
+        {/* Title */}
+        <View style={{ marginTop: SPACE["4xl"], marginBottom: SPACE["2xl"] }}>
+          <Text style={{ color: "#ffffff", fontSize: TYPE.size.display, fontWeight: TYPE.weight.bold, lineHeight: TYPE.size.display * TYPE.leading.tight }}>
+            Upcoming{"\n"}Ride Groups
           </Text>
-        </Pressable>
-      </HStack>
+        </View>
 
-      <VStack space="lg" pb="$16">
-        {filteredRides.map((ride) => {
-          // Debug logging to catch any problematic data
-          if (typeof ride !== "object" || ride === null) {
-            console.error("Invalid ride data:", ride);
-            return null;
-          }
-
-          const requiresGender = ride.genderPref !== "N";
-          const missingGender = requiresGender && !userGender;
-          const mismatchedGender =
-            requiresGender && !!userGender && ride.genderPref !== userGender;
-          const isLocked = missingGender || mismatchedGender;
-          const restrictedLabel =
-            ride.genderPref === "M"
-              ? "men"
-              : ride.genderPref === "F"
-                ? "women"
-                : "non-binary riders";
-
-          // Check if ride has started
-          const rideStarted = hasRideStarted(ride);
-          const canJoin = !rideStarted && !ride.archived;
-
-          return (
-            <Box
-              key={ride.id}
-              p="$4"
-              mb="$4"
-              bg={isLocked || !canJoin ? "#2a2a2a" : "#1e1e1e"}
-              borderWidth={1}
-              borderColor={isLocked || !canJoin ? "#444" : "#333"}
-              borderRadius="$lg"
-              position="relative"
-              opacity={isLocked || !canJoin ? 0.7 : 1}
-            >
-              {(isLocked || !canJoin) && (
-                <Box
-                  position="absolute"
-                  top={0}
-                  left={0}
-                  right={0}
-                  bottom={0}
-                  bg="rgba(0,0,0,0.5)"
-                  justifyContent="center"
-                  alignItems="center"
-                  zIndex={1}
-                  borderRadius="$lg"
-                >
-                  <Text
-                    color="white"
-                    fontWeight="$bold"
-                    textAlign="center"
-                    px="$4"
-                  >
-                    {isLocked
-                      ? missingGender
-                        ? "Set your gender in Profile to join gender-restricted rides."
-                        : `This ride is for ${restrictedLabel} only.`
-                      : rideStarted
-                        ? "This ride has already started."
-                        : "This ride cannot be joined."}
-                  </Text>
-                </Box>
-              )}
-
-              <HStack
-                justifyContent="space-between"
-                alignItems="center"
-                mb="$2"
-              >
-                <HStack alignItems="center" space="sm" flex={1}>
-                  <Text fontWeight="$bold" fontSize="$md" color="white">
-                    {ride.from} → {ride.to}
-                  </Text>
-                  {ride.isTest && (
-                    <Box bg="#ff6b00" px="$2" py="$0.5" borderRadius="$full">
-                      <Text color="white" fontSize="$xs" fontWeight="$bold">
-                        TEST
-                      </Text>
-                    </Box>
-                  )}
-                </HStack>
-                {ride.hostId === userId && (
-                  <Box position="relative">
-                    <Pressable
-                      onPress={() =>
-                        setOpenDropdown(
-                          openDropdown === ride.id ? null : ride.id,
-                        )
-                      }
-                      p="$2"
-                    >
-                      <Text color="#a0a0a0" fontSize="$lg">
-                        ⋮
-                      </Text>
-                    </Pressable>
-
-                    {openDropdown === ride.id && (
-                      <Box
-                        position="absolute"
-                        top="$8"
-                        right="$0"
-                        bg="#2a2a2a"
-                        borderWidth={1}
-                        borderColor="#333"
-                        borderRadius="$md"
-                        p="$2"
-                        minWidth="$24"
-                        zIndex={10}
-                      >
-                        <Pressable
-                          onPress={() => handleEditPress(ride.id)}
-                          p="$2"
-                          borderRadius="$sm"
-                          $pressed={{ bg: "#3a3a3a" }}
-                        >
-                          <Text color="white" fontSize="$sm">
-                            Edit Post
-                          </Text>
-                        </Pressable>
-                      </Box>
-                    )}
-                  </Box>
-                )}
-              </HStack>
-
-              <Text color="#a0a0a0">
-                {String(ride.date)} | {String(ride.time)}
-              </Text>
-              <Text color="#a0a0a0">
-                {String(ride.seats)} seat{ride.seats > 1 ? "s" : ""} available
-              </Text>
-              <Text color="#a0a0a0" fontSize="$sm" mb="$2">
-                Gender preference:{" "}
-                {ride.genderPref === "M"
-                  ? "Male"
-                  : ride.genderPref === "F"
-                    ? "Female"
-                    : ride.genderPref === "NB"
-                      ? "Non-binary"
-                      : "No preference"}
-              </Text>
-
-              {ride.memberIds.length > 0 && (
-                <HStack space="sm" mt="$2" alignItems="center" mb="$2">
-                  <Text color="#a0a0a0" mr="$2" fontSize="$sm">
-                    Members:
-                  </Text>
-                  <HStack space="sm">
-                    {ride.memberIds.slice(0, 5).map((uid) => {
-                      const u = users[uid] || { avatar: DEFAULT_AVATAR };
-                      return (
-                        <Avatar key={uid} size="sm" bgColor="#1e1e1e">
-                          <AvatarImage
-                            source={{ uri: u.avatar }}
-                            alt="User avatar"
-                          />
-                        </Avatar>
-                      );
-                    })}
-                    {ride.memberIds.length > 5 && (
-                      <Box
-                        bg={ACCENT}
-                        borderRadius="$full"
-                        w="$6"
-                        h="$6"
-                        alignItems="center"
-                        justifyContent="center"
-                      >
-                        <Text color="#121212" fontSize="$xs">
-                          +{ride.memberIds.length - 5}
-                        </Text>
-                      </Box>
-                    )}
-                  </HStack>
-                </HStack>
-              )}
-
-              {ride.notes && (
-                <Text color="#a0a0a0" mb="$2">
-                  {String(ride.notes)}
-                </Text>
-              )}
-
-              <Text fontSize="$xs" color="#666" mb="$4">
-                Posted {getRelativeTime(ride.createdAt)}
-                {rideStarted && " • Ride has started"}
-              </Text>
-
-              <HStack space="md" justifyContent="flex-end">
-                {/* View Details on the left */}
-                <Button
-                  size="sm"
-                  backgroundColor={isLocked || !canJoin ? "#444" : ACCENT}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/(stack)/ride/[id]",
-                      params: { id: ride.id },
-                    })
-                  }
-                >
-                  <Text color={isLocked || !canJoin ? "#888" : "#121212"}>
-                    View Details
-                  </Text>
-                </Button>
-
-                {/* Join Group (or View Chat) on the right */}
-                {isLocked ? (
-                  <Button
-                    size="sm"
-                    backgroundColor="#444"
-                    onPress={() =>
-                      missingGender
-                        ? showGenderRestrictionToast("missing")
-                        : showGenderRestrictionToast(
-                            "restricted",
-                            restrictedLabel,
-                          )
-                    }
-                  >
-                    <Text color="#888">
-                      {missingGender ? "Set Gender" : "Restricted"}
-                    </Text>
-                  </Button>
-                ) : ride.memberIds.includes(userId!) ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    borderColor={ACCENT}
-                    backgroundColor="transparent"
-                    onPress={() =>
-                      router.push({
-                        pathname: "/(stack)/ride/[id]/chat",
-                        params: { id: ride.id },
-                      })
-                    }
-                  >
-                    <Text color={ACCENT}>View Chat</Text>
-                  </Button>
-                ) : !canJoin ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    borderColor="#444"
-                    backgroundColor="transparent"
-                    isDisabled={true}
-                  >
-                    <Text color="#666">
-                      {rideStarted ? "Started" : "Cannot Join"}
-                    </Text>
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    borderColor={ACCENT}
-                    backgroundColor="transparent"
-                    onPress={() => handleJoinRide(ride.id)}
-                    isDisabled={ride.seats <= 0}
-                  >
-                    <Text color={ride.seats <= 0 ? "#888" : ACCENT}>
-                      {ride.seats <= 0 ? "Full" : "Join Group"}
-                    </Text>
-                  </Button>
-                )}
-              </HStack>
-
-              {openDropdown === ride.id && (
-                <Pressable
-                  position="absolute"
-                  top="$0"
-                  left="$0"
-                  right="$0"
-                  bottom="$0"
-                  onPress={() => setOpenDropdown(null)}
-                  zIndex={5}
-                />
-              )}
-            </Box>
-          );
-        })}
-
-        {filteredRides.length === 0 && (
-          <VStack alignItems="center" mt="$8" px="$6" space="md">
-            <Image
-              source={require("../../assets/images/empty-bear.png")}
-              style={{ width: 260, height: 260 }}
-              resizeMode="contain"
+        {/* Search + Sort */}
+        <HStack alignItems="center" space="sm" mb="$3">
+          <Input flex={1} size="md" borderColor="#333" backgroundColor="#1e1e1e">
+            <InputField
+              placeholder="Search by location..."
+              placeholderTextColor="#666"
+              color="white"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
             />
-            <Text color="white" fontWeight="$bold" fontSize="$xl" textAlign="center">
-              {searchQuery ? "No rides match your search" : "No rides posted yet"}
+          </Input>
+          <TouchableOpacity
+            onPress={toggleSortOrder}
+            activeOpacity={0.7}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              backgroundColor: "#1e1e1e",
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: "#333",
+            }}
+          >
+            <Text style={{ color: ACCENT, fontSize: TYPE.size.label, fontWeight: TYPE.weight.semibold }}>
+              {sortOrder === "newest" ? "Soonest" : "Latest"}
             </Text>
-            <Text color="#a0a0a0" textAlign="center" fontSize="$sm">
-              {searchQuery
-                ? "Try a different location or clear the search."
-                : "Be the first — post a ride and find people to split the cost with."}
+            <Ionicons
+              name={sortOrder === "newest" ? "arrow-up" : "arrow-down"}
+              size={12}
+              color={ACCENT}
+            />
+          </TouchableOpacity>
+        </HStack>
+
+        {/* Gender filter toggle */}
+        <HStack alignItems="center" justifyContent="space-between" mb="$4" px="$1">
+          <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.caption }}>
+            Gender-restricted rides
+          </Text>
+          <Pressable
+            onPress={() => setShowRestrictedRides((prev) => !prev)}
+            px="$3"
+            py="$1"
+            borderRadius="$md"
+            borderWidth={1}
+            borderColor="#333"
+            backgroundColor={showRestrictedRides ? "#2e2610" : "#1e1e1e"}
+          >
+            <Text style={{ color: ACCENT, fontSize: TYPE.size.label, fontWeight: TYPE.weight.semibold }}>
+              {showRestrictedRides ? "Hide" : "Show"}
             </Text>
-            {!searchQuery && (
+          </Pressable>
+        </HStack>
+
+        {/* Ride cards */}
+        <VStack space="md" pb="$16">
+          {filteredRides.map((ride) => {
+            if (typeof ride !== "object" || ride === null) return null;
+
+            const requiresGender = ride.genderPref !== "N";
+            const missingGender = requiresGender && !userGender;
+            const mismatchedGender = requiresGender && !!userGender && ride.genderPref !== userGender;
+            const isLocked = missingGender || mismatchedGender;
+            const restrictedLabel =
+              ride.genderPref === "M" ? "men"
+              : ride.genderPref === "F" ? "women"
+              : "non-binary riders";
+
+            const genderPrefLabel =
+              ride.genderPref === "M" ? "Men only"
+              : ride.genderPref === "F" ? "Women only"
+              : ride.genderPref === "NB" ? "Non-binary only"
+              : null;
+
+            const rideStarted = hasRideStarted(ride);
+            const canJoin = !rideStarted && !ride.archived;
+
+            const cardOpacity = isLocked || !canJoin ? 0.55 : 1;
+
+            return (
               <TouchableOpacity
-                onPress={() => router.push("/(tabs)/post")}
-                activeOpacity={0.8}
-                style={{
-                  marginTop: 8,
-                  backgroundColor: ACCENT,
-                  paddingVertical: 12,
-                  paddingHorizontal: 28,
-                  borderRadius: 10,
-                }}
+                key={ride.id}
+                activeOpacity={isLocked || !canJoin ? 0.55 : 0.85}
+                onPress={() =>
+                  router.push({ pathname: "/(stack)/ride/[id]", params: { id: ride.id } })
+                }
+                style={{ opacity: cardOpacity }}
               >
-                <Text color="#121212" fontWeight="$semibold" fontSize="$md">
-                  + Post a Ride
-                </Text>
+                <View
+                  style={{
+                    backgroundColor: "#1e1e1e",
+                    borderWidth: 1,
+                    borderColor: isLocked || !canJoin ? "#444" : "#333",
+                    borderRadius: 12,
+                    padding: SPACE.lg,
+                  }}
+                >
+                  {/* Route + host menu */}
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: SPACE.sm }}>
+                    <View style={{ flex: 1, marginRight: SPACE.sm }}>
+                      <Text style={{ color: "#ffffff", fontSize: TYPE.size.heading, fontWeight: TYPE.weight.bold, lineHeight: TYPE.size.heading * TYPE.leading.tight }}>
+                        {ride.to}
+                      </Text>
+                      <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.label, fontWeight: TYPE.weight.medium, marginTop: 2 }}>
+                        from {ride.from}
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.sm }}>
+                      {ride.isTest && (
+                        <View style={{ backgroundColor: "#2e2610", paddingHorizontal: SPACE.sm, paddingVertical: 2, borderRadius: 99, borderWidth: 1, borderColor: ACCENT }}>
+                          <Text style={{ color: ACCENT, fontSize: TYPE.size.micro, fontWeight: TYPE.weight.bold }}>TEST</Text>
+                        </View>
+                      )}
+                      {ride.hostId === userId && (
+                        <View style={{ position: "relative" }}>
+                          <TouchableOpacity
+                            onPress={(e) => {
+                              e.stopPropagation?.();
+                              setOpenDropdown(openDropdown === ride.id ? null : ride.id);
+                            }}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            style={{ padding: 4 }}
+                          >
+                            <Ionicons name="ellipsis-vertical" size={18} color="#a0a0a0" />
+                          </TouchableOpacity>
+                          {openDropdown === ride.id && (
+                            <View
+                              style={{
+                                position: "absolute",
+                                top: 28,
+                                right: 0,
+                                backgroundColor: "#2a2a2a",
+                                borderWidth: 1,
+                                borderColor: "#333",
+                                borderRadius: 8,
+                                paddingVertical: SPACE.xs,
+                                minWidth: 100,
+                                zIndex: 10,
+                              }}
+                            >
+                              <TouchableOpacity
+                                onPress={(e) => { e.stopPropagation?.(); handleEditPress(ride.id); }}
+                                style={{ paddingHorizontal: SPACE.md, paddingVertical: SPACE.sm }}
+                              >
+                                <Text style={{ color: "white", fontSize: TYPE.size.body }}>Edit Post</Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Metadata row */}
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.md, marginBottom: SPACE.sm }}>
+                    <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.caption }}>
+                      {ride.date} · {ride.time}
+                    </Text>
+                    <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.caption }}>
+                      {ride.seats} {ride.seats === 1 ? "seat" : "seats"} left
+                    </Text>
+                    {genderPrefLabel && (
+                      <View style={{ backgroundColor: "#2a2a2a", paddingHorizontal: SPACE.sm, paddingVertical: 2, borderRadius: 4 }}>
+                        <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.micro }}>{genderPrefLabel}</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Notes — 1 line max */}
+                  {ride.notes ? (
+                    <Text
+                      style={{ color: "#808080", fontSize: TYPE.size.caption, marginBottom: SPACE.sm }}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {ride.notes}
+                    </Text>
+                  ) : null}
+
+                  {/* Members + posted time */}
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: SPACE.xs }}>
+                    {ride.memberIds.length > 0 ? (
+                      <HStack space="xs" alignItems="center">
+                        {ride.memberIds.slice(0, 5).map((uid) => {
+                          const u = users[uid] || { avatar: DEFAULT_AVATAR };
+                          return (
+                            <Avatar key={uid} size="xs" bgColor="#1e1e1e">
+                              <AvatarImage source={{ uri: u.avatar }} alt="User avatar" />
+                            </Avatar>
+                          );
+                        })}
+                        {ride.memberIds.length > 5 && (
+                          <View style={{ backgroundColor: "#2a2a2a", borderRadius: 99, width: 20, height: 20, alignItems: "center", justifyContent: "center" }}>
+                            <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.micro }}>+{ride.memberIds.length - 5}</Text>
+                          </View>
+                        )}
+                      </HStack>
+                    ) : <View />}
+                    <Text style={{ color: "#555", fontSize: TYPE.size.label }}>
+                      {rideStarted ? "Started" : getRelativeTime(ride.createdAt)}
+                    </Text>
+                  </View>
+
+                  {/* Divider */}
+                  <View style={{ height: 1, backgroundColor: "#2a2a2a", marginVertical: SPACE.md }} />
+
+                  {/* CTA row */}
+                  <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
+                    {isLocked ? (
+                      <SpringPressable
+                        onPress={(e) => {
+                          e.stopPropagation?.();
+                          missingGender
+                            ? showGenderRestrictionToast("missing")
+                            : showGenderRestrictionToast("restricted", restrictedLabel);
+                        }}
+                        style={{
+                          paddingHorizontal: SPACE.lg,
+                          paddingVertical: SPACE.sm,
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: "#444",
+                        }}
+                      >
+                        <Text style={{ color: "#666", fontSize: TYPE.size.body, fontWeight: TYPE.weight.semibold }}>
+                          {missingGender ? "Set Gender" : "Restricted"}
+                        </Text>
+                      </SpringPressable>
+                    ) : ride.memberIds.includes(userId!) ? (
+                      <SpringPressable
+                        onPress={(e) => {
+                          e.stopPropagation?.();
+                          router.push({ pathname: "/(stack)/ride/[id]/chat", params: { id: ride.id } });
+                        }}
+                        style={{
+                          paddingHorizontal: SPACE.lg,
+                          paddingVertical: SPACE.sm,
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: ACCENT,
+                        }}
+                      >
+                        <Text style={{ color: ACCENT, fontSize: TYPE.size.body, fontWeight: TYPE.weight.semibold }}>View Chat</Text>
+                      </SpringPressable>
+                    ) : !canJoin ? (
+                      <View style={{ paddingHorizontal: SPACE.lg, paddingVertical: SPACE.sm, borderRadius: 8, borderWidth: 1, borderColor: "#444" }}>
+                        <Text style={{ color: "#555", fontSize: TYPE.size.body }}>{rideStarted ? "Started" : "Closed"}</Text>
+                      </View>
+                    ) : (
+                      <SpringPressable
+                        onPress={(e) => {
+                          e.stopPropagation?.();
+                          handleJoinRide(ride.id);
+                        }}
+                        disabled={ride.seats <= 0}
+                        style={{
+                          paddingHorizontal: SPACE.lg,
+                          paddingVertical: SPACE.sm,
+                          borderRadius: 8,
+                          backgroundColor: ride.seats <= 0 ? "#2a2a2a" : ACCENT,
+                        }}
+                      >
+                        <Text style={{
+                          color: ride.seats <= 0 ? "#666" : "#121212",
+                          fontSize: TYPE.size.body,
+                          fontWeight: TYPE.weight.semibold,
+                        }}>
+                          {ride.seats <= 0 ? "Full" : "Join Group"}
+                        </Text>
+                      </SpringPressable>
+                    )}
+                  </View>
+
+                  {openDropdown === ride.id && (
+                    <Pressable
+                      position="absolute"
+                      top="$0"
+                      left="$0"
+                      right="$0"
+                      bottom="$0"
+                      onPress={() => setOpenDropdown(null)}
+                      zIndex={5}
+                    />
+                  )}
+                </View>
               </TouchableOpacity>
-            )}
-          </VStack>
-        )}
-      </VStack>
-    </ScrollView>
+            );
+          })}
+
+          {filteredRides.length === 0 && (
+            <FadeSlideIn delay={100}>
+              <VStack alignItems="center" mt="$8" px="$6" space="md">
+                <Image
+                  source={require("../../assets/images/empty-bear.png")}
+                  style={{ width: 260, height: 260 }}
+                  resizeMode="contain"
+                />
+                <Text style={{ color: "#ffffff", fontSize: TYPE.size.heading, fontWeight: TYPE.weight.bold, textAlign: "center" }}>
+                  {searchQuery ? "No rides match your search" : "No rides posted yet"}
+                </Text>
+                <Text style={{ color: "#a0a0a0", textAlign: "center", fontSize: TYPE.size.body, lineHeight: TYPE.size.body * TYPE.leading.relaxed }}>
+                  {searchQuery
+                    ? "Try a different location or clear the search."
+                    : "Be the first — post a ride and find people to split the cost with."}
+                </Text>
+                {!searchQuery && (
+                  <SpringPressable
+                    onPress={() => router.push("/(tabs)/post")}
+                    style={{
+                      marginTop: SPACE.sm,
+                      backgroundColor: ACCENT,
+                      paddingVertical: SPACE.md,
+                      paddingHorizontal: SPACE["2xl"],
+                      borderRadius: 10,
+                    }}
+                  >
+                    <Text style={{ color: "#121212", fontWeight: TYPE.weight.semibold, fontSize: TYPE.size.body }}>
+                      + Post a Ride
+                    </Text>
+                  </SpringPressable>
+                )}
+              </VStack>
+            </FadeSlideIn>
+          )}
+        </VStack>
+      </ScrollView>
     </View>
   );
 }

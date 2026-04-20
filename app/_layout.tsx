@@ -4,7 +4,7 @@ import RideFeedbackModal from "@/components/RideFeedbackModal";
 import "@/global.css";
 import { config } from "@/gluestack-ui.config";
 import { db } from "@/services/firebaseConfig";
-import { ClerkProvider, useAuth } from "@clerk/clerk-expo";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { GluestackUIProvider } from "@gluestack-ui/themed";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
@@ -12,7 +12,6 @@ import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
 import { useFonts } from "expo-font";
 import { Stack, useRouter } from "expo-router";
-import * as SecureStore from "expo-secure-store";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
 import {
   collection,
@@ -26,7 +25,6 @@ import {
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   AppState,
   AppStateStatus,
   Linking,
@@ -50,16 +48,7 @@ Notifications.setNotificationHandler({
   }),
 });
 
-// ✅ Access Clerk publishable key via correct env variable
-const publishableKey =
-  Constants.expoConfig?.extra?.expoPublicClerkPublishableKey || "";
-
-const tokenCache = {
-  getToken: (key: string) => SecureStore.getItemAsync(key),
-  saveToken: (key: string, value: string) => SecureStore.setItemAsync(key, value),
-};
-
-// Date utility function (moved from your chat screen)
+// Date utility function
 const parseRideDateTime = (dateStr: string, timeStr: string): Date | null => {
   try {
     const currentYear = new Date().getFullYear();
@@ -78,18 +67,8 @@ const parseRideDateTime = (dateStr: string, timeStr: string): Date | null => {
         if (dateParts) {
           const [__, monthName, day] = dateParts;
           const monthNames = [
-            "January",
-            "February",
-            "March",
-            "April",
-            "May",
-            "June",
-            "July",
-            "August",
-            "September",
-            "October",
-            "November",
-            "December",
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December",
           ];
           const monthIndex = monthNames.findIndex(
             (m) => m.toLowerCase() === monthName.toLowerCase(),
@@ -97,11 +76,7 @@ const parseRideDateTime = (dateStr: string, timeStr: string): Date | null => {
 
           if (monthIndex !== -1) {
             return new Date(
-              currentYear,
-              monthIndex,
-              parseInt(day),
-              hourNum,
-              parseInt(minutes),
+              currentYear, monthIndex, parseInt(day), hourNum, parseInt(minutes),
             );
           }
         }
@@ -134,13 +109,12 @@ function compareVersions(a: string, b: string): number {
 }
 
 function RootLayoutContent() {
-  const { userId: clerkUserId, isLoaded: isAuthLoaded } = useAuth();
+  const { userId, isLoaded: isAuthLoaded } = useFirebaseAuth();
   const [loaded] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
   const router = useRouter();
 
-  const [isClerkReady, setIsClerkReady] = useState(false);
   const [showForceUpdate, setShowForceUpdate] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [currentRide, setCurrentRide] = useState<any>(null);
@@ -161,13 +135,10 @@ function RootLayoutContent() {
         ]);
 
         if (ratedData) {
-          const ratedArray = JSON.parse(ratedData);
-          setRatedRides(new Set(ratedArray));
+          setRatedRides(new Set(JSON.parse(ratedData)));
         }
-
         if (rateLaterData) {
-          const rateLaterArray = JSON.parse(rateLaterData);
-          setRateLaterRides(new Set(rateLaterArray));
+          setRateLaterRides(new Set(JSON.parse(rateLaterData)));
         }
       } catch (error) {
         console.error("Error loading stored data:", error);
@@ -181,59 +152,32 @@ function RootLayoutContent() {
 
   // Save rated rides to storage when they change
   useEffect(() => {
-    const saveRatedRides = async () => {
-      try {
-        await AsyncStorage.setItem(RATED_RIDES_KEY, JSON.stringify([...ratedRides]));
-      } catch (error) {
-        console.error("Error saving rated rides:", error);
-      }
-    };
-
     if (ratedRides.size > 0) {
-      saveRatedRides();
+      AsyncStorage.setItem(RATED_RIDES_KEY, JSON.stringify([...ratedRides])).catch(console.error);
     }
   }, [ratedRides]);
 
   // Save rate-later rides to storage when they change
   useEffect(() => {
-    const saveRateLaterRides = async () => {
-      try {
-        await AsyncStorage.setItem(
-          RATE_LATER_RIDES_KEY,
-          JSON.stringify([...rateLaterRides]),
-        );
-      } catch (error) {
-        console.error("Error saving rate-later rides:", error);
-      }
-    };
-
     if (rateLaterRides.size > 0) {
-      saveRateLaterRides();
+      AsyncStorage.setItem(RATE_LATER_RIDES_KEY, JSON.stringify([...rateLaterRides])).catch(console.error);
     }
   }, [rateLaterRides]);
 
   // Check for rides that need feedback
   const checkRidesForFeedback = async () => {
-    if (!clerkUserId || !isAuthLoaded || isLoading) return;
+    if (!userId || !isAuthLoaded || isLoading) return;
 
     try {
-      // Get cooldown status
       const cooldownData = await AsyncStorage.getItem(FEEDBACK_COOLDOWN_KEY);
       if (cooldownData) {
         const { timestamp } = JSON.parse(cooldownData);
-        const now = Date.now();
-        const twentyFourHours = 24 * 60 * 60 * 1000;
-
-        // If within 24-hour cooldown, skip checking
-        if (now - timestamp < twentyFourHours) {
-          return;
-        }
+        if (Date.now() - timestamp < 24 * 60 * 60 * 1000) return;
       }
 
-      // Query active rides where user is a member
       const ridesQuery = query(
         collection(db, "rides"),
-        where("memberIds", "array-contains", clerkUserId),
+        where("memberIds", "array-contains", userId),
         where("archived", "==", false),
         orderBy("startTime", "desc"),
       );
@@ -246,12 +190,8 @@ function RootLayoutContent() {
               const rideData = change.doc.data();
               const rideId = change.doc.id;
 
-              // Skip if user has already rated this ride or marked it for later
-              if (ratedRides.has(rideId) || rateLaterRides.has(rideId)) {
-                return;
-              }
+              if (ratedRides.has(rideId) || rateLaterRides.has(rideId)) return;
 
-              // Parse ride start time
               let startTime: Date | null = null;
               if (rideData.startTime) {
                 startTime = rideData.startTime.toDate();
@@ -261,19 +201,11 @@ function RootLayoutContent() {
 
               if (!startTime) return;
 
-              const now = new Date();
-              const timeSinceStart = now.getTime() - startTime.getTime();
+              const timeSinceStart = Date.now() - startTime.getTime();
+              const thirtyMinutes = 1 * 60 * 1000;
+              const twentyFourHours = 24 * 60 * 60 * 1000;
 
-              // Show feedback modal if ride started within the last 30 minutes to 24 hours
-              // This gives a window for feedback
-              const thirtyMinutesInMs = 1 * 60 * 1000;
-              const twentyFourHoursInMs = 24 * 60 * 60 * 1000;
-
-              if (
-                timeSinceStart >= thirtyMinutesInMs &&
-                timeSinceStart <= twentyFourHoursInMs
-              ) {
-                // Don't show if modal is already showing
+              if (timeSinceStart >= thirtyMinutes && timeSinceStart <= twentyFourHours) {
                 if (!showFeedback) {
                   setCurrentRide({
                     id: rideId,
@@ -289,14 +221,10 @@ function RootLayoutContent() {
                     archived: rideData.archived || false,
                   });
                   setShowFeedback(true);
-
-                  // Set cooldown to prevent immediate re-checking
                   AsyncStorage.setItem(
                     FEEDBACK_COOLDOWN_KEY,
-                    JSON.stringify({
-                      timestamp: Date.now(),
-                    }),
-                  );
+                    JSON.stringify({ timestamp: Date.now() }),
+                  ).catch(console.error);
                 }
               }
             }
@@ -307,7 +235,6 @@ function RootLayoutContent() {
         },
       );
 
-      // Return cleanup function
       return unsubscribe;
     } catch (error) {
       console.error("Error checking rides for feedback:", error);
@@ -316,57 +243,32 @@ function RootLayoutContent() {
 
   // Monitor user's rides for feedback opportunities
   useEffect(() => {
-    if (!clerkUserId || !isAuthLoaded || isLoading) return;
+    if (!userId || !isAuthLoaded || isLoading) return;
 
-    // Initial check
     const unsubscribePromise = checkRidesForFeedback();
 
-    // Set up interval to check every 5 minutes
     rideCheckIntervalRef.current = setInterval(
-      () => {
-        checkRidesForFeedback();
-      },
+      () => { checkRidesForFeedback(); },
       5 * 60 * 1000,
-    ) as unknown as NodeJS.Timeout; // 5 minutes
+    ) as unknown as NodeJS.Timeout;
 
-    // Check when app comes to foreground
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
-      if (
-        appStateRef.current.match(/inactive|background/) &&
-        nextAppState === "active"
-      ) {
+      if (appStateRef.current.match(/inactive|background/) && nextAppState === "active") {
         checkRidesForFeedback();
       }
       appStateRef.current = nextAppState;
     };
 
-    const appStateSubscription = AppState.addEventListener(
-      "change",
-      handleAppStateChange,
-    );
+    const appStateSubscription = AppState.addEventListener("change", handleAppStateChange);
 
-    // Cleanup
     return () => {
-      if (rideCheckIntervalRef.current) {
-        clearInterval(rideCheckIntervalRef.current);
-      }
+      if (rideCheckIntervalRef.current) clearInterval(rideCheckIntervalRef.current);
       appStateSubscription.remove();
-
-      // Clean up the snapshot listener
       unsubscribePromise
-        .then((unsubscribe) => {
-          if (unsubscribe) unsubscribe();
-        })
-        .catch(console.error);
+        ?.then((unsubscribe) => { if (unsubscribe) unsubscribe(); })
+        ?.catch(console.error);
     };
-  }, [
-    clerkUserId,
-    isAuthLoaded,
-    isLoading,
-    ratedRides,
-    rateLaterRides,
-    showFeedback,
-  ]);
+  }, [userId, isAuthLoaded, isLoading, ratedRides, rateLaterRides, showFeedback]);
 
   const handleFeedbackClose = () => {
     setShowFeedback(false);
@@ -375,71 +277,47 @@ function RootLayoutContent() {
 
   const handleRateLater = async () => {
     if (currentRide?.id) {
-      // Add to rate-later list
-      const newRateLaterRides = new Set([...rateLaterRides, currentRide.id]);
-      setRateLaterRides(newRateLaterRides);
-
-      // Schedule reminder in 6 hours
-      const reminderTime = Date.now() + 6 * 60 * 60 * 1000;
+      setRateLaterRides(new Set([...rateLaterRides, currentRide.id]));
       await AsyncStorage.setItem(
         `rate_reminder_${currentRide.id}`,
-        JSON.stringify({ rideId: currentRide.id, reminderTime }),
+        JSON.stringify({ rideId: currentRide.id, reminderTime: Date.now() + 6 * 60 * 60 * 1000 }),
       );
-
-      console.log(`Scheduled reminder for ride ${currentRide.id} in 6 hours`);
     }
-
     handleFeedbackClose();
   };
 
   const handleFeedbackSubmit = async () => {
     if (currentRide?.id) {
-      // Add to rated rides list
-      const newRatedRides = new Set([...ratedRides, currentRide.id]);
-      setRatedRides(newRatedRides);
-
-      // Remove from rate-later list if it was there
+      setRatedRides(new Set([...ratedRides, currentRide.id]));
       if (rateLaterRides.has(currentRide.id)) {
-        const newRateLaterRides = new Set([...rateLaterRides]);
-        newRateLaterRides.delete(currentRide.id);
-        setRateLaterRides(newRateLaterRides);
-
-        // Remove any pending reminder
+        const next = new Set([...rateLaterRides]);
+        next.delete(currentRide.id);
+        setRateLaterRides(next);
         await AsyncStorage.removeItem(`rate_reminder_${currentRide.id}`);
       }
     }
-
     handleFeedbackClose();
   };
 
   // Check for pending reminders when app loads
   useEffect(() => {
     const checkReminders = async () => {
-      if (!clerkUserId || !isAuthLoaded) return;
+      if (!userId || !isAuthLoaded) return;
 
       try {
         const allKeys = await AsyncStorage.getAllKeys();
-        const reminderKeys = allKeys.filter((key) =>
-          key.startsWith("rate_reminder_"),
-        );
-
+        const reminderKeys = allKeys.filter((key) => key.startsWith("rate_reminder_"));
         const now = Date.now();
 
         for (const key of reminderKeys) {
           const reminderData = await AsyncStorage.getItem(key);
           if (reminderData) {
             const { rideId, reminderTime } = JSON.parse(reminderData);
-
             if (now >= reminderTime) {
-              // Time for reminder - check if ride still exists and user is still a member
               try {
                 const rideDoc = await getDoc(doc(db, "rides", rideId));
                 const rideData = rideDoc.data();
-                if (
-                  rideData?.memberIds?.includes(clerkUserId) &&
-                  !ratedRides.has(rideId)
-                ) {
-                  // Show feedback modal
+                if (rideData?.memberIds?.includes(userId) && !ratedRides.has(rideId)) {
                   setCurrentRide({
                     id: rideId,
                     from: rideData.from || "Unknown",
@@ -454,22 +332,14 @@ function RootLayoutContent() {
                     archived: rideData.archived || false,
                   });
                   setShowFeedback(true);
-
-                  // Remove the reminder
                   await AsyncStorage.removeItem(key);
-
-                  // Remove from rate-later list
-                  const newRateLaterRides = new Set([...rateLaterRides]);
-                  newRateLaterRides.delete(rideId);
-                  setRateLaterRides(newRateLaterRides);
-
-                  break; // Only show one reminder at a time
+                  const next = new Set([...rateLaterRides]);
+                  next.delete(rideId);
+                  setRateLaterRides(next);
+                  break;
                 }
               } catch (error) {
-                console.error(
-                  `Error checking reminder for ride ${rideId}:`,
-                  error,
-                );
+                console.error(`Error checking reminder for ride ${rideId}:`, error);
               }
             }
           }
@@ -479,18 +349,10 @@ function RootLayoutContent() {
       }
     };
 
-    if (isAuthLoaded && !isLoading) {
-      checkReminders();
-    }
-  }, [clerkUserId, isAuthLoaded, isLoading, ratedRides, rateLaterRides]);
+    if (isAuthLoaded && !isLoading) checkReminders();
+  }, [userId, isAuthLoaded, isLoading, ratedRides, rateLaterRides]);
 
-  useEffect(() => {
-    // Give Clerk a moment to initialize
-    const timer = setTimeout(() => setIsClerkReady(true), 100);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Force update check — runs after auth is loaded so Firestore rules allow the read
+  // Force update check
   useEffect(() => {
     if (!isAuthLoaded) return;
     const checkVersion = async () => {
@@ -522,16 +384,9 @@ function RootLayoutContent() {
     return () => sub.remove();
   }, [router]);
 
-  if (!loaded || !isClerkReady || isLoading) {
+  if (!loaded || !isAuthLoaded || isLoading) {
     return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          backgroundColor: "#000",
-        }}
-      >
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#000" }}>
         <ActivityIndicator size="large" color="#fff" />
       </View>
     );
@@ -551,9 +406,7 @@ function RootLayoutContent() {
           screenOptions={{
             headerShown: false,
             gestureEnabled: true,
-            contentStyle: {
-              backgroundColor: "#000000",
-            },
+            contentStyle: { backgroundColor: "#000000" },
           }}
         >
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -605,68 +458,18 @@ const forceUpdateStyles = StyleSheet.create({
     padding: 28,
     alignItems: "center",
   },
-  title: {
-    color: "#ffffff",
-    fontSize: 20,
-    fontWeight: "700",
-    marginBottom: 12,
-  },
-  body: {
-    color: "#a0a0a0",
-    fontSize: 15,
-    textAlign: "center",
-    lineHeight: 22,
-    marginBottom: 24,
-  },
-  button: {
-    backgroundColor: ACCENT,
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 40,
-  },
-  buttonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
+  title: { color: "#ffffff", fontSize: 20, fontWeight: "700", marginBottom: 12 },
+  body: { color: "#a0a0a0", fontSize: 15, textAlign: "center", lineHeight: 22, marginBottom: 24 },
+  button: { backgroundColor: ACCENT, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 40 },
+  buttonText: { color: "#ffffff", fontSize: 16, fontWeight: "600" },
 });
 
 export default function RootLayout() {
-  const [isClerkReady, setIsClerkReady] = useState(false);
-
-  useEffect(() => {
-    // Give Clerk a moment to initialize
-    const timer = setTimeout(() => setIsClerkReady(true), 100);
-    return () => clearTimeout(timer);
-  }, []);
-
-  if (!isClerkReady) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          backgroundColor: "#000",
-        }}
-      >
-        <ActivityIndicator size="large" color="#fff" />
-      </View>
-    );
-  }
-
-  if (!publishableKey) {
-    console.error("❌ Clerk publishable key is missing! App may crash.");
-    return null;
-  }
-
   return (
-    <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-      <GluestackUIProvider config={config}>
-        <ThemeProvider value={DarkTheme}>
-          <RootLayoutContent />
-        </ThemeProvider>
-      </GluestackUIProvider>
-    </ClerkProvider>
+    <GluestackUIProvider config={config}>
+      <ThemeProvider value={DarkTheme}>
+        <RootLayoutContent />
+      </ThemeProvider>
+    </GluestackUIProvider>
   );
 }

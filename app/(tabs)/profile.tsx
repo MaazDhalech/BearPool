@@ -1,6 +1,8 @@
 import { ACCENT } from "@/constants/Colors";
+import { TYPE } from "@/constants/Typography";
+import { SPACE } from "@/constants/Spacing";
 import { db } from "@/services/firebaseConfig";
-import { useAuth, useUser } from "@clerk/clerk-expo";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import {
   Avatar,
   AvatarImage,
@@ -23,7 +25,7 @@ import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { Menu } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { LinearGradient } from "expo-linear-gradient";
-import { Alert, Platform, TouchableOpacity } from "react-native";
+import { ActivityIndicator, Alert, Platform, TouchableOpacity, View } from "react-native";
 
 import * as filter from "leo-profanity";
 
@@ -35,13 +37,13 @@ const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
 
 export default function ProfileScreen() {
-  const { isLoaded, userId: clerkUserId } = useAuth();
-  const { user } = useUser();
+  const { isLoaded, userId } = useFirebaseAuth();
   const router = useRouter();
 
   const [profileData, setProfileData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
 
   type Gender = "M" | "F" | "NB" | null;
@@ -96,11 +98,11 @@ export default function ProfileScreen() {
 
   // === Load profile data ===
   useEffect(() => {
-    if (!isLoaded || !clerkUserId || !user) return;
+    if (!isLoaded || !userId) return;
 
     const fetchUserData = async () => {
       try {
-        const userDocRef = doc(db, "users", clerkUserId);
+        const userDocRef = doc(db, "users", userId);
         const userSnap = await getDoc(userDocRef);
 
         const firebaseData = userSnap.exists()
@@ -114,7 +116,7 @@ export default function ProfileScreen() {
             }
           : {
               avatar: DEFAULT_AVATAR,
-              username: user.username || "",
+              username: "",
               ridesJoined: 0,
               ridesHosted: 0,
               createdAt: new Date(),
@@ -122,35 +124,40 @@ export default function ProfileScreen() {
               blockedUsers: [],
             };
 
-        setProfileData({
-          clerkData: {
-            email: user.primaryEmailAddress?.emailAddress || "",
-            firstName: user.firstName || "",
-            lastName: user.lastName || "",
-            username: user.username || "",
-          },
-          firebaseData,
-        });
+        setProfileData({ firebaseData });
 
         setFormData({
-          firstName: user.firstName || "",
-          lastName: user.lastName || "",
-          username: firebaseData.username || user.username || "",
+          firstName: firebaseData.first_name || "",
+          lastName: firebaseData.last_name || "",
+          username: firebaseData.username || "",
           gender: firebaseData.gender || null,
         });
       } catch (error) {
         console.error("Error fetching profile:", error);
+        setProfileData({
+          firebaseData: {
+            avatar: DEFAULT_AVATAR,
+            username: "",
+            first_name: "",
+            last_name: "",
+            email: "",
+            ridesJoined: 0,
+            ridesHosted: 0,
+            gender: null,
+            blockedUsers: [],
+          },
+        });
       } finally {
         setLoading(false);
       }
     };
 
     fetchUserData();
-  }, [isLoaded, clerkUserId, user]);
+  }, [isLoaded, userId]);
 
   // === Save profile ===
   const handleUpdateProfile = async () => {
-    if (!clerkUserId || !user) return;
+    if (!userId) return;
 
     const validations = {
       firstName: validateAndCleanText(formData.firstName, "first name"),
@@ -181,15 +188,10 @@ export default function ProfileScreen() {
         gender: formData.gender,
       };
 
-      await user.update({
-        firstName: cleanedData.firstName,
-        lastName: cleanedData.lastName,
-      });
-
       const updatedData = {
         username: cleanedData.username,
         gender: cleanedData.gender,
-        email: user.primaryEmailAddress?.emailAddress || "",
+        email: profileData.firebaseData.email || "",
         first_name: cleanedData.firstName,
         last_name: cleanedData.lastName,
         avatar: profileData.firebaseData.avatar,
@@ -199,12 +201,9 @@ export default function ProfileScreen() {
         blockedUsers: profileData.firebaseData.blockedUsers || [],
       };
 
-      await setDoc(doc(db, "users", clerkUserId), updatedData);
+      await setDoc(doc(db, "users", userId), updatedData);
 
-      setProfileData({
-        clerkData: { ...profileData.clerkData, ...cleanedData },
-        firebaseData: updatedData,
-      });
+      setProfileData({ firebaseData: updatedData });
 
       setFormData(cleanedData);
       setFormErrors({});
@@ -221,7 +220,7 @@ export default function ProfileScreen() {
 
   // === Change avatar ===
   const handleChangeAvatar = async () => {
-    if (!clerkUserId) return;
+    if (!userId || avatarUploading) return;
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
       Alert.alert(
@@ -276,11 +275,19 @@ export default function ProfileScreen() {
       return;
     }
 
-    await updateDoc(doc(db, "users", clerkUserId), { avatar: base64 });
-    setProfileData((p: any) => ({
-      ...p,
-      firebaseData: { ...p.firebaseData, avatar: base64 },
-    }));
+    setAvatarUploading(true);
+    try {
+      await updateDoc(doc(db, "users", userId), { avatar: base64 });
+      setProfileData((p: any) => ({
+        ...p,
+        firebaseData: { ...p.firebaseData, avatar: base64 },
+      }));
+    } catch (err) {
+      console.error("Failed to upload avatar:", err);
+      Alert.alert("Upload Failed", "Could not update your photo. Please try again.");
+    } finally {
+      setAvatarUploading(false);
+    }
   };
 
   if (!isLoaded || loading) {
@@ -291,29 +298,11 @@ export default function ProfileScreen() {
     );
   }
 
-  if (!user) {
-    return (
-      <Box flex={1} bg="#121212" justifyContent="center" alignItems="center">
-        <Text color="#a0a0a0">Please sign in to view your profile</Text>
-        <Button
-          mt="$4"
-          bg={ACCENT}
-          onPress={() => router.push("/(auth)/Login")}
-        >
-          <Text color="#121212">Sign In</Text>
-        </Button>
-      </Box>
-    );
-  }
-
   const display = {
-    firstName:
-      profileData.firebaseData.first_name || profileData.clerkData.firstName,
-    lastName:
-      profileData.firebaseData.last_name || profileData.clerkData.lastName,
-    username:
-      profileData.firebaseData.username || profileData.clerkData.username,
-    email: profileData.clerkData.email,
+    firstName: profileData.firebaseData.first_name || "",
+    lastName: profileData.firebaseData.last_name || "",
+    username: profileData.firebaseData.username || "",
+    email: profileData.firebaseData.email || "",
     gender: profileData.firebaseData.gender,
     avatar: profileData.firebaseData.avatar,
     ridesJoined: profileData.firebaseData.ridesJoined,
@@ -339,22 +328,21 @@ export default function ProfileScreen() {
           contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
         >
-          <Box px="$4" py="$6">
+          <View style={{ paddingHorizontal: SPACE.lg, paddingBottom: SPACE.lg }}>
             {/* Header */}
             <HStack
               justifyContent="space-between"
               alignItems="center"
-              mb="$6"
-              mt="$8"
+              style={{ marginTop: SPACE["4xl"], marginBottom: SPACE["2xl"] }}
             >
-              <Heading size="xl" color="white">
-                {isEditing ? "Edit Profile" : "Your Profile"}
-              </Heading>
+              <Text style={{ color: "#ffffff", fontSize: TYPE.size.display, fontWeight: TYPE.weight.bold, lineHeight: TYPE.size.display * TYPE.leading.tight }}>
+                {isEditing ? "Edit\nProfile" : "Your\nProfile"}
+              </Text>
               {!isEditing && (
                 <TouchableOpacity
                   onPress={() => router.push("/(stack)/settings/settings")}
                   style={{
-                    padding: 8,
+                    padding: SPACE.sm,
                     backgroundColor: "#1e1e1e",
                     borderRadius: 8,
                     borderWidth: 1,
@@ -370,48 +358,61 @@ export default function ProfileScreen() {
               {/* Avatar */}
               <TouchableOpacity
                 onPress={isEditing ? handleChangeAvatar : undefined}
-                style={{ marginBottom: 24 }}
+                disabled={avatarUploading}
+                style={{ alignItems: "center", marginBottom: isEditing ? SPACE.sm : 0 }}
               >
-                <Avatar size="2xl" bg="#1e1e1e" borderRadius="$full">
-                  {display.avatar ? (
-                    <AvatarImage
-                      source={{ uri: display.avatar }}
-                      alt="Avatar"
-                    />
-                  ) : (
-                    <Avatar.FallbackText color="white">
-                      {initials}
-                    </Avatar.FallbackText>
+                <View style={{ position: "relative" }}>
+                  <Avatar size="2xl" bg="#1e1e1e" borderRadius="$full" opacity={avatarUploading ? 0.5 : 1}>
+                    {display.avatar ? (
+                      <AvatarImage source={{ uri: display.avatar }} alt="Avatar" />
+                    ) : (
+                      <Avatar.FallbackText color="white">{initials}</Avatar.FallbackText>
+                    )}
+                  </Avatar>
+                  {avatarUploading && (
+                    <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
+                      <ActivityIndicator size="small" color={ACCENT} />
+                    </View>
                   )}
-                </Avatar>
+                </View>
                 {isEditing && (
-                  <Text mt="$2" color={ACCENT}>
-                    Tap to change photo
+                  <Text style={{ color: avatarUploading ? "#666" : ACCENT, fontSize: TYPE.size.label, marginTop: SPACE.sm }}>
+                    {avatarUploading ? "Uploading..." : "Tap to change photo"}
                   </Text>
                 )}
               </TouchableOpacity>
 
-              {/* Stats */}
-              <HStack space="xl" w="100%" justifyContent="space-evenly">
-                <VStack alignItems="center">
-                  <Text color="#a0a0a0">Rides Joined</Text>
-                  <Text color="white" fontWeight="$bold" fontSize="$xl">
-                    {display.ridesJoined}
+              {/* Name + username — shown prominently when not editing */}
+              {!isEditing && (
+                <VStack alignItems="center" space="xs" style={{ marginBottom: SPACE.sm }}>
+                  <Text style={{ color: "#ffffff", fontSize: TYPE.size.heading, fontWeight: TYPE.weight.bold, textAlign: "center" }}>
+                    {display.firstName} {display.lastName}
                   </Text>
+                  {display.username ? (
+                    <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.body }}>
+                      @{display.username}
+                    </Text>
+                  ) : null}
                 </VStack>
-                <VStack alignItems="center">
-                  <Text color="#a0a0a0">Rides Hosted</Text>
-                  <Text color="white" fontWeight="$bold" fontSize="$xl">
-                    {display.ridesHosted}
-                  </Text>
-                </VStack>
-              </HStack>
+              )}
+
+              {/* Stats card */}
+              <View style={{ flexDirection: "row", backgroundColor: "#1e1e1e", borderRadius: 12, borderWidth: 1, borderColor: "#333", overflow: "hidden", width: "100%" }}>
+                <View style={{ flex: 1, alignItems: "center", paddingVertical: SPACE.lg, borderRightWidth: 1, borderRightColor: "#333" }}>
+                  <Text style={{ color: ACCENT, fontSize: TYPE.size.heading, fontWeight: TYPE.weight.bold }}>{display.ridesJoined ?? 0}</Text>
+                  <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.label, marginTop: 2 }}>Joined</Text>
+                </View>
+                <View style={{ flex: 1, alignItems: "center", paddingVertical: SPACE.lg }}>
+                  <Text style={{ color: ACCENT, fontSize: TYPE.size.heading, fontWeight: TYPE.weight.bold }}>{display.ridesHosted ?? 0}</Text>
+                  <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.label, marginTop: 2 }}>Hosted</Text>
+                </View>
+              </View>
 
               {/* Form / Display */}
-              <VStack space="sm" w="100%" mt="$6">
+              <VStack space="sm" w="100%" style={{ marginTop: SPACE.lg }}>
                 {isEditing ? (
                   <>
-                    <Text color="#a0a0a0">First Name</Text>
+                    <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.caption }}>First Name</Text>
                     <Input
                       bg="#1e1e1e"
                       borderColor={formErrors.firstName ? "#ff6b6b" : "#333"}
@@ -428,7 +429,7 @@ export default function ProfileScreen() {
                       </Text>
                     )}
 
-                    <Text color="#a0a0a0" mt="$4">
+                    <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.caption, marginTop: SPACE.md }}>
                       Last Name
                     </Text>
                     <Input
@@ -447,7 +448,7 @@ export default function ProfileScreen() {
                       </Text>
                     )}
 
-                    <Text color="#a0a0a0" mt="$4">
+                    <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.caption, marginTop: SPACE.md }}>
                       Username
                     </Text>
                     <Input
@@ -466,126 +467,91 @@ export default function ProfileScreen() {
                       </Text>
                     )}
 
-                    <Text color="#a0a0a0" mt="$4">
+                    <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.caption, marginTop: SPACE.md }}>
                       Gender (optional — helps us keep riders safe)
                     </Text>
-                    <Text color="#666" fontSize="$xs" mb="$2">
-                      We only ask so safety features can work. It’s completely
-                      optional, never shared, and you can remove it anytime.
+                    <Text style={{ color: "#666", fontSize: TYPE.size.micro, marginBottom: SPACE.sm }}>
+                      We only ask so safety features can work. It’s completely optional, never shared, and you can remove it anytime.
                     </Text>
                     <HStack space="sm" w="100%">
                       {(["M", "F", "NB"] as Gender[]).map((option) => (
                         <TouchableOpacity
                           key={option}
-                          onPress={() =>
-                            setFormData({ ...formData, gender: option })
-                          }
+                          activeOpacity={0.7}
+                          onPress={() => setFormData({ ...formData, gender: option })}
                           style={{
                             flex: 1,
-                            padding: 12,
+                            padding: SPACE.md,
                             borderRadius: 8,
                             borderWidth: 1,
-                            borderColor:
-                              formData.gender === option ? ACCENT : "#333",
-                            backgroundColor:
-                              formData.gender === option
-                                ? "#1a3a7b"
-                                : "#1e1e1e",
+                            borderColor: formData.gender === option ? ACCENT : "#333",
+                            backgroundColor: formData.gender === option ? "#2e2610" : "#1e1e1e",
                             alignItems: "center",
                           }}
                         >
-                          <Text
-                            style={{
-                              color:
-                                formData.gender === option
-                                  ? "#ffffff"
-                                  : "#a0a0a0",
-                              fontSize: 14,
-                              fontWeight:
-                                formData.gender === option ? "600" : "400",
-                            }}
-                          >
-                            {option === "M"
-                              ? "Male"
-                              : option === "F"
-                              ? "Female"
-                              : "Non-binary"}
+                          <Text style={{
+                            color: formData.gender === option ? ACCENT : "#a0a0a0",
+                            fontSize: TYPE.size.body,
+                            fontWeight: formData.gender === option ? TYPE.weight.semibold : TYPE.weight.regular,
+                          }}>
+                            {option === "M" ? "Male" : option === "F" ? "Female" : "Non-binary"}
                           </Text>
                         </TouchableOpacity>
                       ))}
                     </HStack>
                     <TouchableOpacity
+                      activeOpacity={0.7}
                       onPress={() => setFormData({ ...formData, gender: null })}
                       style={{
-                        marginTop: 12,
-                        padding: 12,
+                        marginTop: SPACE.sm,
+                        padding: SPACE.md,
                         borderRadius: 8,
                         borderWidth: 1,
-                        borderColor:
-                          formData.gender === null ? ACCENT : "#333",
-                        backgroundColor:
-                          formData.gender === null ? "#1a3a7b" : "transparent",
+                        borderColor: formData.gender === null ? ACCENT : "#333",
+                        backgroundColor: formData.gender === null ? "#2e2610" : "transparent",
                         alignItems: "center",
                       }}
                     >
-                      <Text
-                        style={{
-                          color:
-                            formData.gender === null ? "#ffffff" : "#a0a0a0",
-                          fontSize: 14,
-                          fontWeight: formData.gender === null ? "600" : "400",
-                        }}
-                      >
+                      <Text style={{
+                        color: formData.gender === null ? ACCENT : "#a0a0a0",
+                        fontSize: TYPE.size.body,
+                        fontWeight: formData.gender === null ? TYPE.weight.semibold : TYPE.weight.regular,
+                      }}>
                         Prefer not to say
                       </Text>
                     </TouchableOpacity>
+
+                    <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.caption, marginTop: SPACE.md }}>Email</Text>
+                    <Text style={{ color: "white", fontSize: TYPE.size.body, fontWeight: TYPE.weight.semibold }}>{display.email}</Text>
                   </>
                 ) : (
-                  <>
-                    <Text color="#a0a0a0">Name</Text>
-                    <Text color="white" fontSize="$lg" fontWeight="$semibold">
-                      {display.firstName} {display.lastName}
-                    </Text>
-
-                    <Text color="#a0a0a0" mt="$4">
-                      Username
-                    </Text>
-                    <Text color="white" fontSize="$lg" fontWeight="$semibold">
-                      {display.username || "Not set"}
-                    </Text>
-
-                    <Text color="#a0a0a0" mt="$4">
-                      Gender (optional — helps us keep riders safe)
-                    </Text>
-                    <Text color="white" fontSize="$lg" fontWeight="$semibold">
-                      {display.gender === "M"
-                        ? "Male"
-                        : display.gender === "F"
-                        ? "Female"
-                        : display.gender === "NB"
-                        ? "Non-binary"
-                        : "Not specified"}
-                    </Text>
-                    <Text color="#666" fontSize="$xs" mt="$1">
-                      We only use this for safety features and never share it
-                      elsewhere.
-                    </Text>
-                  </>
+                  /* View mode — details below the name card */
+                  <View style={{ backgroundColor: "#1e1e1e", borderRadius: 12, borderWidth: 1, borderColor: "#333", overflow: "hidden" }}>
+                    {[
+                      { label: "Email", value: display.email },
+                      {
+                        label: "Gender",
+                        value: display.gender === "M" ? "Male"
+                          : display.gender === "F" ? "Female"
+                          : display.gender === "NB" ? "Non-binary"
+                          : "Not specified",
+                      },
+                    ].map((row, i) => (
+                      <View key={row.label} style={{ paddingHorizontal: SPACE.lg, paddingVertical: SPACE.md, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: "#2a2a2a" }}>
+                        <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.label, marginBottom: 2 }}>{row.label}</Text>
+                        <Text style={{ color: "#ffffff", fontSize: TYPE.size.body, fontWeight: TYPE.weight.medium }}>{row.value}</Text>
+                      </View>
+                    ))}
+                  </View>
                 )}
-                <Text color="#a0a0a0" mt="$4">
-                  Email
-                </Text>
-                <Text color="white" fontSize="$lg" fontWeight="$semibold">
-                  {display.email}
-                </Text>
               </VStack>
 
               {/* Buttons */}
-              <VStack space="md" mt="$8" w="100%" pb="$6">
+              <VStack space="md" style={{ marginTop: SPACE["2xl"], width: "100%", paddingBottom: SPACE["2xl"] }}>
                 {isEditing ? (
                   <>
                     <Button bg={ACCENT} onPress={handleUpdateProfile}>
-                      <Text color="#121212" fontWeight="$semibold">
+                      <Text color="#121212" style={{ fontWeight: TYPE.weight.semibold, fontSize: TYPE.size.body }}>
                         Save Changes
                       </Text>
                     </Button>
@@ -601,17 +567,32 @@ export default function ProfileScreen() {
                     </Button>
                   </>
                 ) : (
-                  <Button
-                    variant="outline"
-                    borderColor="#333"
-                    onPress={() => setIsEditing(true)}
+                  <TouchableOpacity
+                    onPress={() => {
+                      setFormData({
+                        firstName: display.firstName,
+                        lastName: display.lastName,
+                        username: display.username,
+                        gender: display.gender ?? null,
+                      });
+                      setIsEditing(true);
+                    }}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: ACCENT,
+                      borderRadius: 8,
+                      paddingVertical: SPACE.md,
+                      alignItems: "center",
+                    }}
                   >
-                    <Text color="white">Edit Profile</Text>
-                  </Button>
+                    <Text style={{ color: ACCENT, fontSize: TYPE.size.body, fontWeight: TYPE.weight.semibold }}>
+                      Edit Profile
+                    </Text>
+                  </TouchableOpacity>
                 )}
               </VStack>
             </VStack>
-          </Box>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </Box>

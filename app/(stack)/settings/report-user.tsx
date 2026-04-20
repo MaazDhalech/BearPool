@@ -1,11 +1,12 @@
 import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
-import { useAuth } from "@clerk/clerk-expo";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import {
   Box,
   Button,
   HStack,
   Heading,
+  Icon,
   Input,
   InputField,
   ScrollView,
@@ -41,7 +42,7 @@ const REPORT_REASONS = [
 ];
 
 export default function ReportUserScreen() {
-  const { userId: reporterId } = useAuth();
+  const { userId: reporterId } = useFirebaseAuth();
   const router = useRouter();
   const { userId: targetUserId, rideId } = useLocalSearchParams<{
     userId?: string;
@@ -233,7 +234,7 @@ export default function ReportUserScreen() {
           <Box px="$4" py="$6">
             <HStack alignItems="center" mb="$6" mt="$8">
               <TouchableOpacity onPress={() => router.back()}>
-                <ChevronLeft color="white" size={28} />
+                <Icon as={ChevronLeft} size="xl" color="white" />
               </TouchableOpacity>
               <Heading size="xl" color="white" ml="$3">
                 Report User
@@ -245,7 +246,7 @@ export default function ReportUserScreen() {
               <Text color="white" fontWeight="$semibold">
                 {targetInfo?.name}
               </Text>{" "}
-              (@{targetInfo?.username}). We’ll review your note within 24 hours.
+              (@{targetInfo?.username}). We’ll review your report within 24 hours.
             </Text>
 
             <VStack space="lg">
@@ -257,6 +258,7 @@ export default function ReportUserScreen() {
                   {REPORT_REASONS.map((reason) => (
                     <TouchableOpacity
                       key={reason}
+                      activeOpacity={0.7}
                       onPress={() =>
                         setForm((prev) => ({ ...prev, reason }))
                       }
@@ -269,13 +271,13 @@ export default function ReportUserScreen() {
                         borderColor:
                           form.reason === reason ? ACCENT : "#333",
                         backgroundColor:
-                          form.reason === reason ? "#1a3a7b" : "#1e1e1e",
+                          form.reason === reason ? "#2e2610" : "#1e1e1e",
                       }}
                     >
                       <Text
                         style={{
                           color:
-                            form.reason === reason ? "white" : "#a0a0a0",
+                            form.reason === reason ? ACCENT : "#a0a0a0",
                           fontWeight:
                             form.reason === reason ? "600" : "400",
                         }}

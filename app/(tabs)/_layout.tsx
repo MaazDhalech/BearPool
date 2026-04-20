@@ -3,7 +3,7 @@ import { IconSymbol } from "@/components/ui/IconSymbol";
 import TabBarBackground from "@/components/ui/TabBarBackground";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { ACCENT } from "@/constants/Colors";
-import { useAuth } from "@clerk/clerk-expo";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs, useRouter } from "expo-router";
 import React, { useEffect } from "react";
@@ -11,7 +11,7 @@ import { Platform } from "react-native";
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
-  const { isSignedIn, isLoaded } = useAuth();
+  const { isSignedIn, isLoaded } = useFirebaseAuth();
   const router = useRouter();
 
   // Redirect to login if not signed in
