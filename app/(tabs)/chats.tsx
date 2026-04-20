@@ -1,4 +1,7 @@
 import { ACCENT } from "@/constants/Colors";
+import { TYPE } from "@/constants/Typography";
+import { SPACE } from "@/constants/Spacing";
+import { FadeSlideIn } from "@/components/FadeSlideIn";
 import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import {
@@ -6,25 +9,25 @@ import {
   AvatarImage,
   Box,
   HStack,
-  Heading,
-  Pressable,
-  ScrollView,
   Spinner,
   Text,
   VStack,
 } from "@gluestack-ui/themed";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import {
   collection,
   doc,
   getDoc,
+  getDocs,
+  limit,
   onSnapshot,
+  orderBy,
   query,
   where,
 } from "firebase/firestore";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { LinearGradient } from "expo-linear-gradient";
-import { RefreshControl, View } from "react-native";
+import { RefreshControl, ScrollView, TouchableOpacity, View } from "react-native";
 
 const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
@@ -41,22 +44,22 @@ export default function ChatsScreen() {
 
   const unsubRidesRef = useRef<(() => void) | null>(null);
   const userCache = useRef<{ [uid: string]: { id: string; avatar: string } }>({});
-  let readCounter = 0;
+  const hasLoadedOnce = useRef(false);
 
-  useEffect(() => {
-    if (!userId) return;
-    setupListeners();
-    return () => {
-      unsubRidesRef.current?.();
-    };
-  }, [userId]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!userId) return;
+      setupListeners();
+      return () => {
+        unsubRidesRef.current?.();
+      };
+    }, [userId]),
+  );
 
   const getUserData = async (uid: string) => {
     if (userCache.current[uid]) return userCache.current[uid];
     try {
       const udoc = await getDoc(doc(db, "users", uid));
-      readCounter++;
-      console.log(`📚 Firestore user read #${readCounter} for ${uid}`);
       if (udoc.exists()) {
         const d = udoc.data();
         const user = { id: uid, avatar: d.avatar || DEFAULT_AVATAR };
@@ -69,10 +72,37 @@ export default function ChatsScreen() {
     return null;
   };
 
-  const setupListeners = async () => {
+  const getUnreadStatus = async (rideId: string): Promise<boolean> => {
+    try {
+      const [readStateSnap, lastMsgSnap] = await Promise.all([
+        getDoc(doc(db, "rides", rideId, "readState", userId!)),
+        getDocs(
+          query(
+            collection(db, "rides", rideId, "messages"),
+            orderBy("createdAt", "desc"),
+            limit(1),
+          ),
+        ),
+      ]);
+
+      const lastMsg = lastMsgSnap.docs[0]?.data();
+      if (!lastMsg) return false;
+
+      if (!readStateSnap.exists()) return true;
+
+      const lastReadAt = readStateSnap.data().lastReadAt;
+      if (!lastReadAt) return true;
+
+      return lastMsg.createdAt?.toMillis() > lastReadAt.toMillis();
+    } catch {
+      return false;
+    }
+  };
+
+  const setupListeners = () => {
     unsubRidesRef.current?.();
     setError(null);
-    setLoading(true);
+    if (!hasLoadedOnce.current) setLoading(true);
 
     const ridesQ = query(
       collection(db, "rides"),
@@ -91,17 +121,23 @@ export default function ChatsScreen() {
 
           const group: any = {
             id: rideId,
-            title: `${ride.from} → ${ride.to}`,
+            from: ride.from ?? "Unknown",
+            to: ride.to ?? "Unknown",
             members: [] as any[],
             joinedAt: (ride.createdAt as any)?.toMillis() || 0,
             archived: ride.archived ?? false,
             date: ride.date ?? "",
             time: ride.time ?? "",
+            hasUnread: false,
           };
 
           const ids: string[] = ride.memberIds || [];
-          const members = await Promise.all(ids.map((uid) => getUserData(uid)));
+          const [members, hasUnread] = await Promise.all([
+            Promise.all(ids.map((uid) => getUserData(uid))),
+            getUnreadStatus(rideId),
+          ]);
           group.members = members.filter(Boolean);
+          group.hasUnread = hasUnread;
 
           if (group.archived) {
             archived.push(group);
@@ -110,6 +146,7 @@ export default function ChatsScreen() {
           }
         }
 
+        hasLoadedOnce.current = true;
         setActiveGroups(active);
         setArchivedGroups(archived);
         setLoading(false);
@@ -137,35 +174,45 @@ export default function ChatsScreen() {
   };
 
   const renderGroup = (grp: any, muted = false) => (
-    <Pressable
+    <TouchableOpacity
       key={grp.id}
-      borderRadius="$lg"
-      bg={muted ? "#161616" : "#1e1e1e"}
-      p="$4"
-      borderWidth="$1"
-      borderColor={muted ? "#222" : "#333"}
-      opacity={muted ? 0.7 : 1}
+      activeOpacity={0.75}
       onPress={() => handlePress(grp.id)}
+      style={{
+        borderRadius: 12,
+        backgroundColor: muted ? "#161616" : "#1e1e1e",
+        padding: 16,
+        borderWidth: 1,
+        borderColor: grp.hasUnread && !muted ? ACCENT + "55" : muted ? "#222" : "#333",
+        opacity: muted ? 0.65 : 1,
+      }}
     >
       <VStack space="xs">
-        <HStack justifyContent="space-between" alignItems="center">
-          <Text fontWeight="$bold" fontSize="$md" color={muted ? "#888" : "white"}>
-            {grp.title}
-          </Text>
-          {muted && (
-            <Text color="#555" fontSize="$xs">
-              Archived
+        <HStack justifyContent="space-between" alignItems="flex-start">
+          <VStack style={{ flex: 1, marginRight: SPACE.sm }}>
+            <HStack alignItems="center" space="sm">
+              <Text style={{ color: muted ? "#888" : "#ffffff", fontSize: TYPE.size.subheading, fontWeight: TYPE.weight.bold, lineHeight: TYPE.size.subheading * TYPE.leading.tight }}>
+                {grp.to}
+              </Text>
+              {grp.hasUnread && !muted && (
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: ACCENT }} />
+              )}
+            </HStack>
+            <Text style={{ color: muted ? "#555" : "#a0a0a0", fontSize: TYPE.size.label, fontWeight: TYPE.weight.medium, marginTop: 2 }}>
+              from {grp.from}
             </Text>
+          </VStack>
+          {muted && (
+            <View style={{ backgroundColor: "#2a2a2a", paddingHorizontal: SPACE.sm, paddingVertical: 2, borderRadius: 4 }}>
+              <Text style={{ color: "#666", fontSize: TYPE.size.micro }}>Archived</Text>
+            </View>
           )}
         </HStack>
         {grp.date ? (
-          <Text color="#555" fontSize="$xs">
+          <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.caption, marginTop: SPACE.xs }}>
             {grp.date} · {grp.time}
           </Text>
         ) : null}
-        <Text color="#666" fontSize="$xs" italic>
-          Tap to view chat →
-        </Text>
         <HStack space="sm" mt="$2">
           {grp.members.slice(0, 5).map((u: any) => (
             <Avatar key={u.id} size="sm" bgColor="#121212">
@@ -174,21 +221,21 @@ export default function ChatsScreen() {
           ))}
           {grp.members.length > 5 && (
             <Box
-              bg={ACCENT}
+              bg="#2a2a2a"
               borderRadius="$full"
               w="$6"
               h="$6"
               alignItems="center"
               justifyContent="center"
             >
-              <Text color="#121212" fontSize="$xs">
+              <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.micro }}>
                 +{grp.members.length - 5}
               </Text>
             </Box>
           )}
         </HStack>
       </VStack>
-    </Pressable>
+    </TouchableOpacity>
   );
 
   return (
@@ -200,51 +247,61 @@ export default function ChatsScreen() {
       />
       <ScrollView
         style={{ backgroundColor: "transparent" }}
-        contentContainerStyle={{ paddingBottom: 120 }}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor="#a0a0a0"
-        />
-      }
-    >
-      <Box px="$4" py="$6">
-        <Heading size="xl" color="white" mb="$6" mt="$16">
-          Your Ride Groups
-        </Heading>
+        contentContainerStyle={{ paddingBottom: 120, flexGrow: 1 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#a0a0a0"
+          />
+        }
+      >
+        <View style={{ paddingHorizontal: SPACE.lg, paddingBottom: SPACE.lg }}>
+          <View style={{ marginTop: SPACE["4xl"], marginBottom: SPACE["2xl"] }}>
+            <Text style={{ color: "#ffffff", fontSize: TYPE.size.display, fontWeight: TYPE.weight.bold, lineHeight: TYPE.size.display * TYPE.leading.tight }}>
+              Your{"\n"}Ride Groups
+            </Text>
+          </View>
 
-        {loading ? (
-          <HStack justifyContent="center" mt="$10">
-            <Spinner size="large" color={ACCENT} />
-          </HStack>
-        ) : error ? (
-          <Text color="#ff6666" textAlign="center">
-            {error}
-          </Text>
-        ) : activeGroups.length === 0 && archivedGroups.length === 0 ? (
-          <Text color="#888" textAlign="center">
-            You're not part of any ride groups yet.
-          </Text>
-        ) : (
-          <VStack space="lg">
-            {activeGroups.length > 0 && (
-              <VStack space="md">
-                {activeGroups.map((grp) => renderGroup(grp))}
-              </VStack>
-            )}
-
-            {archivedGroups.length > 0 && (
-              <VStack space="md" mt={activeGroups.length > 0 ? "$4" : "$0"}>
-                <Text color="#555" fontSize="$sm" fontWeight="$semibold" letterSpacing={1}>
-                  PAST RIDES
+          {loading ? (
+            <HStack justifyContent="center" mt="$10">
+              <Spinner size="large" color={ACCENT} />
+            </HStack>
+          ) : error ? (
+            <Text style={{ color: "#ff6666", textAlign: "center", fontSize: TYPE.size.body }}>
+              {error}
+            </Text>
+          ) : activeGroups.length === 0 && archivedGroups.length === 0 ? (
+            <FadeSlideIn delay={100}>
+              <VStack alignItems="center" mt="$8" px="$6" space="md">
+                <Text style={{ fontSize: 36, marginBottom: SPACE.sm }}>🐻</Text>
+                <Text style={{ color: "#ffffff", fontSize: TYPE.size.heading, fontWeight: TYPE.weight.bold, textAlign: "center" }}>
+                  No ride groups yet
                 </Text>
-                {archivedGroups.map((grp) => renderGroup(grp, true))}
+                <Text style={{ color: "#a0a0a0", textAlign: "center", fontSize: TYPE.size.body, lineHeight: TYPE.size.body * TYPE.leading.relaxed }}>
+                  Join or post a ride on the feed to start coordinating with your group.
+                </Text>
               </VStack>
-            )}
-          </VStack>
-        )}
-      </Box>
+            </FadeSlideIn>
+          ) : (
+            <VStack space="lg">
+              {activeGroups.length > 0 && (
+                <VStack space="md">
+                  {activeGroups.map((grp) => renderGroup(grp))}
+                </VStack>
+              )}
+
+              {archivedGroups.length > 0 && (
+                <VStack space="md" mt={activeGroups.length > 0 ? "$4" : "$0"}>
+                  <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.label, fontWeight: TYPE.weight.medium, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: SPACE.xs }}>
+                    Past Rides
+                  </Text>
+                  {archivedGroups.map((grp) => renderGroup(grp, true))}
+                </VStack>
+              )}
+            </VStack>
+          )}
+        </View>
       </ScrollView>
     </View>
   );

@@ -22,6 +22,7 @@ import {
   ModalContent,
   ModalHeader,
   ScrollView,
+  Spinner,
   Text,
   VStack,
 } from "@gluestack-ui/themed";
@@ -99,6 +100,7 @@ const SettingsItem: React.FC<SettingsItemProps> = ({
 }) => (
   <TouchableOpacity
     onPress={onPress}
+    activeOpacity={0.7}
     style={{
       backgroundColor: "#1e1e1e",
       padding: 16,
@@ -639,7 +641,7 @@ const handleReauthAndDelete = async () => {
                 title="Help & Support"
                 subtitle="Get help or contact our support team"
                 onPress={handleHelpSupport}
-                color="#9C27B0"
+                color={ACCENT}
               />
 
               <SettingsItem
@@ -655,15 +657,18 @@ const handleReauthAndDelete = async () => {
                 title="Delete Account"
                 subtitle="Permanently delete your account and all data"
                 onPress={handleDeleteAccount}
-                color="#ff0000"
+                color="#ff5555"
               />
             </VStack>
 
             {deletingAccount && (
               <Box mt="$4" p="$4" bg="#2a2a2a" borderRadius="$md">
-                <Text color="#ff6b6b" textAlign="center">
-                  Deleting account... Please wait.
-                </Text>
+                <HStack space="sm" justifyContent="center" alignItems="center">
+                  <Spinner size="small" color="#ff6b6b" />
+                  <Text color="#ff6b6b" textAlign="center">
+                    Deleting account... Please wait.
+                  </Text>
+                </HStack>
               </Box>
             )}
           </Box>
@@ -789,7 +794,7 @@ const handleReauthAndDelete = async () => {
 
             {notifPermissionStatus === "denied" && !notifEnabled && (
               <RNView style={styles.notifWarning}>
-                <Text color="#ff9800" fontSize="$sm" mb="$3">
+                <Text color="#ffcc00" fontSize="$sm" mb="$3">
                   Notifications are blocked in your device settings.
                 </Text>
                 <Button size="sm" bg={ACCENT} onPress={() => Linking.openSettings()}>
@@ -934,7 +939,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   reauthBtn: {
-    backgroundColor: "#cc0000",
+    backgroundColor: "#ff5555",
     borderRadius: 10,
     height: 50,
     alignItems: "center",

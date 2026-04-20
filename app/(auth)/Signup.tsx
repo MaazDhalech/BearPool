@@ -525,9 +525,9 @@ const s = StyleSheet.create({
     justifyContent: "center",
     minHeight: 50 * SCALE,
   },
-  genderButtonSelected: { borderColor: palette.accent, backgroundColor: palette.accent },
+  genderButtonSelected: { borderColor: palette.accent, backgroundColor: "#2e2610" },
   genderText: { color: palette.muted, fontSize: 14 * SCALE, fontWeight: "500" },
-  genderTextSelected: { color: palette.bg, fontWeight: "600" },
+  genderTextSelected: { color: palette.accent, fontWeight: "600" },
   genderOptionFull: { marginTop: 0 },
   tosContainer: { flexDirection: "row", alignItems: "center", marginBottom: SPACING.lg * SCALE },
   checkbox: {

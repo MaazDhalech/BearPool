@@ -1,4 +1,6 @@
 import { ACCENT } from "@/constants/Colors";
+import { TYPE } from "@/constants/Typography";
+import { SPACE } from "@/constants/Spacing";
 import { NotificationOptInModal } from "@/components/NotificationOptInModal";
 import { useNotificationOptInPrompt } from "@/hooks/useNotificationOptInPrompt";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -25,7 +27,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { useEffect, useRef, useState } from "react";
-import { Alert } from "react-native";
+import { Alert, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type Ride = {
@@ -40,6 +42,29 @@ type Ride = {
   memberIds: string[];
   genderPref?: string;
   hostId: string | null;
+  archived: boolean;
+};
+
+const parseRideDateTime = (dateStr: string, timeStr: string): Date | null => {
+  try {
+    const currentYear = new Date().getFullYear();
+    const parsed = new Date(`${dateStr}, ${currentYear} ${timeStr}`);
+    if (!isNaN(parsed.getTime())) return parsed;
+    const timeParts = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+    if (timeParts) {
+      let hours = parseInt(timeParts[1]);
+      const minutes = parseInt(timeParts[2]);
+      if (timeParts[3].toUpperCase() === "PM" && hours < 12) hours += 12;
+      if (timeParts[3].toUpperCase() === "AM" && hours === 12) hours = 0;
+      const dateParts = dateStr.match(/(\w+)\s+(\d+)/);
+      if (dateParts) {
+        const months = ["january","february","march","april","may","june","july","august","september","october","november","december"];
+        const monthIdx = months.indexOf(dateParts[1].toLowerCase());
+        if (monthIdx !== -1) return new Date(currentYear, monthIdx, parseInt(dateParts[2]), hours, minutes);
+      }
+    }
+    return null;
+  } catch { return null; }
 };
 
 type Member = {
@@ -137,6 +162,7 @@ export default function RideDetailsPage() {
             memberIds: data.memberIds ?? [],
             genderPref: data.genderPref ?? "N",
             hostId: data.hostId ?? null,
+            archived: data.archived ?? false,
           });
         } else {
           console.warn("No such ride!");
@@ -200,6 +226,17 @@ export default function RideDetailsPage() {
   const handleJoinRide = async () => {
     if (!userId || !ride?.id) return;
 
+    if (ride.archived) {
+      Alert.alert("Ride Unavailable", "This ride has been archived.");
+      return;
+    }
+
+    const rdt = parseRideDateTime(ride.date, ride.time);
+    if (rdt && new Date() >= rdt) {
+      Alert.alert("Ride Started", "This ride has already started and cannot be joined.");
+      return;
+    }
+
     const rideGenderPref = ride.genderPref ?? "N";
     const requiresSpecificGender = rideGenderPref !== "N";
 
@@ -259,16 +296,14 @@ export default function RideDetailsPage() {
       }
     } catch (err) {
       console.error("Error joining ride:", err);
+      Alert.alert("Join Failed", "Could not join this ride. Please try again.");
     }
   };
 
   if (loading) {
     return (
       <Box flex={1} justifyContent="center" alignItems="center" bg="#121212">
-        <Spinner size="large" />
-        <Text mt="$4" color="#a0a0a0">
-          Loading ride details...
-        </Text>
+        <Spinner size="large" color={ACCENT} />
       </Box>
     );
   }
@@ -276,127 +311,134 @@ export default function RideDetailsPage() {
   if (!ride) {
     return (
       <Box flex={1} justifyContent="center" alignItems="center" px="$4" bg="#121212">
-        <Text fontSize="$lg" color="$red500">
-          Ride not found.
+        <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.body, textAlign: "center", marginBottom: SPACE.lg }}>
+          This ride couldn't be found. It may have been deleted.
         </Text>
-        <Button mt="$4" onPress={() => router.back()} bg={ACCENT}>
-          <Text color="#121212">Go Back</Text>
+        <Button onPress={() => router.back()} bg={ACCENT}>
+          <Text color="#121212" style={{ fontWeight: TYPE.weight.semibold }}>Go Back</Text>
         </Button>
       </Box>
     );
   }
 
   const alreadyJoined = userId ? ride.memberIds.includes(userId) : false;
+  const rideDateTime = parseRideDateTime(ride.date, ride.time);
+  const rideStarted = rideDateTime ? new Date() >= rideDateTime : false;
+  const canJoin = !ride.archived && !rideStarted;
   const genderPrefLabel =
-    ride.genderPref === "M"
-      ? "Men only"
-      : ride.genderPref === "F"
-      ? "Women only"
-      : ride.genderPref === "NB"
-      ? "Non-binary only"
-      : "No preference";
+    ride.genderPref === "M" ? "Men only"
+    : ride.genderPref === "F" ? "Women only"
+    : ride.genderPref === "NB" ? "Non-binary only"
+    : null;
 
   return (
     <Box flex={1} bg="#121212" pt={insets.top}>
-      {/* Header with Back Button */}
+      {/* Header — shows the route, not a generic label */}
       <HStack
         alignItems="center"
         px="$4"
         py="$3"
         borderBottomWidth="$1"
-        borderBottomColor="#333"
+        borderBottomColor="#2a2a2a"
       >
-        <Pressable
-          onPress={() => router.back()}
-          p="$2"
-          borderRadius="$full"
-          mr="$3"
-        >
-          <Ionicons name="arrow-back" size={24} color="white" />
+        <Pressable onPress={() => router.back()} p="$2" borderRadius="$full" mr="$2">
+          <Ionicons name="arrow-back" size={22} color="white" />
         </Pressable>
-        <Heading size="lg" color="white" flex={1}>
-          Ride Details
-        </Heading>
+        <VStack flex={1}>
+          <Text style={{ color: "#ffffff", fontSize: TYPE.size.subheading, fontWeight: TYPE.weight.bold }} numberOfLines={1}>
+            {ride.from} → {ride.to}
+          </Text>
+          <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.label }}>
+            {ride.date} · {ride.time}
+          </Text>
+        </VStack>
       </HStack>
 
-      <ScrollView 
-        px="$4" 
-        pt="$4" 
-        contentContainerStyle={{ paddingBottom: 100 }}
-      >
-        <Box
-          p="$4"
-          borderRadius="$lg"
-          borderWidth="$1"
-          borderColor="#333"
-          backgroundColor="#1e1e1e"
-          mb="$4"
-        >
-          <VStack space="sm">
-            <Heading size="lg" color="white">
-              {ride.from} → {ride.to}
-            </Heading>
-
-            <Text color="#a0a0a0">
-              {ride.date}, {ride.time}
-            </Text>
-            <Text color="#a0a0a0">
-              {ride.seats} seat{ride.seats > 1 ? "s" : ""} available
-            </Text>
-            <Text color="#a0a0a0">
-              Gender preference: {genderPrefLabel}
-            </Text>
-
-            {ride.notes && (
-              <Text color="#a0a0a0" mt="$1">
-                Notes: {ride.notes}
-              </Text>
+      <ScrollView contentContainerStyle={{ padding: SPACE.lg, paddingBottom: 120 }}>
+        {/* Info card */}
+        <View style={{ backgroundColor: "#1e1e1e", borderRadius: 12, borderWidth: 1, borderColor: "#333", padding: SPACE.lg, marginBottom: SPACE.lg }}>
+          {/* Seats + gender */}
+          <View style={{ flexDirection: "row", gap: SPACE.md, marginBottom: SPACE.md }}>
+            <View style={{ flex: 1, backgroundColor: "#2a2a2a", borderRadius: 8, padding: SPACE.md, alignItems: "center" }}>
+              <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.label, marginBottom: 2 }}>Seats left</Text>
+              <Text style={{ color: "#ffffff", fontSize: TYPE.size.subheading, fontWeight: TYPE.weight.bold }}>{ride.seats}</Text>
+            </View>
+            {genderPrefLabel && (
+              <View style={{ flex: 1, backgroundColor: "#2a2a2a", borderRadius: 8, padding: SPACE.md, alignItems: "center" }}>
+                <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.label, marginBottom: 2 }}>Riders</Text>
+                <Text style={{ color: "#ffffff", fontSize: TYPE.size.body, fontWeight: TYPE.weight.semibold }}>{genderPrefLabel}</Text>
+              </View>
             )}
+          </View>
 
-            <Text mt="$1" color="#666" fontSize="$xs">
-              Posted {getRelativeTime(ride.createdAt)}
+          {/* Notes */}
+          {ride.notes ? (
+            <View style={{ borderTopWidth: 1, borderTopColor: "#2a2a2a", paddingTop: SPACE.md, marginBottom: SPACE.sm }}>
+              <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.label, marginBottom: SPACE.xs }}>Notes</Text>
+              <Text style={{ color: "#ffffff", fontSize: TYPE.size.body, lineHeight: TYPE.size.body * TYPE.leading.relaxed }}>{ride.notes}</Text>
+            </View>
+          ) : null}
+
+          {/* Posted time */}
+          <Text style={{ color: "#555", fontSize: TYPE.size.label, marginTop: ride.notes ? SPACE.sm : 0 }}>
+            Posted {getRelativeTime(ride.createdAt)}
+          </Text>
+        </View>
+
+        {/* Members */}
+        {members.length > 0 && (
+          <View style={{ marginBottom: SPACE.lg }}>
+            <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.label, fontWeight: TYPE.weight.medium, marginBottom: SPACE.sm, textTransform: "uppercase", letterSpacing: 0.5 }}>
+              Group · {members.length} {members.length === 1 ? "member" : "members"}
             </Text>
-
-            {/* Group Members */}
-            {members.length > 0 && (
-              <Box mt="$4">
-                <Text color="#aaaaaa" fontSize="$sm" mb="$2">
-                  Group Members:
-                </Text>
-                <VStack space="xs">
-                  {members.map((member) => (
-                    <Text key={member.id} color="white" fontSize="$sm">
-                      • {member.name}
-                    </Text>
-                  ))}
-                </VStack>
-              </Box>
-            )}
-
-            {/* Action Buttons */}
-            <VStack space="sm" mt="$6">
-            {alreadyJoined ? (
-              <Button
-                size="md"
-                backgroundColor={ACCENT}
-                onPress={() =>
-                  router.push({
-                    pathname: "/(stack)/ride/[id]/chat",
-                    params: { id: ride.id },
-                  })
-                }
-              >
-                <Text color="#121212">View Chat</Text>
-              </Button>
-            ) : (
-              <Button size="md" backgroundColor={ACCENT} onPress={handleJoinRide}>
-                <Text color="#121212">Join Ride</Text>
-              </Button>
-            )}
-            </VStack>
-          </VStack>
-        </Box>
+            <View style={{ backgroundColor: "#1e1e1e", borderRadius: 12, borderWidth: 1, borderColor: "#333", overflow: "hidden" }}>
+              {members.map((member, i) => (
+                <View
+                  key={member.id}
+                  style={{
+                    paddingHorizontal: SPACE.lg,
+                    paddingVertical: SPACE.md,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    borderTopWidth: i === 0 ? 0 : 1,
+                    borderTopColor: "#2a2a2a",
+                  }}
+                >
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: member.id === ride.hostId ? ACCENT : "#444", marginRight: SPACE.md }} />
+                  <Text style={{ color: "#ffffff", fontSize: TYPE.size.body, flex: 1 }}>{member.name}</Text>
+                  {member.id === ride.hostId && (
+                    <Text style={{ color: ACCENT, fontSize: TYPE.size.label, fontWeight: TYPE.weight.medium }}>Host</Text>
+                  )}
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
       </ScrollView>
+
+      {/* Sticky CTA */}
+      <View style={{ paddingHorizontal: SPACE.lg, paddingBottom: insets.bottom + SPACE.md, paddingTop: SPACE.md, borderTopWidth: 1, borderTopColor: "#2a2a2a", backgroundColor: "#121212" }}>
+        {alreadyJoined ? (
+          <Button
+            size="lg"
+            backgroundColor={ACCENT}
+            onPress={() => router.push({ pathname: "/(stack)/ride/[id]/chat", params: { id: ride.id } })}
+          >
+            <Text color="#121212" style={{ fontWeight: TYPE.weight.bold, fontSize: TYPE.size.body }}>Open Chat</Text>
+          </Button>
+        ) : !canJoin ? (
+          <Button size="lg" backgroundColor="#2a2a2a" disabled>
+            <Text color="#555" style={{ fontWeight: TYPE.weight.bold, fontSize: TYPE.size.body }}>
+              {ride.archived ? "Archived" : "Ride Started"}
+            </Text>
+          </Button>
+        ) : (
+          <Button size="lg" backgroundColor={ACCENT} onPress={handleJoinRide}>
+            <Text color="#121212" style={{ fontWeight: TYPE.weight.bold, fontSize: TYPE.size.body }}>Join Ride</Text>
+          </Button>
+        )}
+      </View>
+
       <NotificationOptInModal
         visible={showNotifPrompt}
         isDenied={notifDenied}

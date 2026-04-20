@@ -1,4 +1,5 @@
 // components/RideFeedbackModal.tsx
+import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import {
@@ -577,17 +578,13 @@ ${feedbackForm.issueDetails}
       selected === (isYes || isIssue)
         ? isYes
           ? "#4CAF50"
-          : isIssue
-            ? "#FF6B6B"
-            : "#9C27B0"
+          : "#FF6B6B"
         : "#2a2a2a";
     const borderColor =
       selected === (isYes || isIssue)
         ? isYes
           ? "#388E3C"
-          : isIssue
-            ? "#D32F2F"
-            : "#7B1FA2"
+          : "#D32F2F"
         : "#444";
 
     return (
@@ -626,7 +623,7 @@ ${feedbackForm.issueDetails}
             justifyContent="center"
             alignItems="center"
           >
-            <Spinner size="large" color="#9C27B0" />
+            <Spinner size="large" color={ACCENT} />
             <Text color="#a0a0a0" mt="$4" fontSize="$sm">
               Loading ride details...
             </Text>
@@ -714,7 +711,7 @@ ${feedbackForm.issueDetails}
                       </HStack>
 
                       <HStack alignItems="center" mb="$3">
-                        <Icon as={MapPin} size="md" color="#9C27B0" mr="$3" />
+                        <Icon as={MapPin} size="md" color={ACCENT} mr="$3" />
                         <VStack flex={1}>
                           <Text color="white" fontSize="$lg" fontWeight="700">
                             {rideInfo.from} → {rideInfo.to}
@@ -957,7 +954,7 @@ ${feedbackForm.issueDetails}
                   {/* Action Buttons */}
                   <VStack space="md" mb="$4">
                     <Button
-                      bg="#9C27B0"
+                      bg={ACCENT}
                       onPress={handleSubmit}
                       disabled={
                         submitting ||
@@ -966,16 +963,16 @@ ${feedbackForm.issueDetails}
                       }
                       size="lg"
                       borderRadius="$lg"
-                      $pressed={{ bg: "#7B1FA2" }}
+                      opacity={submitting || feedbackForm.rating === 0 || feedbackForm.wouldRideAgain === null ? 0.6 : 1}
                     >
                       {submitting ? (
                         <HStack space="sm" alignItems="center">
-                          <Spinner size="small" color="white" />
-                          <ButtonText color="white">Submitting...</ButtonText>
+                          <Spinner size="small" color="#121212" />
+                          <ButtonText color="#121212">Submitting...</ButtonText>
                         </HStack>
                       ) : (
                         <ButtonText
-                          color="white"
+                          color="#121212"
                           fontSize="$md"
                           fontWeight="$semibold"
                         >

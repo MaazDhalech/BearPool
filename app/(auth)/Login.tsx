@@ -21,7 +21,7 @@ import {
   signInWithCredential,
   signInWithEmailAndPassword,
 } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { addDoc, collection, doc, getDoc, serverTimestamp } from "firebase/firestore";
 import React from "react";
 import {
   ActivityIndicator,
@@ -30,7 +30,9 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Linking,
+  Modal,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -172,7 +174,49 @@ export default function Login() {
   const [appleLoading, setAppleLoading] = React.useState(false);
   const [error, setError] = React.useState("");
 
+  const [showBugReport, setShowBugReport] = React.useState(false);
+  const [bugEmail, setBugEmail] = React.useState("");
+  const [bugDescription, setBugDescription] = React.useState("");
+  const [bugSubmitting, setBugSubmitting] = React.useState(false);
+
   const passwordRef = React.useRef<TextInput>(null);
+
+  // ── Bug report submit ──
+  const onSubmitBugReport = async () => {
+    if (!bugEmail.trim() || !bugDescription.trim()) {
+      Alert.alert("Missing Info", "Please enter your email and describe the issue.");
+      return;
+    }
+    setBugSubmitting(true);
+    try {
+      const web3formsApiKey = Constants.expoConfig?.extra?.web3formsApiKey;
+      if (web3formsApiKey) {
+        const formData = new FormData();
+        formData.append("access_key", web3formsApiKey);
+        formData.append("name", bugEmail);
+        formData.append("email", bugEmail);
+        formData.append("subject", "BearPool Login Bug Report");
+        formData.append("message", bugDescription);
+        formData.append("from_name", "BearPool Bug Report (Pre-login)");
+        formData.append("replyto", bugEmail);
+        await fetch("https://api.web3forms.com/submit", { method: "POST", body: formData });
+      }
+      await addDoc(collection(db, "bugReports"), {
+        email: bugEmail.trim(),
+        description: bugDescription.trim(),
+        source: "login-screen",
+        createdAt: serverTimestamp(),
+      });
+      Alert.alert("Report Sent", "Thanks — we'll look into it shortly.", [
+        { text: "OK", onPress: () => { setShowBugReport(false); setBugEmail(""); setBugDescription(""); } },
+      ]);
+    } catch (err) {
+      console.error("Bug report failed:", err);
+      Alert.alert("Error", "Could not send your report. Please try again.");
+    } finally {
+      setBugSubmitting(false);
+    }
+  };
 
   // ── Email/password sign-in ──
   const onSignInPress = async () => {
@@ -199,7 +243,7 @@ export default function Login() {
       } else if (code === "auth/too-many-requests") {
         setError("Too many attempts. Please wait or reset your password.");
       } else {
-        setError(err?.message || "Something went wrong. Please try again.");
+        setError("Something went wrong. Please try again.");
       }
     } finally {
       setLoading(false);
@@ -274,7 +318,7 @@ export default function Login() {
           ]
         );
       } else {
-        setError(err?.message || "Google sign-in failed.");
+        setError("Google sign-in failed. Please try again.");
       }
     } finally {
       setGoogleLoading(false);
@@ -480,10 +524,88 @@ export default function Login() {
               >
                 <Text style={s.legalLink}>bearpool.net</Text>
               </TouchableOpacity>
+              <View style={s.dot} />
+              <TouchableOpacity
+                onPress={() => setShowBugReport(true)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={s.legalLink}>Report a bug</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
+
+      {/* ── Bug Report Modal ── */}
+      <Modal
+        visible={showBugReport}
+        transparent
+        animationType="slide"
+        onRequestClose={() => !bugSubmitting && setShowBugReport(false)}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={s.modalOverlay}>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : "height"}
+              style={{ width: "100%" }}
+            >
+              <View style={s.modalSheet}>
+                <Text style={s.modalTitle}>Report a Bug</Text>
+                <Text style={s.modalSubtitle}>
+                  Having trouble logging in? Let us know and we'll fix it.
+                </Text>
+
+                <Text style={s.modalLabel}>Your email</Text>
+                <TextInput
+                  style={s.modalInput}
+                  placeholder="johndoe@berkeley.edu"
+                  placeholderTextColor={palette.ghost}
+                  value={bugEmail}
+                  onChangeText={setBugEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!bugSubmitting}
+                />
+
+                <Text style={s.modalLabel}>What's happening?</Text>
+                <TextInput
+                  style={[s.modalInput, s.modalTextarea]}
+                  placeholder="Describe the issue..."
+                  placeholderTextColor={palette.ghost}
+                  value={bugDescription}
+                  onChangeText={setBugDescription}
+                  multiline
+                  numberOfLines={5}
+                  textAlignVertical="top"
+                  editable={!bugSubmitting}
+                />
+
+                <TouchableOpacity
+                  onPress={onSubmitBugReport}
+                  activeOpacity={0.8}
+                  disabled={bugSubmitting}
+                  style={[s.modalSubmit, bugSubmitting && { opacity: 0.7 }]}
+                >
+                  {bugSubmitting ? (
+                    <ActivityIndicator color={palette.bg} size="small" />
+                  ) : (
+                    <Text style={s.modalSubmitText}>Submit Report</Text>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => { if (!bugSubmitting) { setShowBugReport(false); setBugEmail(""); setBugDescription(""); } }}
+                  activeOpacity={0.7}
+                  style={s.modalCancel}
+                >
+                  <Text style={s.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </KeyboardAvoidingView>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </>
   );
 }
@@ -577,4 +699,71 @@ const s = StyleSheet.create({
     marginHorizontal: SPACING.xs * SCALE,
   },
   legalLink: { color: palette.muted, fontSize: 14 * SCALE },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.6)",
+  },
+  modalSheet: {
+    backgroundColor: "#1e1e1e",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: SPACING.md,
+    paddingBottom: SPACING.lg + SPACING.md,
+  },
+  modalTitle: {
+    color: palette.ink,
+    fontSize: 20 * SCALE,
+    fontWeight: "700",
+    marginBottom: 6 * SCALE,
+  },
+  modalSubtitle: {
+    color: palette.muted,
+    fontSize: 14 * SCALE,
+    marginBottom: SPACING.md * SCALE,
+    lineHeight: 20 * SCALE,
+  },
+  modalLabel: {
+    color: palette.muted,
+    fontSize: 13 * SCALE,
+    fontWeight: "600",
+    marginBottom: 6 * SCALE,
+  },
+  modalInput: {
+    backgroundColor: "#2a2a2a",
+    borderRadius: BORDER_RADIUS.sm,
+    color: palette.ink,
+    fontSize: 15 * SCALE,
+    paddingHorizontal: 14 * SCALE,
+    paddingVertical: 12 * SCALE,
+    borderWidth: 1,
+    borderColor: "#333",
+    marginBottom: SPACING.sm * SCALE,
+  },
+  modalTextarea: {
+    height: 110 * SCALE,
+    textAlignVertical: "top",
+  },
+  modalSubmit: {
+    backgroundColor: palette.accent,
+    height: 52 * SCALE,
+    borderRadius: BORDER_RADIUS.md,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: SPACING.xs * SCALE,
+    marginBottom: SPACING.sm * SCALE,
+  },
+  modalSubmitText: {
+    color: palette.bg,
+    fontSize: 16 * SCALE,
+    fontWeight: "700",
+  },
+  modalCancel: {
+    alignItems: "center",
+    paddingVertical: SPACING.xs * SCALE,
+  },
+  modalCancelText: {
+    color: palette.muted,
+    fontSize: 15 * SCALE,
+  },
 });

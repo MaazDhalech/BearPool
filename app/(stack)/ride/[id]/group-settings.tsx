@@ -30,7 +30,7 @@ import {
 } from "firebase/firestore";
 import { Menu as MenuIcon } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { Alert, Modal, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Modal, TextInput, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const DEFAULT_AVATAR =
@@ -238,7 +238,7 @@ export default function GroupSettings() {
       setKickReason("");
       setCustomKickReason("");
 
-      Alert.alert("Success", "Member removed successfully");
+      Alert.alert("Member removed", `${userToKick.name} has been removed from the ride.`);
     } catch (error) {
       console.error("Error removing member:", error);
       Alert.alert("Error", "Failed to remove member");
@@ -286,8 +286,8 @@ export default function GroupSettings() {
               setRide((prev: any) => ({ ...prev, hostId: newHostId }));
 
               Alert.alert(
-                "Success",
-                `${newHost.name} is now the host. You can now leave the ride if you wish.`,
+                "Host updated",
+                `${newHost.name} is now the host. You can leave the ride whenever you'd like.`,
               );
             } catch (error) {
               console.error("Error assigning new host:", error);
@@ -459,8 +459,8 @@ This ride has been permanently deleted from the system.
       await deleteDoc(rideRef);
 
       Alert.alert(
-        "Success",
-        `Ride deleted successfully.${emailSent ? " A report has been sent to the admin." : " (Report sending failed, but ride was deleted.)"}`,
+        "Ride deleted",
+        emailSent ? "Your ride has been removed." : "Your ride has been removed. The admin report could not be sent.",
         [
           {
             text: "OK",
@@ -546,7 +546,7 @@ This ride has been permanently deleted from the system.
     Alert.alert(
       "Leave Group",
       isHost && otherMembers.length === 0
-        ? "You are the only member left. Would you like to leave and delete this ride?"
+        ? "You're the last member. Leaving will delete this ride."
         : "Are you sure you want to leave this ride?",
       [
         { text: "Cancel", style: "cancel" },
@@ -653,7 +653,7 @@ This ride has been permanently deleted from the system.
                       {u.name}
                     </Text>
                     {u.id === ride.hostId && (
-                      <Text color="#00cc88" fontSize="$xs" fontWeight="$bold">
+                      <Text color="#4CAF50" fontSize="$xs" fontWeight="$bold">
                         (Host)
                       </Text>
                     )}
@@ -709,7 +709,7 @@ This ride has been permanently deleted from the system.
                           borderRadius="$sm"
                           $pressed={{ bg: "#3a3a3a" }}
                         >
-                          <Text color="#00cc88">Make Host</Text>
+                          <Text color="#4CAF50">Make Host</Text>
                         </Pressable>
                         <Pressable
                           onPress={() => {
@@ -804,8 +804,7 @@ This ride has been permanently deleted from the system.
               )}
 
               <Text color="#a0a0a0" mb={6}>
-                Please select a reason for removing this member. This will be
-                stored for record keeping.
+                Select a reason for removing this member. This helps us keep BearPool safe.
               </Text>
 
               <VStack space="md" mb={6}>
@@ -881,15 +880,7 @@ This ride has been permanently deleted from the system.
                 >
                   {kickSubmitting ? (
                     <HStack space="sm" alignItems="center">
-                      <Box
-                        width={20}
-                        height={20}
-                        borderRadius={10}
-                        borderWidth={2}
-                        borderColor="white"
-                        borderTopColor="transparent"
-                        style={{ transform: [{ rotate: "360deg" }] }}
-                      />
+                      <ActivityIndicator size="small" color="white" />
                       <Text color="white">Removing...</Text>
                     </HStack>
                   ) : (
@@ -959,8 +950,7 @@ This ride has been permanently deleted from the system.
               )}
 
               <Text color="#a0a0a0" mb={6}>
-                Please help us improve by telling us why you're deleting this
-                ride. A report with ride details will be sent to the admin.
+                Tell us why you're deleting this ride. A report will be sent to our team.
               </Text>
 
               <VStack space="md" mb={6}>
@@ -989,9 +979,9 @@ This ride has been permanently deleted from the system.
                         borderRadius: 10,
                         borderWidth: 2,
                         borderColor:
-                          deletionReason === reason ? "#9C27B0" : "#666",
+                          deletionReason === reason ? "#ff5555" : "#666",
                         backgroundColor:
-                          deletionReason === reason ? "#9C27B0" : "transparent",
+                          deletionReason === reason ? "#ff5555" : "transparent",
                         marginRight: 12,
                       }}
                     />
@@ -1031,20 +1021,12 @@ This ride has been permanently deleted from the system.
                 <Button
                   onPress={handleSubmitDeletion}
                   disabled={submitting || !deletionReason}
-                  bg="#9C27B0"
+                  bg="#ff5555"
                   opacity={submitting || !deletionReason ? 0.6 : 1}
                 >
                   {submitting ? (
                     <HStack space="sm" alignItems="center">
-                      <Box
-                        width={20}
-                        height={20}
-                        borderRadius={10}
-                        borderWidth={2}
-                        borderColor="white"
-                        borderTopColor="transparent"
-                        style={{ transform: [{ rotate: "360deg" }] }}
-                      />
+                      <ActivityIndicator size="small" color="white" />
                       <Text color="white">Deleting...</Text>
                     </HStack>
                   ) : (
