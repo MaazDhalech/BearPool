@@ -4,6 +4,7 @@ export default {
   expo: {
     name: "BearPool",
     slug: "BearPool",
+    owner: "bearpool_expo",
     version: "1.2.0",
     runtimeVersion: "1.2.0",
     updates: {
