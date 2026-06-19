@@ -79,7 +79,7 @@ export default function ChatsScreen() {
         getDocs(
           query(
             collection(db, "rides", rideId, "messages"),
-            orderBy("createdAt", "desc"),
+            orderBy("timestamp", "desc"),
             limit(1),
           ),
         ),
@@ -93,7 +93,7 @@ export default function ChatsScreen() {
       const lastReadAt = readStateSnap.data().lastReadAt;
       if (!lastReadAt) return true;
 
-      return lastMsg.createdAt?.toMillis() > lastReadAt.toMillis();
+      return lastMsg.timestamp?.toMillis() > lastReadAt.toMillis();
     } catch {
       return false;
     }

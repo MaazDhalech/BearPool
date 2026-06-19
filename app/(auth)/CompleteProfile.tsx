@@ -180,7 +180,7 @@ export default function CompleteProfile() {
         genderOption === null || genderOption === "PNTS" ? null : genderOption;
 
       await setDoc(doc(db, "users", userId), {
-        avatar: BLANK_AVATAR,
+        avatar: currentUser.photoURL || BLANK_AVATAR,
         username: cleanText(trimmedUsername),
         email: currentUser.email?.toLowerCase() ?? "",
         first_name: cleanText(trimmedFirstName),

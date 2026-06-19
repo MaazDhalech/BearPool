@@ -8,6 +8,7 @@ import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { GluestackUIProvider } from "@gluestack-ui/themed";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
 import { useFonts } from "expo-font";
@@ -393,7 +394,7 @@ function RootLayoutContent() {
   }
 
   return (
-    <>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <ExpoStatusBar style="light" translucent backgroundColor="transparent" />
       <View
         style={{
@@ -440,7 +441,7 @@ function RootLayoutContent() {
         onRateLater={handleRateLater}
         onFeedbackSubmit={handleFeedbackSubmit}
       />
-    </>
+    </GestureHandlerRootView>
   );
 }
 

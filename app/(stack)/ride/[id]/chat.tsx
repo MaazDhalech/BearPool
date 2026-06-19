@@ -1,19 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ACCENT } from "@/constants/Colors";
-import { TYPE } from "@/constants/Typography";
 import { SPACE } from "@/constants/Spacing";
-import ReAnimated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withRepeat,
-  withSequence,
-  withTiming,
-  withDelay,
-  Easing,
-} from "react-native-reanimated";
-import { db } from "@/services/firebaseConfig";
+import { TYPE } from "@/constants/Typography";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
+import { db } from "@/services/firebaseConfig";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Avatar,
@@ -24,6 +13,7 @@ import {
   Text,
 } from "@gluestack-ui/themed";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
+import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import {
   addDoc,
@@ -39,19 +29,30 @@ import {
   Timestamp,
   updateDoc,
 } from "firebase/firestore";
+import * as filter from "leo-profanity";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Animated,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
-  Share,
   TouchableOpacity,
   View,
 } from "react-native";
+import { TouchableOpacity as GHTouchableOpacity } from "react-native-gesture-handler";
+import ReAnimated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import * as Haptics from "expo-haptics";
-import * as filter from "leo-profanity";
 
 filter.add(["berkeleyhate", "ridebully"]);
 
@@ -205,6 +206,7 @@ export default function RideChatScreen() {
   const [autoScroll, setAutoScroll] = useState(true);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [selectedMsgId, setSelectedMsgId] = useState<string | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const userMapRef = useRef<UserMap>({});
   const flatListRef = useRef<FlatList<ListItem>>(null);
@@ -218,12 +220,27 @@ export default function RideChatScreen() {
 
   const insets = useSafeAreaInsets();
   const safeBottom = insets.bottom > 0 ? insets.bottom : 8;
+  const inputPadBottom = keyboardHeight > 0 ? 3 : safeBottom;
 
   const animatedValue = useRef(new Animated.Value(0)).current;
   const sendScale = useSharedValue(1);
   const sendScaleStyle = useAnimatedStyle(() => ({
     transform: [{ scale: sendScale.value }],
   }));
+
+  // ── Keyboard height tracking ──────────────────────────
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const onShow = (e: any) => setKeyboardHeight(e.endCoordinates.height);
+    const onHide = () => setKeyboardHeight(0);
+    const subShow = Keyboard.addListener(showEvent, onShow);
+    const subHide = Keyboard.addListener(hideEvent, onHide);
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
+  }, []);
 
   // ── Scroll ──────────────────────────────────────────
   const setAutoScrollBoth = useCallback((val: boolean) => {
@@ -233,8 +250,7 @@ export default function RideChatScreen() {
 
   const scrollToBottom = useCallback((animated = true) => {
     flatListRef.current?.scrollToOffset({ offset: 0, animated });
-    setAutoScrollBoth(true);
-  }, [setAutoScrollBoth]);
+  }, []);
 
   // ── Read state ───────────────────────────────────────
   const updateReadState = useCallback(
@@ -531,51 +547,27 @@ export default function RideChatScreen() {
       orderBy("timestamp", "asc"),
     );
 
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
+    const unsubscribe = onSnapshot(q, (snapshot) => {
       const msgs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as Message[];
       setMessages(msgs);
 
       if (isFocused) {
-        let latestNonSystemTs: number | null = null;
         let newestSenderId: string | null = null;
+        let latestTs: number | null = null;
         for (const msg of msgs) {
           const ts = msg.timestamp?.toMillis?.() ?? null;
-          if (!msg.system && ts !== null) {
-            if (latestNonSystemTs === null || ts > latestNonSystemTs) {
-              latestNonSystemTs = ts;
-              newestSenderId = msg.senderId || null;
-            }
+          if (!msg.system && ts !== null && (latestTs === null || ts > latestTs)) {
+            latestTs = ts;
+            newestSenderId = msg.senderId || null;
           }
         }
-
         const isFirstLoad = !hasLoadedMessagesRef.current;
         if (isFirstLoad || autoScrollRef.current || newestSenderId === user?.uid) {
           markReadIfAllowed();
-          hasLoadedMessagesRef.current = true;
-        } else if (isFirstLoad) {
-          hasLoadedMessagesRef.current = true;
         }
+        hasLoadedMessagesRef.current = true;
       }
 
-      // Fetch unseen user details
-      const uniqueIds = Array.from(
-        new Set(msgs.map((m) => m.senderId).filter(Boolean) as string[]),
-      );
-      const newMap = { ...userMapRef.current };
-      let hasUpdates = false;
-      for (const uid of uniqueIds) {
-        if (!newMap[uid]) {
-          const uDoc = await getDoc(doc(db, "users", uid));
-          if (uDoc.exists()) {
-            const d = uDoc.data();
-            newMap[uid] = { name: d.username || "Anonymous", avatar: d.avatar || DEFAULT_AVATAR };
-            hasUpdates = true;
-          }
-        }
-      }
-      if (hasUpdates) setUserMap(newMap);
-
-      // Scroll: inverted FlatList — offset 0 is always the newest message
       if (autoScrollRef.current) {
         setTimeout(() => {
           flatListRef.current?.scrollToOffset({ offset: 0, animated: hasLoadedMessagesRef.current });
@@ -585,6 +577,31 @@ export default function RideChatScreen() {
 
     return () => unsubscribe();
   }, [rideId, isFocused, markReadIfAllowed, user?.uid]);
+
+  // ── Fetch user details (separate from snapshot to avoid async race) ──
+  useEffect(() => {
+    if (messages.length === 0) return;
+    const uniqueIds = Array.from(
+      new Set(messages.map((m) => m.senderId).filter(Boolean) as string[]),
+    );
+    const newMap = { ...userMapRef.current };
+    let hasUpdates = false;
+    const fetches = uniqueIds
+      .filter((uid) => !newMap[uid])
+      .map(async (uid) => {
+        try {
+          const uDoc = await getDoc(doc(db, "users", uid));
+          if (uDoc.exists()) {
+            const d = uDoc.data();
+            newMap[uid] = { name: d.username || "Anonymous", avatar: d.avatar || DEFAULT_AVATAR };
+            hasUpdates = true;
+          }
+        } catch {}
+      });
+    Promise.all(fetches).then(() => {
+      if (hasUpdates) setUserMap({ ...newMap });
+    });
+  }, [messages]);
 
   // ── Typing indicator subscription ────────────────────
   useEffect(() => {
@@ -631,8 +648,8 @@ export default function RideChatScreen() {
   const listData = useMemo((): ListItem[] => {
     if (messages.length === 0) return [];
 
-    const GROUP_BREAK_MS = 5 * 60 * 1000; // 5 min gap breaks a chain
-    const DIVIDER_THRESHOLD_MS = 60 * 60 * 1000; // 1 hr gap shows a divider
+    const GROUP_BREAK_MS = 5 * 60 * 1000;
+    const DIVIDER_THRESHOLD_MS = 60 * 60 * 1000;
 
     const processed: ProcessedMessage[] = messages.map((msg, i) => {
       if (msg.system) return { ...msg, isFirstInGroup: true, isLastInGroup: true };
@@ -706,32 +723,16 @@ export default function RideChatScreen() {
     (msg: Message) => {
       if (msg.deleted) return;
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      const options: any[] = [
-        {
-          text: "Share message",
-          onPress: () => Share.share({ message: msg.text }),
-        },
-      ];
+      const options: any[] = [{ text: "Cancel", style: "cancel" }];
       if (msg.senderId === user?.uid) {
-        options.push({
-          text: "Delete Message",
+        options.unshift({
+          text: "Delete",
           style: "destructive",
           onPress: () =>
-            Alert.alert("Delete Message", "This will be removed for everyone.", [
-              { text: "Cancel", style: "cancel" },
-              {
-                text: "Delete",
-                style: "destructive",
-                onPress: () =>
-                  updateDoc(
-                    doc(db, "rides", String(rideId), "messages", msg.id),
-                    { deleted: true },
-                  ),
-              },
-            ]),
+            updateDoc(doc(db, "rides", String(rideId), "messages", msg.id), { deleted: true }),
         });
       } else if (msg.senderId) {
-        options.push({
+        options.unshift({
           text: "Report User",
           style: "destructive",
           onPress: () =>
@@ -741,8 +742,7 @@ export default function RideChatScreen() {
             }),
         });
       }
-      options.push({ text: "Cancel", style: "cancel" });
-      Alert.alert("", undefined, options);
+      Alert.alert("Message Options", undefined, options);
     },
     [user?.uid, rideId],
   );
@@ -893,7 +893,7 @@ export default function RideChatScreen() {
             borderBottomRightRadius: R,
           };
 
-      const AVATAR_COL = 32 + SPACE.sm; // avatar width + gap
+      const AVATAR_COL = 32 + SPACE.sm;
 
       return (
         <View
@@ -951,8 +951,8 @@ export default function RideChatScreen() {
             <TouchableOpacity
               onLongPress={() => handleLongPress(msg)}
               onPress={() => setSelectedMsgId((prev) => (prev === msg.id ? null : msg.id))}
-              activeOpacity={0.85}
-              delayLongPress={300}
+              activeOpacity={1}
+              delayLongPress={200}
             >
               <View
                 style={[
@@ -1136,11 +1136,11 @@ export default function RideChatScreen() {
             flexGrow: 1,
             justifyContent: "flex-end",
           }}
-          scrollEventThrottle={50}
-          onScrollBeginDrag={() => setAutoScrollBoth(false)}
+          scrollEventThrottle={16}
           onScroll={({ nativeEvent }) => {
-            const nearBottom = nativeEvent.contentOffset.y < 60;
-            if (nearBottom && !autoScrollRef.current) setAutoScrollBoth(true);
+            const y = nativeEvent.contentOffset.y;
+            if (y < 60 && !autoScrollRef.current) setAutoScrollBoth(true);
+            else if (y > 120 && autoScrollRef.current) setAutoScrollBoth(false);
           }}
           ListHeaderComponent={
             typingUsers.length > 0 ? (
@@ -1173,54 +1173,19 @@ export default function RideChatScreen() {
               </View>
             ) : null
           }
-          ListEmptyComponent={<ChatEmptyState />}
-          ListEmptyComponentStyle={{ flexGrow: 1, justifyContent: "center" }}
+          ListEmptyComponent={
+            <View style={{ flexGrow: 1, justifyContent: "center" }}>
+              <ChatEmptyState />
+            </View>
+          }
         />
-
-        {/* Scroll-to-bottom FAB */}
-        {!autoScroll && (
-          <TouchableOpacity
-            onPress={() => scrollToBottom(true)}
-            activeOpacity={0.85}
-            style={{
-              position: "absolute",
-              bottom: 72,
-              alignSelf: "center",
-              backgroundColor: "#1e1e1e",
-              borderRadius: 999,
-              paddingHorizontal: 16,
-              paddingVertical: 7,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: SPACE.sm,
-              borderWidth: 1,
-              borderColor: "#333",
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.4,
-              shadowRadius: 4,
-              elevation: 4,
-            }}
-          >
-            <Ionicons name="chevron-down" size={14} color={ACCENT} />
-            <Text
-              style={{
-                color: ACCENT,
-                fontSize: TYPE.size.label,
-                fontWeight: TYPE.weight.semibold,
-              }}
-            >
-              Latest messages
-            </Text>
-          </TouchableOpacity>
-        )}
 
         {/* Input bar */}
         <View
           style={{
             paddingHorizontal: SPACE.md,
             paddingTop: SPACE.sm,
-            paddingBottom: safeBottom,
+            paddingBottom: inputPadBottom,
             backgroundColor: "#121212",
             borderTopWidth: 1,
             borderTopColor: "#2a2a2a",
@@ -1261,7 +1226,7 @@ export default function RideChatScreen() {
                   if (text.trim()) {
                     sendTypingStatus(true);
                     if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
-                    typingDebounceRef.current = setTimeout(() => sendTypingStatus(false), 4000);
+                    typingDebounceRef.current = setTimeout(() => sendTypingStatus(false), 4000) as unknown as NodeJS.Timeout;
                   } else {
                     clearTyping();
                   }
@@ -1304,6 +1269,45 @@ export default function RideChatScreen() {
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Scroll-to-bottom FAB — outside KAV, positioned above keyboard */}
+      {!autoScroll && (
+        <View
+          pointerEvents="box-none"
+          style={{
+            position: "absolute",
+            bottom: keyboardHeight > 0 ? keyboardHeight + 60 : safeBottom + 70,
+            alignSelf: "center",
+            zIndex: 100,
+          }}
+        >
+          <GHTouchableOpacity
+            onPress={() => scrollToBottom(true)}
+            activeOpacity={0.85}
+            style={{
+              backgroundColor: "#1e1e1e",
+              borderRadius: 999,
+              paddingHorizontal: 16,
+              paddingVertical: 7,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: SPACE.sm,
+              borderWidth: 1,
+              borderColor: "#333",
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.4,
+              shadowRadius: 4,
+              elevation: 4,
+            }}
+          >
+            <Ionicons name="chevron-down" size={14} color={ACCENT} />
+            <Text style={{ color: ACCENT, fontSize: TYPE.size.label, fontWeight: TYPE.weight.semibold }}>
+              Latest messages
+            </Text>
+          </GHTouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }

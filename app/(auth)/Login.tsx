@@ -387,10 +387,16 @@ export default function Login() {
       <Stack.Screen options={{ gestureEnabled: false }} />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={insets.top}
         style={s.root}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <View style={[s.mainContainer, { paddingTop: insets.top }]}>
+            <ScrollView
+              contentContainerStyle={s.scrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
             {/* ── Header ── */}
             <View style={s.header}>
               <Image
@@ -532,6 +538,7 @@ export default function Login() {
                 <Text style={s.legalLink}>Report a bug</Text>
               </TouchableOpacity>
             </View>
+            </ScrollView>
           </View>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
@@ -616,12 +623,11 @@ export default function Login() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: palette.bg },
-  mainContainer: {
-    flex: 1,
+  mainContainer: { flex: 1 },
+  scrollContent: {
     paddingHorizontal: SPACING.md * SCALE,
-    paddingBottom: SPACING.md * SCALE,
-    paddingTop: SPACING.xl * 1.5 * SCALE,
-    justifyContent: "center",
+    paddingTop: SPACING.xl * SCALE,
+    paddingBottom: SPACING.lg * SCALE,
   },
   header: { alignItems: "center", marginBottom: SPACING.lg * SCALE },
   logo: { width: 90 * SCALE, height: 90 * SCALE, marginBottom: SPACING.sm * SCALE },
@@ -687,8 +693,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     opacity: 0.6,
-    marginTop: "auto",
-    paddingTop: SPACING.md * SCALE,
+    marginTop: SPACING.lg * SCALE,
     paddingBottom: SPACING.sm * SCALE,
   },
   dot: {

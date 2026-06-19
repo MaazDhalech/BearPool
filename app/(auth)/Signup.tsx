@@ -271,6 +271,7 @@ export default function Signup() {
       <Stack.Screen options={{ gestureEnabled: !loading }} />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={insets.top}
         style={s.root}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -496,6 +497,7 @@ const s = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: SPACING.md * SCALE,
     paddingBottom: SPACING.lg * SCALE,
+    flexGrow: 1,
     justifyContent: "center",
   },
   header: { alignItems: "center", marginTop: SPACING.xl * SCALE, marginBottom: SPACING.md * SCALE },
