@@ -1,0 +1,101 @@
+name: iOS Build (local on macOS runner)
+
+# Builds the .ipa ON the GitHub runner via `eas build --local`.
+# This does NOT use Expo's cloud build servers, so it does NOT count
+# against the 15-builds/month free-tier quota. EXPO_TOKEN is still
+# required so the runner can pull iOS signing credentials from EAS.
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "EAS build profile"
+        required: true
+        default: "preview"
+        type: choice
+        options:
+          - preview
+          - development
+          - production
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Expo SDK 54 / React Native needs a recent Xcode (pod install fails on old ones).
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Print Xcode version
+        run: xcodebuild -version
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      # app.config.js reads these via process.env at build time and bakes them
+      # into the binary. The repo's .env is gitignored, so recreate it here from
+      # GitHub Actions secrets. Values are masked in logs and never printed.
+      - name: Create .env from secrets
+        env:
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          FIREBASE_AUTH_DOMAIN: ${{ secrets.FIREBASE_AUTH_DOMAIN }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_STORAGE_BUCKET: ${{ secrets.FIREBASE_STORAGE_BUCKET }}
+          FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}
+          FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+          FIREBASE_MEASUREMENT_ID: ${{ secrets.FIREBASE_MEASUREMENT_ID }}
+          EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          WEB3FORMS_API_KEY: ${{ secrets.WEB3FORMS_API_KEY }}
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          # Referenced in app.config.js but not in the committed .env — wire up if used.
+          GOOGLE_IOS_CLIENT_ID: ${{ secrets.GOOGLE_IOS_CLIENT_ID }}
+          GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
+        run: |
+          cat > .env <<EOF
+          FIREBASE_API_KEY=${FIREBASE_API_KEY}
+          FIREBASE_AUTH_DOMAIN=${FIREBASE_AUTH_DOMAIN}
+          FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+          FIREBASE_STORAGE_BUCKET=${FIREBASE_STORAGE_BUCKET}
+          FIREBASE_MESSAGING_SENDER_ID=${FIREBASE_MESSAGING_SENDER_ID}
+          FIREBASE_APP_ID=${FIREBASE_APP_ID}
+          FIREBASE_MEASUREMENT_ID=${FIREBASE_MEASUREMENT_ID}
+          EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=${EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY}
+          WEB3FORMS_API_KEY=${WEB3FORMS_API_KEY}
+          BACKEND_URL=${BACKEND_URL}
+          GOOGLE_IOS_CLIENT_ID=${GOOGLE_IOS_CLIENT_ID}
+          GOOGLE_WEB_CLIENT_ID=${GOOGLE_WEB_CLIENT_ID}
+          EOF
+
+      - name: Build iOS (.ipa) locally on the macOS runner
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          COCOAPODS_DISABLE_STATS: true
+        run: |
+          eas build \
+            --platform ios \
+            --profile ${{ github.event.inputs.profile }} \
+            --local \
+            --non-interactive \
+            --output "$GITHUB_WORKSPACE/BearPool-${{ github.event.inputs.profile }}.ipa"
+
+      - name: Upload .ipa artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BearPool-${{ github.event.inputs.profile }}-ipa
+          path: ${{ github.workspace }}/BearPool-*.ipa
+          if-no-files-found: error
+          retention-days: 14
