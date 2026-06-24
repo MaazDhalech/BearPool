@@ -1094,6 +1094,8 @@ export default function HomeScreen() {
                     </Text>
                   </SpringPressable>
                 )}
+
+                <AdBanner />
               </VStack>
             </FadeSlideIn>
           )}
