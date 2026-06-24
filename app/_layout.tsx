@@ -1,5 +1,6 @@
 // app/_layout.tsx
 import { ACCENT } from "@/constants/Colors";
+import { initializeAds } from "@/services/ads";
 import RideFeedbackModal from "@/components/RideFeedbackModal";
 import "@/global.css";
 import { config } from "@/gluestack-ui.config";
@@ -125,6 +126,11 @@ function RootLayoutContent() {
 
   const rideCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const appStateRef = useRef(AppState.currentState);
+
+  // Initialize the Mobile Ads SDK once at startup.
+  useEffect(() => {
+    initializeAds();
+  }, []);
 
   // Load rated rides and rate-later rides from storage
   useEffect(() => {

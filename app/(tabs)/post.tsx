@@ -1,6 +1,7 @@
 import { ACCENT } from "@/constants/Colors";
 import { TYPE } from "@/constants/Typography";
 import { SPACE } from "@/constants/Spacing";
+import { preloadInterstitial, showInterstitial } from "@/services/ads";
 import { NotificationOptInModal } from "@/components/NotificationOptInModal";
 import { useNotificationOptInPrompt } from "@/hooks/useNotificationOptInPrompt";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -85,6 +86,11 @@ export default function PostScreen() {
   const { shouldPrompt, requestPermission, openSettings, markDismissed } =
     useNotificationOptInPrompt(userId);
   const { registerForPush } = usePushNotifications();
+
+  // Preload an interstitial so it's ready to show at the post-success transition.
+  useEffect(() => {
+    preloadInterstitial();
+  }, []);
 
   const modalScale = useSharedValue(0.88);
   const modalOpacity = useSharedValue(0);
@@ -349,15 +355,17 @@ export default function PostScreen() {
     }
   };
 
-  // Handle navigation after success
+  // Handle navigation after success. The transition away from a freshly posted
+  // ride is a natural break — show an interstitial here (frequency-capped), then
+  // navigate. Navigation always runs even if no ad is shown.
   const handleGoToHome = () => {
     setShowSuccessPopup(false);
-    router.replace("/");
+    showInterstitial(() => router.replace("/"));
   };
 
   const handleGoToChat = () => {
     setShowSuccessPopup(false);
-    router.replace("/(tabs)/chats");
+    showInterstitial(() => router.replace("/(tabs)/chats"));
   };
 
   // === Real-time input filtering ===

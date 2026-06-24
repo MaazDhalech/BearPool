@@ -2,6 +2,7 @@ import { ACCENT } from "@/constants/Colors";
 import { TYPE } from "@/constants/Typography";
 import { SPACE } from "@/constants/Spacing";
 import { FadeSlideIn } from "@/components/FadeSlideIn";
+import { AdBanner } from "@/components/AdBanner";
 import { SpringPressable } from "@/components/SpringPressable";
 import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
@@ -38,7 +39,7 @@ import {
 } from "firebase/firestore";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { AppState, AppStateStatus, Image, RefreshControl, TouchableOpacity, View } from "react-native";
 
 const DEFAULT_AVATAR =
@@ -823,7 +824,7 @@ export default function HomeScreen() {
 
         {/* Ride cards */}
         <VStack space="md" pb="$16">
-          {filteredRides.map((ride) => {
+          {filteredRides.map((ride, index) => {
             if (typeof ride !== "object" || ride === null) return null;
 
             const requiresGender = ride.genderPref !== "N";
@@ -847,8 +848,8 @@ export default function HomeScreen() {
             const cardOpacity = isLocked || !canJoin ? 0.55 : 1;
 
             return (
+              <React.Fragment key={ride.id}>
               <TouchableOpacity
-                key={ride.id}
                 activeOpacity={isLocked || !canJoin ? 0.55 : 0.85}
                 onPress={() =>
                   router.push({ pathname: "/(stack)/ride/[id]", params: { id: ride.id } })
@@ -1054,8 +1055,12 @@ export default function HomeScreen() {
                   )}
                 </View>
               </TouchableOpacity>
+              {(index + 1) % 6 === 0 && <AdBanner />}
+              </React.Fragment>
             );
           })}
+
+          {filteredRides.length > 0 && filteredRides.length < 6 && <AdBanner />}
 
           {filteredRides.length === 0 && (
             <FadeSlideIn delay={100}>

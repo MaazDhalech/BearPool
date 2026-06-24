@@ -71,6 +71,17 @@ export default {
         {
           "iosUrlScheme": "com.googleusercontent.apps.888067452420-h931i412b9d244e27q24at0ehmie2mvr"
         }
+      ],
+      [
+        "react-native-google-mobile-ads",
+        {
+          // iOS-only release. androidAppId is Google's sample/test app ID as a
+          // placeholder until a separate Android AdMob app is created.
+          iosAppId: "ca-app-pub-3671007839721369~8407264748",
+          androidAppId: "ca-app-pub-3940256099942544~3347511713",
+          userTrackingUsageDescription:
+            "This identifier will be used to deliver more relevant ads to you.",
+        }
       ]
     ],
     experiments: {
