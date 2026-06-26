@@ -325,7 +325,7 @@ export default function ProfileScreen() {
       <NavHeader
         title="Profile"
         showBack={false}
-        rightIcon={isEditing ? undefined : "menu"}
+        rightIcon={isEditing ? undefined : "settings"}
         rightLabel="Open settings"
         onRightPress={() => router.push("/(stack)/settings/settings")}
       />

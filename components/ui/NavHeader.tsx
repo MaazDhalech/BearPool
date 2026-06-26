@@ -11,9 +11,14 @@ import {
   View,
   type ViewStyle,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { initialWindowMetrics } from "react-native-safe-area-context";
 
 const CIRCLE = 44;
+
+// Raw device top inset, computed once — so every NavHeader sits at the exact
+// same vertical spot on every screen, independent of each screen's container /
+// SafeAreaContext (gluestack Box, KeyboardAvoidingView, etc.). Mirrors Tippy.
+const TOP_INSET = initialWindowMetrics?.insets.top ?? 54;
 
 // Translucent "glassy" look on platforms/OS versions without real liquid glass.
 const glassFallback = {
@@ -88,7 +93,6 @@ export function NavHeader({
   style,
 }: Props) {
   const t = useTheme();
-  const insets = useSafeAreaInsets();
 
   const titleText = (
     <>
@@ -106,7 +110,7 @@ export function NavHeader({
   );
 
   return (
-    <View style={[{ paddingTop: insets.top }, s.container, style]}>
+    <View style={[{ paddingTop: TOP_INSET }, s.container, style]}>
       {/* Left */}
       {showBack ? (
         <CircleButton
@@ -164,7 +168,9 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   spacer: { width: CIRCLE, flexShrink: 0 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  // Fixed height so the row is always CIRCLE tall whether or not side buttons
+  // are present — keeps the title at the exact same Y on every screen.
+  center: { flex: 1, height: CIRCLE, alignItems: "center", justifyContent: "center" },
   title: { fontSize: 17, fontWeight: "600", letterSpacing: -0.2, textAlign: "center" },
   subtitle: { fontSize: TYPE.size.label, textAlign: "center", marginTop: 1 },
 });
