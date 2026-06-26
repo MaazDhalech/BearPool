@@ -1,5 +1,4 @@
 import { ACCENT } from "@/constants/Colors";
-import { GlassSurface } from "@/components/ui/GlassSurface";
 import { NavHeader } from "@/components/ui/NavHeader";
 import { SPACE } from "@/constants/Spacing";
 import { TYPE } from "@/constants/Typography";
@@ -46,7 +45,6 @@ import {
 import {
   Gesture,
   GestureDetector,
-  TouchableOpacity as GHTouchableOpacity,
 } from "react-native-gesture-handler";
 import ReAnimated, {
   Easing,
@@ -209,34 +207,41 @@ function TypingDots() {
 
 const REPLY_THRESHOLD = 56;
 
-// Swipe-right-to-reply wrapper (WhatsApp/iMessage style). Translates the row
-// as you drag right; past the threshold it fires a haptic and triggers onReply.
+// Swipe-to-reply wrapper (WhatsApp/iMessage style). Other-user messages swipe
+// right with the "Reply" hint in the left gutter; your own (right-aligned)
+// messages swipe left with the hint on the right, so it stays on the bubble's
+// side. Past the threshold it fires a haptic and triggers onReply.
 function SwipeableMessage({
   onReply,
+  mirrored,
   children,
 }: {
   onReply: () => void;
+  mirrored: boolean;
   children: React.ReactNode;
 }) {
   const tx = useSharedValue(0);
   const hapticFired = useSharedValue(false);
+  const dir = mirrored ? -1 : 1;
 
   const fireHaptic = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
   const pan = Gesture.Pan()
-    .activeOffsetX(14)
+    .activeOffsetX(mirrored ? -14 : 14)
     .failOffsetY([-14, 14])
     .onUpdate((e) => {
-      tx.value = Math.min(Math.max(e.translationX, 0), 84);
-      if (tx.value >= REPLY_THRESHOLD && !hapticFired.value) {
+      // Magnitude in the reply direction, clamped 0..84.
+      const mag = Math.min(Math.max(e.translationX * dir, 0), 84);
+      tx.value = mag * dir;
+      if (mag >= REPLY_THRESHOLD && !hapticFired.value) {
         hapticFired.value = true;
         runOnJS(fireHaptic)();
-      } else if (tx.value < REPLY_THRESHOLD && hapticFired.value) {
+      } else if (mag < REPLY_THRESHOLD && hapticFired.value) {
         hapticFired.value = false;
       }
     })
     .onEnd(() => {
-      if (tx.value >= REPLY_THRESHOLD) runOnJS(onReply)();
+      if (Math.abs(tx.value) >= REPLY_THRESHOLD) runOnJS(onReply)();
       tx.value = withSpring(0, { damping: 20, stiffness: 220 });
       hapticFired.value = false;
     });
@@ -244,10 +249,10 @@ function SwipeableMessage({
   const rowStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: tx.value }],
   }));
-  // Timestamp revealed in the left gutter as the row slides right.
-  const stampStyle = useAnimatedStyle(() => {
-    const p = Math.min(tx.value / REPLY_THRESHOLD, 1);
-    return { opacity: p, transform: [{ translateX: (1 - p) * -8 }] };
+  // Reply hint revealed in the gutter as the row slides.
+  const hintStyle = useAnimatedStyle(() => {
+    const p = Math.min(Math.abs(tx.value) / REPLY_THRESHOLD, 1);
+    return { opacity: p, transform: [{ translateX: (1 - p) * 8 * -dir }] };
   });
 
   return (
@@ -257,14 +262,14 @@ function SwipeableMessage({
         style={[
           {
             position: "absolute",
-            left: SPACE.md,
             top: 0,
             bottom: 0,
             width: 72,
             alignItems: "center",
             justifyContent: "center",
+            ...(mirrored ? { right: SPACE.md } : { left: SPACE.md }),
           },
-          stampStyle,
+          hintStyle,
         ]}
       >
         <Ionicons name="arrow-undo" size={18} color="#9a9a9a" />
@@ -298,7 +303,6 @@ export default function RideChatScreen() {
   const [isArchived, setIsArchived] = useState(false);
   const [timeUntilArchive, setTimeUntilArchive] = useState<string | null>(null);
   const [shouldShowArchiveCountdown, setShouldShowArchiveCountdown] = useState(false);
-  const [autoScroll, setAutoScroll] = useState(true);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [memberReadAt, setMemberReadAt] = useState<Record<string, number>>({});
@@ -340,11 +344,6 @@ export default function RideChatScreen() {
   }, []);
 
   // ── Scroll ──────────────────────────────────────────
-  const setAutoScrollBoth = useCallback((val: boolean) => {
-    autoScrollRef.current = val;
-    setAutoScroll(val);
-  }, []);
-
   const scrollToBottom = useCallback((animated = true) => {
     flatListRef.current?.scrollToOffset({ offset: 0, animated });
   }, []);
@@ -377,6 +376,9 @@ export default function RideChatScreen() {
     useCallback(() => {
       if (!rideId || !user?.uid) return;
       hasLoadedMessagesRef.current = false;
+      // Always land on the latest message when (re)opening the chat.
+      autoScrollRef.current = true;
+      scrollToBottom(false);
       updateReadState({ activeChat: true, activeAt: serverTimestamp() });
 
       readStateHeartbeatRef.current = setInterval(() => {
@@ -390,7 +392,7 @@ export default function RideChatScreen() {
         }
         updateReadState({ activeChat: false, activeAt: serverTimestamp() });
       };
-    }, [rideId, updateReadState, user?.uid]),
+    }, [rideId, updateReadState, user?.uid, scrollToBottom]),
   );
 
   // ── Send button animation ────────────────────────────
@@ -894,7 +896,7 @@ export default function RideChatScreen() {
     try {
       const senderDoc = userMap[user?.uid || ""];
       const senderName =
-        senderDoc?.name || user?.displayName || user?.email || "Anonymous";
+        senderDoc?.name || user?.displayName || "Anonymous";
       await addDoc(collection(db, "rides", String(rideId), "messages"), {
         text: messageText,
         senderId: user?.uid,
@@ -950,16 +952,9 @@ export default function RideChatScreen() {
 
       if (isSystem || isArchivedNotice) {
         const text = msg.text ?? "";
-        const iconName: keyof typeof Ionicons.glyphMap = isArchivedNotice
-          ? "archive-outline"
-          : text.toLowerCase().includes("joined")
-          ? "person-add-outline"
-          : text.toLowerCase().includes("left")
-          ? "person-remove-outline"
-          : "information-circle-outline";
 
         return (
-          <View style={{ alignItems: "center", paddingVertical: SPACE.sm }}>
+          <View style={{ alignItems: "center", paddingVertical: SPACE.md }}>
             <View
               style={{
                 backgroundColor: isArchivedNotice ? "#2d2d00" : "#1e1e1e",
@@ -968,16 +963,8 @@ export default function RideChatScreen() {
                 borderRadius: 999,
                 paddingHorizontal: SPACE.md,
                 paddingVertical: 5,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 5,
               }}
             >
-              <Ionicons
-                name={iconName}
-                size={12}
-                color={isArchivedNotice ? "#ffff99" : "#555"}
-              />
               <Text
                 style={{
                   fontSize: TYPE.size.label,
@@ -993,22 +980,14 @@ export default function RideChatScreen() {
       }
 
       if (msg.deleted) {
+        const deleter =
+          msg.senderId === user?.uid
+            ? "You"
+            : userMap[msg.senderId || ""]?.name || msg.senderName || "Someone";
         return (
-          <View
-            style={{
-              alignItems: msg.senderId === user?.uid ? "flex-end" : "flex-start",
-              paddingHorizontal: SPACE.md,
-              marginBottom: msg.isLastInGroup ? SPACE.md : 2,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: TYPE.size.label,
-                color: "#444",
-                fontStyle: "italic",
-              }}
-            >
-              Message deleted
+          <View style={{ alignItems: "center", paddingVertical: SPACE.md, paddingHorizontal: SPACE.md }}>
+            <Text style={{ fontSize: TYPE.size.label, color: "#666", fontStyle: "italic" }}>
+              {deleter} deleted a message
             </Text>
           </View>
         );
@@ -1016,7 +995,11 @@ export default function RideChatScreen() {
 
       const isCurrentUser = msg.senderId === user?.uid;
       const sender = userMap[msg.senderId || ""] || {
-        name: msg.senderName || "Unknown",
+        // Never flash a raw email before the username resolves from userMap.
+        name:
+          msg.senderName && !msg.senderName.includes("@")
+            ? msg.senderName
+            : "…",
         avatar: msg.avatar || DEFAULT_AVATAR,
       };
       const { isFirstInGroup, isLastInGroup } = msg;
@@ -1041,7 +1024,7 @@ export default function RideChatScreen() {
       const AVATAR_COL = 32 + SPACE.sm;
 
       return (
-        <SwipeableMessage onReply={() => handleReply(msg)}>
+        <SwipeableMessage onReply={() => handleReply(msg)} mirrored={isCurrentUser}>
         <View
           style={{
             marginBottom: isLastInGroup ? SPACE.md : 2,
@@ -1103,9 +1086,8 @@ export default function RideChatScreen() {
                 style={[
                   {
                     backgroundColor: isCurrentUser ? ACCENT : "#252525",
-                    paddingHorizontal: 12,
-                    paddingTop: 8,
-                    paddingBottom: 7,
+                    paddingHorizontal: SPACE.md,
+                    paddingVertical: SPACE.sm,
                   },
                   bubbleStyle,
                 ]}
@@ -1279,9 +1261,11 @@ export default function RideChatScreen() {
           }}
           scrollEventThrottle={16}
           onScroll={({ nativeEvent }) => {
+            // Inverted list: y≈0 is the latest message. Resume auto-scroll near
+            // the bottom; pause it once the user scrolls up to read history.
             const y = nativeEvent.contentOffset.y;
-            if (y < 60 && !autoScrollRef.current) setAutoScrollBoth(true);
-            else if (y > 120 && autoScrollRef.current) setAutoScrollBoth(false);
+            if (y < 60) autoScrollRef.current = true;
+            else if (y > 120) autoScrollRef.current = false;
           }}
           ListHeaderComponent={
             typingUsers.length > 0 ? (
@@ -1447,51 +1431,6 @@ export default function RideChatScreen() {
           </View>
         </View>
       </KeyboardAvoidingView>
-
-      {/* Scroll-to-bottom FAB - outside KAV, positioned above keyboard */}
-      {!autoScroll && (
-        <View
-          pointerEvents="box-none"
-          style={{
-            position: "absolute",
-            bottom: keyboardHeight > 0 ? keyboardHeight + 60 : safeBottom + 70,
-            alignSelf: "center",
-            zIndex: 100,
-          }}
-        >
-          <GHTouchableOpacity
-            onPress={() => scrollToBottom(true)}
-            activeOpacity={0.85}
-            style={{
-              borderRadius: 999,
-              overflow: "hidden",
-              borderWidth: 1,
-              borderColor: "#333",
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.4,
-              shadowRadius: 4,
-              elevation: 4,
-            }}
-          >
-            <GlassSurface
-              fallbackColor="#1e1e1e"
-              style={{
-                paddingHorizontal: 16,
-                paddingVertical: 7,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: SPACE.sm,
-              }}
-            >
-              <Ionicons name="chevron-down" size={14} color={ACCENT} />
-              <Text style={{ color: ACCENT, fontSize: TYPE.size.label, fontWeight: TYPE.weight.semibold }}>
-                Latest messages
-              </Text>
-            </GlassSurface>
-          </GHTouchableOpacity>
-        </View>
-      )}
     </View>
   );
 }
