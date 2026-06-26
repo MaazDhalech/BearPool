@@ -1,5 +1,6 @@
 import { ACCENT } from "@/constants/Colors";
 import { GlassSurface } from "@/components/ui/GlassSurface";
+import { NavHeader } from "@/components/ui/NavHeader";
 import { SPACE } from "@/constants/Spacing";
 import { TYPE } from "@/constants/Typography";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
@@ -1033,88 +1034,54 @@ export default function RideChatScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: "#121212" }}>
       {/* ── Top chrome (outside KAV — stays put when keyboard opens) ── */}
-      <View style={{ paddingTop: insets.top, backgroundColor: "#121212" }}>
-        <HStack
-          alignItems="center"
-          px="$3"
-          py="$3"
-          borderBottomWidth="$1"
-          borderBottomColor="#2a2a2a"
-        >
-          <Pressable onPress={() => router.back()} p="$2" borderRadius="$full" mr="$1">
-            <Ionicons name="arrow-back" size={24} color="white" />
-          </Pressable>
-
-          {rideInfo ? (
-            <TouchableOpacity
-              style={{ flex: 1, paddingHorizontal: SPACE.sm }}
-              onPress={() =>
+      <NavHeader
+        title={rideInfo ? `${rideInfo.from} → ${rideInfo.to}` : undefined}
+        subtitle={
+          rideInfo
+            ? `${rideInfo.memberIds?.length || 0} members · ${rideInfo.date} · ${rideInfo.time}${isArchived ? " · Archived" : ""}`
+            : undefined
+        }
+        onTitlePress={
+          rideInfo
+            ? () =>
                 router.push({
                   pathname: "/(stack)/ride/[id]/group-settings",
                   params: { id: rideId as string },
                 })
-              }
-              activeOpacity={0.7}
-            >
-              <Text
-                style={{
-                  color: "white",
-                  fontSize: TYPE.size.subheading,
-                  fontWeight: TYPE.weight.semibold,
-                  marginBottom: 1,
-                }}
-                numberOfLines={1}
-              >
-                {rideInfo.from} → {rideInfo.to}
-              </Text>
-              <Text
-                style={{ color: "#666", fontSize: TYPE.size.label }}
-                numberOfLines={1}
-              >
-                {rideInfo.memberIds?.length || 0} members · {rideInfo.date} · {rideInfo.time}
-                {isArchived ? " · Archived" : ""}
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <View style={{ flex: 1 }} />
-          )}
+            : undefined
+        }
+        rightIcon="people-outline"
+        rightLabel="Group settings"
+        onRightPress={() =>
+          router.push({
+            pathname: "/(stack)/ride/[id]/group-settings",
+            params: { id: rideId as string },
+          })
+        }
+      />
 
-          <Pressable
-            onPress={() =>
-              router.push({
-                pathname: "/(stack)/ride/[id]/group-settings",
-                params: { id: rideId as string },
-              })
-            }
-            p="$2"
-          >
-            <Ionicons name="people-outline" size={22} color="#555" />
-          </Pressable>
-        </HStack>
-
-        {/* Archive countdown — single compact line */}
-        {shouldShowArchiveCountdown && timeUntilArchive && (
-          <View
+      {/* Archive countdown — single compact line */}
+      {shouldShowArchiveCountdown && timeUntilArchive && (
+        <View
+          style={{
+            backgroundColor: "#1a1a1a",
+            paddingVertical: 6,
+            alignItems: "center",
+            borderBottomWidth: 1,
+            borderBottomColor: "#2a2a2a",
+          }}
+        >
+          <Text
             style={{
-              backgroundColor: "#1a1a1a",
-              paddingVertical: 6,
-              alignItems: "center",
-              borderBottomWidth: 1,
-              borderBottomColor: "#2a2a2a",
+              fontSize: TYPE.size.micro,
+              fontWeight: "600",
+              color: timeUntilArchive.includes("Archives in") ? "#ffcc00" : "#777",
             }}
           >
-            <Text
-              style={{
-                fontSize: TYPE.size.micro,
-                fontWeight: "600",
-                color: timeUntilArchive.includes("Archives in") ? "#ffcc00" : "#777",
-              }}
-            >
-              {timeUntilArchive} · Ride chats archive 6 hours after start time
-            </Text>
-          </View>
-        )}
-      </View>
+            {timeUntilArchive} · Ride chats archive 6 hours after start time
+          </Text>
+        </View>
+      )}
 
       {/* ── Keyboard-managed section ── */}
       <KeyboardAvoidingView

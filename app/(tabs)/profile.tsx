@@ -3,6 +3,7 @@ import { TYPE } from "@/constants/Typography";
 import { SPACE } from "@/constants/Spacing";
 import { ScreenTitle } from "@/components/ui/ScreenTitle";
 import { ActionButton } from "@/components/ui/ActionButton";
+import { GlassSurface } from "@/components/ui/GlassSurface";
 import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import {
@@ -400,7 +401,7 @@ export default function ProfileScreen() {
               )}
 
               {/* Stats card */}
-              <View style={{ flexDirection: "row", backgroundColor: "#1e1e1e", borderRadius: 12, borderWidth: 1, borderColor: "#333", overflow: "hidden", width: "100%" }}>
+              <GlassSurface fallbackColor="#1e1e1e" style={{ flexDirection: "row", borderRadius: 12, borderWidth: 1, borderColor: "#333", overflow: "hidden", width: "100%" }}>
                 <View style={{ flex: 1, alignItems: "center", paddingVertical: SPACE.lg, borderRightWidth: 1, borderRightColor: "#333" }}>
                   <Text style={{ color: ACCENT, fontSize: TYPE.size.heading, fontWeight: TYPE.weight.bold }}>{display.ridesJoined ?? 0}</Text>
                   <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.label, marginTop: 2 }}>Joined</Text>
@@ -409,7 +410,7 @@ export default function ProfileScreen() {
                   <Text style={{ color: ACCENT, fontSize: TYPE.size.heading, fontWeight: TYPE.weight.bold }}>{display.ridesHosted ?? 0}</Text>
                   <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.label, marginTop: 2 }}>Hosted</Text>
                 </View>
-              </View>
+              </GlassSurface>
 
               {/* Form / Display */}
               <VStack space="sm" w="100%" style={{ marginTop: SPACE.lg }}>

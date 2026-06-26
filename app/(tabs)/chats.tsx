@@ -254,7 +254,9 @@ export default function ChatsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#a0a0a0"
+            tintColor={ACCENT}
+            colors={[ACCENT]}
+            progressBackgroundColor="#1e1e1e"
           />
         }
       >

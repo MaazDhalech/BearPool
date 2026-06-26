@@ -761,7 +761,9 @@ export default function HomeScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="#a0a0a0"
+            tintColor={ACCENT}
+            colors={[ACCENT]}
+            progressBackgroundColor="#1e1e1e"
           />
         }
       >

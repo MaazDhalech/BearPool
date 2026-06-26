@@ -337,7 +337,6 @@ export default function RideDetailsPage() {
       <NavHeader
         title={`${ride.from} → ${ride.to}`}
         subtitle={`${ride.date} · ${ride.time}`}
-        borderColor="#2a2a2a"
       />
 
       <ScrollView contentContainerStyle={{ padding: SPACE.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
