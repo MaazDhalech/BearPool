@@ -1,13 +1,14 @@
 import { ACCENT } from "@/constants/Colors";
 import { TYPE } from "@/constants/Typography";
 import { SPACE } from "@/constants/Spacing";
+import { ScreenTitle } from "@/components/ui/ScreenTitle";
+import { ActionButton } from "@/components/ui/ActionButton";
 import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import {
   Avatar,
   AvatarImage,
   Box,
-  Button,
   HStack,
   Heading,
   Icon,
@@ -335,12 +336,14 @@ export default function ProfileScreen() {
               alignItems="center"
               style={{ marginTop: SPACE["4xl"], marginBottom: SPACE["2xl"] }}
             >
-              <Text style={{ color: "#ffffff", fontSize: TYPE.size.display, fontWeight: TYPE.weight.bold, lineHeight: TYPE.size.display * TYPE.leading.tight }}>
+              <ScreenTitle style={{ marginTop: 0, marginBottom: 0 }}>
                 {isEditing ? "Edit\nProfile" : "Your\nProfile"}
-              </Text>
+              </ScreenTitle>
               {!isEditing && (
                 <TouchableOpacity
                   onPress={() => router.push("/(stack)/settings/settings")}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open settings"
                   style={{
                     padding: SPACE.sm,
                     backgroundColor: "#1e1e1e",
@@ -550,24 +553,20 @@ export default function ProfileScreen() {
               <VStack space="md" style={{ marginTop: SPACE["2xl"], width: "100%", paddingBottom: SPACE["2xl"] }}>
                 {isEditing ? (
                   <>
-                    <Button bg={ACCENT} onPress={handleUpdateProfile}>
-                      <Text color="#121212" style={{ fontWeight: TYPE.weight.semibold, fontSize: TYPE.size.body }}>
-                        Save Changes
-                      </Text>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      borderColor="#333"
+                    <ActionButton label="Save Changes" onPress={handleUpdateProfile} />
+                    <ActionButton
+                      label="Cancel"
+                      variant="ghost"
                       onPress={() => {
                         setIsEditing(false);
                         setFormErrors({});
                       }}
-                    >
-                      <Text color="white">Cancel</Text>
-                    </Button>
+                    />
                   </>
                 ) : (
-                  <TouchableOpacity
+                  <ActionButton
+                    label="Edit Profile"
+                    variant="secondary"
                     onPress={() => {
                       setFormData({
                         firstName: display.firstName,
@@ -577,18 +576,7 @@ export default function ProfileScreen() {
                       });
                       setIsEditing(true);
                     }}
-                    style={{
-                      borderWidth: 1,
-                      borderColor: ACCENT,
-                      borderRadius: 8,
-                      paddingVertical: SPACE.md,
-                      alignItems: "center",
-                    }}
-                  >
-                    <Text style={{ color: ACCENT, fontSize: TYPE.size.body, fontWeight: TYPE.weight.semibold }}>
-                      Edit Profile
-                    </Text>
-                  </TouchableOpacity>
+                  />
                 )}
               </VStack>
             </VStack>

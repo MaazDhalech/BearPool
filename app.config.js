@@ -12,7 +12,7 @@ export default {
     orientation: "portrait",
     icon: "./assets/images/newicon.png",
     scheme: "bearpool",
-    userInterfaceStyle: "automatic",
+    userInterfaceStyle: "dark",
     newArchEnabled: true,
     ios: {
       bundleIdentifier: "com.rebu.bearpool",
@@ -49,6 +49,7 @@ export default {
     },
     plugins: [
       "expo-router",
+      "react-native-bottom-tabs",
       [
         "expo-apple-authentication",
       ],

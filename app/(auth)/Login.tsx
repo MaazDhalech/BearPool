@@ -42,6 +42,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AppSheet, type AppSheetRef } from "@/components/ui/AppSheet";
 
 // ─────────────────────────────────────────────
 //  DESIGN TOKENS
@@ -174,12 +175,12 @@ export default function Login() {
   const [appleLoading, setAppleLoading] = React.useState(false);
   const [error, setError] = React.useState("");
 
-  const [showBugReport, setShowBugReport] = React.useState(false);
   const [bugEmail, setBugEmail] = React.useState("");
   const [bugDescription, setBugDescription] = React.useState("");
   const [bugSubmitting, setBugSubmitting] = React.useState(false);
 
   const passwordRef = React.useRef<TextInput>(null);
+  const bugSheetRef = React.useRef<AppSheetRef>(null);
 
   // ── Bug report submit ──
   const onSubmitBugReport = async () => {
@@ -208,7 +209,7 @@ export default function Login() {
         createdAt: serverTimestamp(),
       });
       Alert.alert("Report Sent", "Thanks — we'll look into it shortly.", [
-        { text: "OK", onPress: () => { setShowBugReport(false); setBugEmail(""); setBugDescription(""); } },
+        { text: "OK", onPress: () => { bugSheetRef.current?.dismiss(); setBugEmail(""); setBugDescription(""); } },
       ]);
     } catch (err) {
       console.error("Bug report failed:", err);
@@ -465,6 +466,10 @@ export default function Login() {
                 blurOnSubmit={false}
               />
 
+              {email.includes("@") && !isBerkeleyEmail(email.trim()) ? (
+                <Text style={s.inlineHint}>Use your @berkeley.edu email.</Text>
+              ) : null}
+
               <FormField
                 label="Password"
                 ref={passwordRef}
@@ -532,7 +537,7 @@ export default function Login() {
               </TouchableOpacity>
               <View style={s.dot} />
               <TouchableOpacity
-                onPress={() => setShowBugReport(true)}
+                onPress={() => bugSheetRef.current?.present()}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Text style={s.legalLink}>Report a bug</Text>
@@ -543,76 +548,62 @@ export default function Login() {
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
 
-      {/* ── Bug Report Modal ── */}
-      <Modal
-        visible={showBugReport}
-        transparent
-        animationType="slide"
-        onRequestClose={() => !bugSubmitting && setShowBugReport(false)}
-      >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={s.modalOverlay}>
-            <KeyboardAvoidingView
-              behavior={Platform.OS === "ios" ? "padding" : "height"}
-              style={{ width: "100%" }}
-            >
-              <View style={s.modalSheet}>
-                <Text style={s.modalTitle}>Report a Bug</Text>
-                <Text style={s.modalSubtitle}>
-                  Having trouble logging in? Let us know and we'll fix it.
-                </Text>
+      {/* ── Bug Report Sheet ── */}
+      <AppSheet ref={bugSheetRef} detents={["auto"]} dismissible={!bugSubmitting}>
+        <View style={s.sheetContent}>
+          <Text style={s.modalTitle}>Report a Bug</Text>
+          <Text style={s.modalSubtitle}>
+            Having trouble logging in? Let us know and we'll fix it.
+          </Text>
 
-                <Text style={s.modalLabel}>Your email</Text>
-                <TextInput
-                  style={s.modalInput}
-                  placeholder="johndoe@berkeley.edu"
-                  placeholderTextColor={palette.ghost}
-                  value={bugEmail}
-                  onChangeText={setBugEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!bugSubmitting}
-                />
+          <Text style={s.modalLabel}>Your email</Text>
+          <TextInput
+            style={s.modalInput}
+            placeholder="johndoe@berkeley.edu"
+            placeholderTextColor={palette.ghost}
+            value={bugEmail}
+            onChangeText={setBugEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!bugSubmitting}
+          />
 
-                <Text style={s.modalLabel}>What's happening?</Text>
-                <TextInput
-                  style={[s.modalInput, s.modalTextarea]}
-                  placeholder="Describe the issue..."
-                  placeholderTextColor={palette.ghost}
-                  value={bugDescription}
-                  onChangeText={setBugDescription}
-                  multiline
-                  numberOfLines={5}
-                  textAlignVertical="top"
-                  editable={!bugSubmitting}
-                />
+          <Text style={s.modalLabel}>What's happening?</Text>
+          <TextInput
+            style={[s.modalInput, s.modalTextarea]}
+            placeholder="Describe the issue..."
+            placeholderTextColor={palette.ghost}
+            value={bugDescription}
+            onChangeText={setBugDescription}
+            multiline
+            numberOfLines={5}
+            textAlignVertical="top"
+            editable={!bugSubmitting}
+          />
 
-                <TouchableOpacity
-                  onPress={onSubmitBugReport}
-                  activeOpacity={0.8}
-                  disabled={bugSubmitting}
-                  style={[s.modalSubmit, bugSubmitting && { opacity: 0.7 }]}
-                >
-                  {bugSubmitting ? (
-                    <ActivityIndicator color={palette.bg} size="small" />
-                  ) : (
-                    <Text style={s.modalSubmitText}>Submit Report</Text>
-                  )}
-                </TouchableOpacity>
+          <TouchableOpacity
+            onPress={onSubmitBugReport}
+            activeOpacity={0.8}
+            disabled={bugSubmitting}
+            style={[s.modalSubmit, bugSubmitting && { opacity: 0.7 }]}
+          >
+            {bugSubmitting ? (
+              <ActivityIndicator color={palette.bg} size="small" />
+            ) : (
+              <Text style={s.modalSubmitText}>Submit Report</Text>
+            )}
+          </TouchableOpacity>
 
-                <TouchableOpacity
-                  onPress={() => { if (!bugSubmitting) { setShowBugReport(false); setBugEmail(""); setBugDescription(""); } }}
-                  activeOpacity={0.7}
-                  style={s.modalCancel}
-                >
-                  <Text style={s.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </KeyboardAvoidingView>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
+          <TouchableOpacity
+            onPress={() => { if (!bugSubmitting) { bugSheetRef.current?.dismiss(); setBugEmail(""); setBugDescription(""); } }}
+            activeOpacity={0.7}
+            style={s.modalCancel}
+          >
+            <Text style={s.modalCancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </AppSheet>
     </>
   );
 }
@@ -664,6 +655,13 @@ const s = StyleSheet.create({
     borderColor: "#4a1e1e",
   },
   errorText: { color: "#ff7d7d", textAlign: "center" },
+  inlineHint: {
+    color: "#ff7d7d",
+    fontSize: 13 * SCALE,
+    marginTop: -SPACING.sm * SCALE,
+    marginBottom: SPACING.sm * SCALE,
+    marginLeft: 2 * SCALE,
+  },
   forgotButton: {
     alignSelf: "flex-end",
     marginBottom: SPACING.lg * SCALE,
@@ -713,6 +711,10 @@ const s = StyleSheet.create({
     backgroundColor: "#1e1e1e",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
+    padding: SPACING.md,
+    paddingBottom: SPACING.lg + SPACING.md,
+  },
+  sheetContent: {
     padding: SPACING.md,
     paddingBottom: SPACING.lg + SPACING.md,
   },

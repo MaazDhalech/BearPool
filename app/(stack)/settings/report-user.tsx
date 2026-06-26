@@ -233,7 +233,11 @@ export default function ReportUserScreen() {
         >
           <Box px="$4" py="$6">
             <HStack alignItems="center" mb="$6" mt="$8">
-              <TouchableOpacity onPress={() => router.back()}>
+              <TouchableOpacity
+                onPress={() => router.back()}
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+              >
                 <Icon as={ChevronLeft} size="xl" color="white" />
               </TouchableOpacity>
               <Heading size="xl" color="white" ml="$3">

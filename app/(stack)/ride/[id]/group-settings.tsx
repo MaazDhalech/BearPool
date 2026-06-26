@@ -31,7 +31,7 @@ import {
 import { Menu as MenuIcon } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Modal, TextInput, TouchableOpacity, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { NavHeader } from "@/components/ui/NavHeader";
 
 const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
@@ -47,7 +47,6 @@ export default function GroupSettings() {
   const { id: rideId } = useLocalSearchParams();
   const { user } = useFirebaseAuth();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
 
   const [ride, setRide] = useState<any>(null);
   const [users, setUsers] = useState<User[]>([]);
@@ -610,29 +609,10 @@ This ride has been permanently deleted from the system.
   const hostCanLeave = !isHost || otherMembers.length === 0;
 
   return (
-    <Box flex={1} bg="#121212" pt={insets.top}>
-      {/* Header with Back Button and Title */}
-      <HStack
-        alignItems="center"
-        px="$4"
-        py="$3"
-        borderBottomWidth="$1"
-        borderBottomColor="#333"
-      >
-        <Pressable
-          onPress={() => router.back()}
-          p="$2"
-          borderRadius="$full"
-          mr="$3"
-        >
-          <Ionicons name="arrow-back" size={24} color="white" />
-        </Pressable>
-        <Heading size="lg" color="white" flex={1}>
-          Group Settings
-        </Heading>
-      </HStack>
+    <Box flex={1} bg="#121212">
+      <NavHeader title="Group Settings" />
 
-      <ScrollView px="$4" py="$4">
+      <ScrollView px="$4" py="$4" showsVerticalScrollIndicator={false}>
         <VStack space="lg">
           {users.map((u) => (
             <HStack

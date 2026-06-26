@@ -29,6 +29,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { Alert, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { NavHeader } from "@/components/ui/NavHeader";
 
 type Ride = {
   id: string;
@@ -332,29 +333,14 @@ export default function RideDetailsPage() {
     : null;
 
   return (
-    <Box flex={1} bg="#121212" pt={insets.top}>
-      {/* Header — shows the route, not a generic label */}
-      <HStack
-        alignItems="center"
-        px="$4"
-        py="$3"
-        borderBottomWidth="$1"
-        borderBottomColor="#2a2a2a"
-      >
-        <Pressable onPress={() => router.back()} p="$2" borderRadius="$full" mr="$2">
-          <Ionicons name="arrow-back" size={22} color="white" />
-        </Pressable>
-        <VStack flex={1}>
-          <Text style={{ color: "#ffffff", fontSize: TYPE.size.subheading, fontWeight: TYPE.weight.bold }} numberOfLines={1}>
-            {ride.from} → {ride.to}
-          </Text>
-          <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.label }}>
-            {ride.date} · {ride.time}
-          </Text>
-        </VStack>
-      </HStack>
+    <Box flex={1} bg="#121212">
+      <NavHeader
+        title={`${ride.from} → ${ride.to}`}
+        subtitle={`${ride.date} · ${ride.time}`}
+        borderColor="#2a2a2a"
+      />
 
-      <ScrollView contentContainerStyle={{ padding: SPACE.lg, paddingBottom: 120 }}>
+      <ScrollView contentContainerStyle={{ padding: SPACE.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         {/* Info card */}
         <View style={{ backgroundColor: "#1e1e1e", borderRadius: 12, borderWidth: 1, borderColor: "#333", padding: SPACE.lg, marginBottom: SPACE.lg }}>
           {/* Seats + gender */}

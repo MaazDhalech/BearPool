@@ -2,6 +2,7 @@ import { ACCENT } from "@/constants/Colors";
 import { TYPE } from "@/constants/Typography";
 import { SPACE } from "@/constants/Spacing";
 import { FadeSlideIn } from "@/components/FadeSlideIn";
+import { ScreenTitle } from "@/components/ui/ScreenTitle";
 import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import {
@@ -248,6 +249,7 @@ export default function ChatsScreen() {
       <ScrollView
         style={{ backgroundColor: "transparent" }}
         contentContainerStyle={{ paddingBottom: 120, flexGrow: 1 }}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -257,11 +259,7 @@ export default function ChatsScreen() {
         }
       >
         <View style={{ paddingHorizontal: SPACE.lg, paddingBottom: SPACE.lg }}>
-          <View style={{ marginTop: SPACE["4xl"], marginBottom: SPACE["2xl"] }}>
-            <Text style={{ color: "#ffffff", fontSize: TYPE.size.display, fontWeight: TYPE.weight.bold, lineHeight: TYPE.size.display * TYPE.leading.tight }}>
-              Your{"\n"}Ride Groups
-            </Text>
-          </View>
+          <ScreenTitle>{"Your\nRide Groups"}</ScreenTitle>
 
           {loading ? (
             <HStack justifyContent="center" mt="$10">

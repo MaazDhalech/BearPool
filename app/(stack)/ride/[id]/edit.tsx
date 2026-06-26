@@ -22,7 +22,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { NavHeader } from "@/components/ui/NavHeader";
 
 import * as filter from "leo-profanity";
 
@@ -36,7 +36,6 @@ export default function EditRideScreen() {
   const { userId } = useFirebaseAuth();
   const router = useRouter();
   const { id } = useLocalSearchParams();
-  const insets = useSafeAreaInsets();
 
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -462,33 +461,12 @@ export default function EditRideScreen() {
       keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}
     >
       {/* Header */}
-      <View
-        style={{
-          paddingTop: insets.top,
-          paddingHorizontal: 16,
-          paddingBottom: 16,
-          borderBottomWidth: 1,
-          borderBottomColor: "#333",
-          flexDirection: "row",
-          alignItems: "center",
-        }}
-      >
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={{ padding: 8, borderRadius: 20, marginRight: 12 }}
-        >
-          <Ionicons name="arrow-back" size={24} color="white" />
-        </TouchableOpacity>
-        <Text
-          style={{ color: "#ffffff", fontSize: 20, fontWeight: "700", flex: 1 }}
-        >
-          Edit Ride
-        </Text>
-      </View>
+      <NavHeader title="Edit Ride" />
 
       <ScrollView
         contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 16, paddingVertical: 20, paddingBottom: 120 }}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
         <View style={{ marginBottom: 20 }}>
           {/* From */}
@@ -542,6 +520,8 @@ export default function EditRideScreen() {
             </Text>
             <TouchableOpacity
               onPress={showDatePickerModal}
+              accessibilityRole="button"
+              accessibilityLabel={`Change date, currently ${formattedDate}`}
               style={{
                 backgroundColor: "#1e1e1e",
                 padding: 14,
@@ -556,7 +536,7 @@ export default function EditRideScreen() {
               <Text style={{ color: "#ffffff", fontSize: 16 }}>
                 {formattedDate}
               </Text>
-              <Text style={{ color: ACCENT, fontSize: 16 }}>📅</Text>
+              <Ionicons name="calendar-outline" size={18} color={ACCENT} />
             </TouchableOpacity>
           </View>
 
@@ -567,6 +547,8 @@ export default function EditRideScreen() {
             </Text>
             <TouchableOpacity
               onPress={showTimePickerModal}
+              accessibilityRole="button"
+              accessibilityLabel={`Change time, currently ${formattedTime}`}
               style={{
                 backgroundColor: "#1e1e1e",
                 padding: 14,
@@ -581,7 +563,7 @@ export default function EditRideScreen() {
               <Text style={{ color: "#ffffff", fontSize: 16 }}>
                 {formattedTime}
               </Text>
-              <Text style={{ color: ACCENT, fontSize: 16 }}>🕒</Text>
+              <Ionicons name="time-outline" size={18} color={ACCENT} />
             </TouchableOpacity>
           </View>
 

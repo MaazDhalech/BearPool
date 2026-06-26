@@ -1,18 +1,22 @@
-import { HapticTab } from "@/components/HapticTab";
-import { IconSymbol } from "@/components/ui/IconSymbol";
-import TabBarBackground from "@/components/ui/TabBarBackground";
-import { useColorScheme } from "@/hooks/useColorScheme";
 import { ACCENT } from "@/constants/Colors";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
-import { Ionicons } from "@expo/vector-icons";
-import { Tabs, useRouter } from "expo-router";
-import React, { useEffect } from "react";
-import { Platform } from "react-native";
+import { db } from "@/services/firebaseConfig";
+import { createNativeBottomTabNavigator } from "@bottom-tabs/react-navigation";
+import { useRouter, withLayoutContext } from "expo-router";
+import { doc, getDoc } from "firebase/firestore";
+import React, { useEffect, useState } from "react";
+import type { ImageSourcePropType } from "react-native";
+
+// Bridge the native bottom-tabs navigator into expo-router's file-based routing.
+const BottomTabNavigator = createNativeBottomTabNavigator().Navigator;
+const Tabs = withLayoutContext(BottomTabNavigator);
+
+type TabIcon = ImageSourcePropType | { sfSymbol: string };
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-  const { isSignedIn, isLoaded } = useFirebaseAuth();
+  const { isSignedIn, isLoaded, userId } = useFirebaseAuth();
   const router = useRouter();
+  const [avatar, setAvatar] = useState<string | null>(null);
 
   // Redirect to login if not signed in
   useEffect(() => {
@@ -21,79 +25,58 @@ export default function TabLayout() {
     }
   }, [isLoaded, isSignedIn]);
 
+  // Load the user's avatar so the Profile tab shows their photo instead of an icon
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      if (!userId) return;
+      try {
+        const snap = await getDoc(doc(db, "users", userId));
+        if (active && snap.exists()) {
+          const a = snap.data().avatar;
+          if (typeof a === "string" && a.length > 0) setAvatar(a);
+        }
+      } catch {
+        // non-fatal — fall back to the SF Symbol icon
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [userId]);
+
   // Show nothing (for now) while loading auth state
   if (!isLoaded || !isSignedIn) {
     return null;
   }
 
+  const profileIcon = (): TabIcon =>
+    avatar ? { uri: avatar } : { sfSymbol: "person.crop.circle" };
+
   return (
     <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: ACCENT,
-        tabBarInactiveTintColor: '#666666',
-        headerShown: false,
-        tabBarButton: HapticTab,
-        tabBarBackground: TabBarBackground,
-        tabBarStyle: {
-          backgroundColor: '#000000',
-          borderTopColor: '#000000',
-          ...Platform.select({
-            ios: {
-              position: "absolute",
-            },
-            default: {},
-          }),
-        },
-      }}
+      tabBarActiveTintColor={ACCENT}
+      tabBarInactiveTintColor="#666666"
+      barTintColor="#000000"
     >
       <Tabs.Screen
         name="index"
-        options={{
-          title: "Home",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="house.fill" color={color} />
-          ),
-        }}
+        options={{ title: "Home", tabBarIcon: () => ({ sfSymbol: "house.fill" }) }}
       />
       <Tabs.Screen
         name="chats"
         options={{
           title: "Chats",
-          tabBarIcon: ({ color }) => 
-            Platform.OS === 'ios' ? (
-              <IconSymbol
-                size={28}
-                name="bubble.left.and.bubble.right.fill"
-                color={color}
-              />
-            ) : (
-              <Ionicons name="chatbubbles" size={28} color={color} />
-            )
+          tabBarIcon: () => ({ sfSymbol: "bubble.left.and.bubble.right.fill" }),
         }}
       />
       <Tabs.Screen
         name="post"
-        options={{
-          title: "Post",
-          tabBarIcon: ({ color }) => 
-            Platform.OS === 'ios' ? (
-              <IconSymbol size={28} name="plus.circle.fill" color={color} />
-            ) : (
-              <Ionicons name="add-circle" size={28} color={color} />
-            )
-        }}
+        options={{ title: "Post", tabBarIcon: () => ({ sfSymbol: "plus.circle.fill" }) }}
       />
       <Tabs.Screen
         name="profile"
-        options={{
-          title: "Profile",
-          tabBarIcon: ({ color }) => 
-            Platform.OS === 'ios' ? (
-              <IconSymbol size={28} name="person.crop.circle" color={color} />
-            ) : (
-              <Ionicons name="person-circle" size={28} color={color} />
-            )
-        }}
+        options={{ title: "Profile", tabBarIcon: () => profileIcon() }}
       />
     </Tabs>
   );

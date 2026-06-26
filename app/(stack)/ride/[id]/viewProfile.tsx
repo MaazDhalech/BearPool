@@ -314,13 +314,17 @@ export default function UserProfileScreen() {
   const initials = (userProfile.first_name?.[0] || "") + (userProfile.last_name?.[0] || "") || userProfile.username?.[0] || "U";
 
   return (
-    <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: 120 }}>
+    <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
       <Box flex={1} bg="#121212" px="$4" py="$6">
         <HStack justifyContent="space-between" alignItems="center" mb="$6" mt="$8">
           <Heading size="xl" color="white">
             Profile
           </Heading>
-          <TouchableOpacity onPress={() => router.back()}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="Done"
+          >
             <Text color={ACCENT} fontSize="$lg">Done</Text>
           </TouchableOpacity>
         </HStack>

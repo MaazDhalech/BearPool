@@ -3,6 +3,9 @@ import { TYPE } from "@/constants/Typography";
 import { SPACE } from "@/constants/Spacing";
 import { FadeSlideIn } from "@/components/FadeSlideIn";
 import { SpringPressable } from "@/components/SpringPressable";
+import { ScreenTitle } from "@/components/ui/ScreenTitle";
+import { SearchInput } from "@/components/ui/SearchInput";
+import { FilterPill } from "@/components/ui/FilterPill";
 import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import {
@@ -12,8 +15,6 @@ import {
   Button,
   HStack,
   Heading,
-  Input,
-  InputField,
   Pressable,
   ScrollView,
   Text,
@@ -226,6 +227,7 @@ export default function HomeScreen() {
 
   const ridesUnsubscribeRef = useRef<(() => void) | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const didInitBlockedRef = useRef(false);
 
   const fetchUserGender = async () => {
     if (!userId) return;
@@ -433,11 +435,16 @@ export default function HomeScreen() {
     };
   }, [sortOrder]);
 
-  // Re-filter rides when blocked users list changes
+  // Re-filter rides whenever the blocked-users list changes — including when it
+  // becomes empty (unblocking the last user must un-hide their rides). The
+  // initial population is skipped here since initializeData() already sets up
+  // the listener with the freshly-fetched list.
   useEffect(() => {
-    if (blockedUsers.length > 0) {
-      setupRealTimeListener();
+    if (!didInitBlockedRef.current) {
+      didInitBlockedRef.current = true;
+      return;
     }
+    setupRealTimeListener();
   }, [blockedUsers]);
 
   useEffect(() => {
@@ -749,6 +756,7 @@ export default function HomeScreen() {
       <ScrollView
         style={{ backgroundColor: "transparent" }}
         contentContainerStyle={{ paddingHorizontal: SPACE.lg, paddingBottom: 120 }}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -758,47 +766,21 @@ export default function HomeScreen() {
         }
       >
         {/* Title */}
-        <View style={{ marginTop: SPACE["4xl"], marginBottom: SPACE["2xl"] }}>
-          <Text style={{ color: "#ffffff", fontSize: TYPE.size.display, fontWeight: TYPE.weight.bold, lineHeight: TYPE.size.display * TYPE.leading.tight }}>
-            Upcoming{"\n"}Ride Groups
-          </Text>
-        </View>
+        <ScreenTitle>{"Upcoming\nRide Groups"}</ScreenTitle>
 
         {/* Search + Sort */}
         <HStack alignItems="center" space="sm" mb="$3">
-          <Input flex={1} size="md" borderColor="#333" backgroundColor="#1e1e1e">
-            <InputField
-              placeholder="Search by location..."
-              placeholderTextColor="#666"
-              color="white"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-          </Input>
-          <TouchableOpacity
+          <SearchInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search by location..."
+          />
+          <FilterPill
+            label={sortOrder === "newest" ? "Soonest" : "Latest"}
+            icon={sortOrder === "newest" ? "arrow-up" : "arrow-down"}
             onPress={toggleSortOrder}
-            activeOpacity={0.7}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 4,
-              paddingHorizontal: 12,
-              paddingVertical: 8,
-              backgroundColor: "#1e1e1e",
-              borderRadius: 8,
-              borderWidth: 1,
-              borderColor: "#333",
-            }}
-          >
-            <Text style={{ color: ACCENT, fontSize: TYPE.size.label, fontWeight: TYPE.weight.semibold }}>
-              {sortOrder === "newest" ? "Soonest" : "Latest"}
-            </Text>
-            <Ionicons
-              name={sortOrder === "newest" ? "arrow-up" : "arrow-down"}
-              size={12}
-              color={ACCENT}
-            />
-          </TouchableOpacity>
+            accessibilityLabel={`Sort by ${sortOrder === "newest" ? "soonest" : "latest"}, tap to change`}
+          />
         </HStack>
 
         {/* Gender filter toggle */}
@@ -806,19 +788,12 @@ export default function HomeScreen() {
           <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.caption }}>
             Gender-restricted rides
           </Text>
-          <Pressable
+          <FilterPill
+            label={showRestrictedRides ? "Hide" : "Show"}
+            active={showRestrictedRides}
             onPress={() => setShowRestrictedRides((prev) => !prev)}
-            px="$3"
-            py="$1"
-            borderRadius="$md"
-            borderWidth={1}
-            borderColor="#333"
-            backgroundColor={showRestrictedRides ? "#2e2610" : "#1e1e1e"}
-          >
-            <Text style={{ color: ACCENT, fontSize: TYPE.size.label, fontWeight: TYPE.weight.semibold }}>
-              {showRestrictedRides ? "Hide" : "Show"}
-            </Text>
-          </Pressable>
+            accessibilityLabel={`${showRestrictedRides ? "Hide" : "Show"} gender-restricted rides`}
+          />
         </HStack>
 
         {/* Ride cards */}

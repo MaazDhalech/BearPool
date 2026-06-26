@@ -1,4 +1,5 @@
 import { ACCENT } from "@/constants/Colors";
+import { GlassSurface } from "@/components/ui/GlassSurface";
 import { SPACE } from "@/constants/Spacing";
 import { TYPE } from "@/constants/Typography";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
@@ -1285,13 +1286,8 @@ export default function RideChatScreen() {
             onPress={() => scrollToBottom(true)}
             activeOpacity={0.85}
             style={{
-              backgroundColor: "#1e1e1e",
               borderRadius: 999,
-              paddingHorizontal: 16,
-              paddingVertical: 7,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: SPACE.sm,
+              overflow: "hidden",
               borderWidth: 1,
               borderColor: "#333",
               shadowColor: "#000",
@@ -1301,10 +1297,21 @@ export default function RideChatScreen() {
               elevation: 4,
             }}
           >
-            <Ionicons name="chevron-down" size={14} color={ACCENT} />
-            <Text style={{ color: ACCENT, fontSize: TYPE.size.label, fontWeight: TYPE.weight.semibold }}>
-              Latest messages
-            </Text>
+            <GlassSurface
+              fallbackColor="#1e1e1e"
+              style={{
+                paddingHorizontal: 16,
+                paddingVertical: 7,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: SPACE.sm,
+              }}
+            >
+              <Ionicons name="chevron-down" size={14} color={ACCENT} />
+              <Text style={{ color: ACCENT, fontSize: TYPE.size.label, fontWeight: TYPE.weight.semibold }}>
+                Latest messages
+              </Text>
+            </GlassSurface>
           </GHTouchableOpacity>
         </View>
       )}

@@ -425,10 +425,15 @@ export default function Signup() {
                 <TouchableOpacity
                   onPress={() => setTosAccepted(!tosAccepted)}
                   activeOpacity={0.7}
+                  accessibilityRole="checkbox"
+                  accessibilityLabel="I agree to the Terms of Service"
+                  accessibilityState={{ checked: tosAccepted }}
                   style={s.tosContainer}
                 >
                   <View style={[s.checkbox, tosAccepted && s.checkboxChecked]}>
-                    {tosAccepted && <Text style={s.checkboxText}>✓</Text>}
+                    {tosAccepted && (
+                      <MaterialCommunityIcons name="check" size={16 * SCALE} color={palette.bg} />
+                    )}
                   </View>
                   <Text style={s.tosText}>
                     I agree to the{" "}
