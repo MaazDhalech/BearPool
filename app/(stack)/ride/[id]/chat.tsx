@@ -43,9 +43,14 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { TouchableOpacity as GHTouchableOpacity } from "react-native-gesture-handler";
+import {
+  Gesture,
+  GestureDetector,
+  TouchableOpacity as GHTouchableOpacity,
+} from "react-native-gesture-handler";
 import ReAnimated, {
   Easing,
+  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -80,6 +85,13 @@ type RideInfo = {
   rideFull: boolean;
 };
 
+type ReplyMeta = {
+  id: string;
+  text: string;
+  senderName: string;
+  senderId: string;
+};
+
 type Message = {
   id: string;
   text: string;
@@ -90,6 +102,8 @@ type Message = {
   system?: boolean;
   archivedNotice?: boolean;
   deleted?: boolean;
+  sent?: boolean;
+  replyTo?: ReplyMeta | null;
 };
 
 type ProcessedMessage = Message & {
@@ -148,7 +162,7 @@ function ChatEmptyState() {
           lineHeight: TYPE.size.body * 1.7,
         }}
       >
-        Say hi to your group — coordinate pickup spots, arrival times, or just break the ice.
+        Say hi to your group. Coordinate pickup spots, arrival times, or just break the ice.
       </Text>
     </View>
   );
@@ -193,6 +207,85 @@ function TypingDots() {
   );
 }
 
+const REPLY_THRESHOLD = 56;
+
+// Swipe-right-to-reply wrapper (WhatsApp/iMessage style). Translates the row
+// as you drag right; past the threshold it fires a haptic and triggers onReply.
+function SwipeableMessage({
+  onReply,
+  children,
+}: {
+  onReply: () => void;
+  children: React.ReactNode;
+}) {
+  const tx = useSharedValue(0);
+  const hapticFired = useSharedValue(false);
+
+  const fireHaptic = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+  const pan = Gesture.Pan()
+    .activeOffsetX(14)
+    .failOffsetY([-14, 14])
+    .onUpdate((e) => {
+      tx.value = Math.min(Math.max(e.translationX, 0), 84);
+      if (tx.value >= REPLY_THRESHOLD && !hapticFired.value) {
+        hapticFired.value = true;
+        runOnJS(fireHaptic)();
+      } else if (tx.value < REPLY_THRESHOLD && hapticFired.value) {
+        hapticFired.value = false;
+      }
+    })
+    .onEnd(() => {
+      if (tx.value >= REPLY_THRESHOLD) runOnJS(onReply)();
+      tx.value = withSpring(0, { damping: 20, stiffness: 220 });
+      hapticFired.value = false;
+    });
+
+  const rowStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: tx.value }],
+  }));
+  // Timestamp revealed in the left gutter as the row slides right.
+  const stampStyle = useAnimatedStyle(() => {
+    const p = Math.min(tx.value / REPLY_THRESHOLD, 1);
+    return { opacity: p, transform: [{ translateX: (1 - p) * -8 }] };
+  });
+
+  return (
+    <View>
+      <ReAnimated.View
+        pointerEvents="none"
+        style={[
+          {
+            position: "absolute",
+            left: SPACE.md,
+            top: 0,
+            bottom: 0,
+            width: 72,
+            alignItems: "center",
+            justifyContent: "center",
+          },
+          stampStyle,
+        ]}
+      >
+        <Ionicons name="arrow-undo" size={18} color="#9a9a9a" />
+        <Text
+          style={{
+            fontSize: TYPE.size.micro,
+            color: "#9a9a9a",
+            fontWeight: "600",
+            marginTop: 2,
+          }}
+        >
+          Reply
+        </Text>
+      </ReAnimated.View>
+      <GestureDetector gesture={pan}>
+        <ReAnimated.View style={rowStyle}>{children}</ReAnimated.View>
+      </GestureDetector>
+    </View>
+  );
+}
+
 export default function RideChatScreen() {
   const { id: rideId } = useLocalSearchParams();
   const { user } = useFirebaseAuth();
@@ -207,8 +300,10 @@ export default function RideChatScreen() {
   const [shouldShowArchiveCountdown, setShouldShowArchiveCountdown] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
-  const [selectedMsgId, setSelectedMsgId] = useState<string | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [memberReadAt, setMemberReadAt] = useState<Record<string, number>>({});
+  const [replyTo, setReplyTo] = useState<ReplyMeta | null>(null);
+  const inputRef = useRef<any>(null);
 
   const userMapRef = useRef<UserMap>({});
   const flatListRef = useRef<FlatList<ListItem>>(null);
@@ -605,6 +700,33 @@ export default function RideChatScreen() {
     });
   }, [messages]);
 
+  // ── Read receipts: each member's lastReadAt ──────────
+  useEffect(() => {
+    if (!rideId) return;
+    const readStateCol = collection(db, "rides", String(rideId), "readState");
+    const unsub = onSnapshot(readStateCol, (snap) => {
+      const map: Record<string, number> = {};
+      snap.docs.forEach((d) => {
+        const ms = d.data().lastReadAt?.toMillis?.();
+        if (typeof ms === "number") map[d.id] = ms;
+      });
+      setMemberReadAt(map);
+    });
+    return () => unsub();
+  }, [rideId]);
+
+  // "Seen by all" = every other member's lastReadAt is at/after the message time
+  const isSeenByAll = useCallback(
+    (msg: Message) => {
+      const ts = msg.timestamp?.toMillis?.();
+      if (!ts || !rideInfo) return false;
+      const others = rideInfo.memberIds.filter((id) => id && id !== user?.uid);
+      if (others.length === 0) return false;
+      return others.every((id) => (memberReadAt[id] ?? 0) >= ts);
+    },
+    [rideInfo, memberReadAt, user?.uid],
+  );
+
   // ── Typing indicator subscription ────────────────────
   useEffect(() => {
     if (!rideId || !user?.uid) return;
@@ -749,6 +871,25 @@ export default function RideChatScreen() {
     [user?.uid, rideId],
   );
 
+  const handleReply = useCallback(
+    (msg: Message) => {
+      const name =
+        msg.senderId === user?.uid
+          ? "You"
+          : userMap[msg.senderId || ""]?.name || msg.senderName || "Unknown";
+      setReplyTo({
+        id: msg.id,
+        text: msg.text,
+        senderName: name,
+        senderId: msg.senderId || "",
+      });
+      // Defer so the input is rendered and the swipe gesture has settled,
+      // otherwise the focus() no-ops and the keyboard never opens.
+      setTimeout(() => inputRef.current?.focus?.(), 60);
+    },
+    [user?.uid, userMap],
+  );
+
   const sendMessage = async (messageText: string) => {
     try {
       const senderDoc = userMap[user?.uid || ""];
@@ -759,8 +900,10 @@ export default function RideChatScreen() {
         senderId: user?.uid,
         senderName,
         timestamp: serverTimestamp(),
+        ...(replyTo ? { replyTo } : {}),
       });
       setInput("");
+      setReplyTo(null);
     } catch (err) {
       console.error("Failed to send message:", err);
       Alert.alert("Error", "Failed to send message. Please try again.");
@@ -878,7 +1021,7 @@ export default function RideChatScreen() {
       };
       const { isFirstInGroup, isLastInGroup } = msg;
 
-      // Border radii — iMessage-style chain rounding
+      // Border radii - iMessage-style chain rounding
       const R = 18;
       const r = 5;
       const bubbleStyle = isCurrentUser
@@ -898,6 +1041,7 @@ export default function RideChatScreen() {
       const AVATAR_COL = 32 + SPACE.sm;
 
       return (
+        <SwipeableMessage onReply={() => handleReply(msg)}>
         <View
           style={{
             marginBottom: isLastInGroup ? SPACE.md : 2,
@@ -906,9 +1050,9 @@ export default function RideChatScreen() {
             paddingHorizontal: SPACE.md,
           }}
         >
-          {/* Avatar column — only for other users */}
+          {/* Avatar column - only for other users */}
           {!isCurrentUser && (
-            <View style={{ width: AVATAR_COL, justifyContent: "flex-end", paddingBottom: 2 }}>
+            <View style={{ width: AVATAR_COL, alignSelf: "stretch", justifyContent: "center" }}>
               {isLastInGroup ? (
                 <TouchableOpacity
                   onPress={() => handleUserPress(msg.senderId || "")}
@@ -929,7 +1073,7 @@ export default function RideChatScreen() {
               alignItems: isCurrentUser ? "flex-end" : "flex-start",
             }}
           >
-            {/* Sender name — first in group, other users only */}
+            {/* Sender name - first in group, other users only */}
             {!isCurrentUser && isFirstInGroup && (
               <TouchableOpacity
                 onPress={() => handleUserPress(msg.senderId || "")}
@@ -952,7 +1096,6 @@ export default function RideChatScreen() {
             {/* Bubble */}
             <TouchableOpacity
               onLongPress={() => handleLongPress(msg)}
-              onPress={() => setSelectedMsgId((prev) => (prev === msg.id ? null : msg.id))}
               activeOpacity={1}
               delayLongPress={200}
             >
@@ -967,6 +1110,44 @@ export default function RideChatScreen() {
                   bubbleStyle,
                 ]}
               >
+                {/* Quoted reply preview */}
+                {msg.replyTo && (
+                  <View
+                    style={{
+                      borderLeftWidth: 3,
+                      borderLeftColor: isCurrentUser ? "rgba(18,18,18,0.45)" : ACCENT,
+                      backgroundColor: isCurrentUser
+                        ? "rgba(18,18,18,0.12)"
+                        : "rgba(255,255,255,0.06)",
+                      borderRadius: 6,
+                      paddingHorizontal: 8,
+                      paddingVertical: 5,
+                      marginBottom: 5,
+                    }}
+                  >
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        fontSize: TYPE.size.label,
+                        fontWeight: "600",
+                        color: isCurrentUser ? "rgba(18,18,18,0.8)" : ACCENT,
+                        marginBottom: 1,
+                      }}
+                    >
+                      {msg.replyTo.senderName}
+                    </Text>
+                    <Text
+                      numberOfLines={2}
+                      style={{
+                        fontSize: TYPE.size.label,
+                        color: isCurrentUser ? "rgba(18,18,18,0.65)" : "#aaa",
+                      }}
+                    >
+                      {msg.replyTo.text}
+                    </Text>
+                  </View>
+                )}
+
                 <Text
                   style={{
                     color: isCurrentUser ? "#121212" : "#e8e8e8",
@@ -976,53 +1157,45 @@ export default function RideChatScreen() {
                 >
                   {msg.text}
                 </Text>
-
-                {/* Timestamp inside bubble — last message of group only */}
-                {isLastInGroup && msg.timestamp?.toDate && (
-                  <Text
-                    style={{
-                      fontSize: 10,
-                      color: isCurrentUser ? "rgba(18,18,18,0.5)" : "#555",
-                      textAlign: isCurrentUser ? "right" : "left",
-                      marginTop: 3,
-                    }}
-                  >
-                    {msg.timestamp
-                      .toDate()
-                      .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                  </Text>
-                )}
               </View>
             </TouchableOpacity>
 
-            {/* Tapped exact timestamp */}
-            {selectedMsgId === msg.id && msg.timestamp?.toDate && (
-              <Text
+            {/* Meta: time + read receipts, below the last bubble of a group */}
+            {isLastInGroup && msg.timestamp?.toDate && (
+              <View
                 style={{
-                  fontSize: TYPE.size.micro,
-                  color: "#555",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 3,
                   marginTop: 3,
+                  paddingHorizontal: 2,
                   alignSelf: isCurrentUser ? "flex-end" : "flex-start",
                 }}
               >
-                {msg.timestamp.toDate().toLocaleDateString([], {
-                  weekday: "short",
-                  month: "short",
-                  day: "numeric",
-                })}{" · "}{msg.timestamp.toDate().toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </Text>
+                <Text style={{ fontSize: 10, color: "#777" }}>
+                  {msg.timestamp
+                    .toDate()
+                    .toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                </Text>
+                {isCurrentUser &&
+                  (isSeenByAll(msg) ? (
+                    <Ionicons name="checkmark-done" size={13} color="#0a84ff" />
+                  ) : msg.sent ? (
+                    <Ionicons name="checkmark" size={12} color="#8a8a8a" />
+                  ) : (
+                    <Ionicons name="time-outline" size={11} color="#777" />
+                  ))}
+              </View>
             )}
           </View>
 
           {/* Mirror spacer so current-user bubbles don't kiss the right edge */}
           {isCurrentUser && <View style={{ width: AVATAR_COL }} />}
         </View>
+        </SwipeableMessage>
       );
     },
-    [user?.uid, userMap, handleUserPress, handleLongPress, selectedMsgId, setSelectedMsgId],
+    [user?.uid, userMap, handleUserPress, handleLongPress, isSeenByAll, handleReply],
   );
 
   const keyExtractor = useCallback(
@@ -1033,7 +1206,7 @@ export default function RideChatScreen() {
   // ── Render ───────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: "#121212" }}>
-      {/* ── Top chrome (outside KAV — stays put when keyboard opens) ── */}
+      {/* ── Top chrome (outside KAV - stays put when keyboard opens) ── */}
       <NavHeader
         title={rideInfo ? `${rideInfo.from} → ${rideInfo.to}` : undefined}
         subtitle={
@@ -1060,7 +1233,7 @@ export default function RideChatScreen() {
         }
       />
 
-      {/* Archive countdown — single compact line */}
+      {/* Archive countdown - single compact line */}
       {shouldShowArchiveCountdown && timeUntilArchive && (
         <View
           style={{
@@ -1159,6 +1332,42 @@ export default function RideChatScreen() {
             borderTopColor: "#2a2a2a",
           }}
         >
+          {/* Reply preview */}
+          {replyTo && (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: "#1e1e1e",
+                borderRadius: 10,
+                borderLeftWidth: 3,
+                borderLeftColor: ACCENT,
+                paddingVertical: 6,
+                paddingLeft: 10,
+                paddingRight: 6,
+                marginBottom: SPACE.sm,
+              }}
+            >
+              <Ionicons
+                name="arrow-undo"
+                size={15}
+                color={ACCENT}
+                style={{ marginRight: 8 }}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: ACCENT, fontSize: TYPE.size.label, fontWeight: "600", marginBottom: 1 }}>
+                  Replying to {replyTo.senderName}
+                </Text>
+                <Text numberOfLines={1} style={{ color: "#999", fontSize: TYPE.size.label }}>
+                  {replyTo.text}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setReplyTo(null)} hitSlop={10} style={{ padding: 4 }}>
+                <Ionicons name="close" size={18} color="#888" />
+              </TouchableOpacity>
+            </View>
+          )}
+
           {input.length > MAX_CHARS * 0.8 && (
             <Text
               style={{
@@ -1181,9 +1390,10 @@ export default function RideChatScreen() {
               backgroundColor={isArchived ? "#1a1a1a" : "#2a2a2a"}
             >
               <InputField
+                ref={inputRef}
                 placeholder={
                   isArchived
-                    ? "Chat archived — still open for messages"
+                    ? "Chat archived, still open for messages"
                     : "Message..."
                 }
                 placeholderTextColor={isArchived ? "#444" : "#666"}
@@ -1238,7 +1448,7 @@ export default function RideChatScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* Scroll-to-bottom FAB — outside KAV, positioned above keyboard */}
+      {/* Scroll-to-bottom FAB - outside KAV, positioned above keyboard */}
       {!autoScroll && (
         <View
           pointerEvents="box-none"

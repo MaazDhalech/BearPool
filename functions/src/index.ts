@@ -154,6 +154,20 @@ export const onRideMessageCreated = onDocumentCreated(
       return;
     }
 
+    // Mark the message as sent (server-acknowledged) so clients can render
+    // the single "sent" tick. Only an update — does not re-trigger onCreate.
+    if (message.sent !== true) {
+      try {
+        await event.data?.ref.update({ sent: true });
+      } catch (err) {
+        logger.error("Failed to mark message as sent", {
+          rideId,
+          messageId,
+          error: String(err),
+        });
+      }
+    }
+
     // Resolve message timestamp
     let messageTimestamp: admin.firestore.Timestamp;
     if (message.timestamp instanceof admin.firestore.Timestamp) {

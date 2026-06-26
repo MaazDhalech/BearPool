@@ -13,6 +13,7 @@ import React from "react";
 import {
   ActivityIndicator,
   GestureResponderEvent,
+  Image,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -289,7 +290,13 @@ export default function Signup() {
               showsVerticalScrollIndicator={false}
             >
               <View style={s.header}>
-                <Text style={s.brandTitle}>Create Account</Text>
+                <Image
+                  source={require("../../assets/images/newicon.png")}
+                  resizeMode="contain"
+                  style={{ ...s.logo, marginTop: 25 * SCALE, borderRadius: 20 * SCALE }}
+                />
+                <Text style={s.brandTitle}>BearPool</Text>
+                <Text style={s.subtitle}>The biggest ride-share board for Cal students.</Text>
               </View>
 
               {error ? (
@@ -505,8 +512,10 @@ const s = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
   },
-  header: { alignItems: "center", marginTop: SPACING.xl * SCALE, marginBottom: SPACING.md * SCALE },
-  brandTitle: { color: palette.ink, fontSize: 32 * SCALE, fontWeight: "800" },
+  header: { alignItems: "center", marginBottom: SPACING.lg * SCALE },
+  logo: { width: 90 * SCALE, height: 90 * SCALE, marginBottom: SPACING.sm * SCALE },
+  brandTitle: { color: palette.ink, fontSize: 42 * SCALE, fontWeight: "800" },
+  subtitle: { color: palette.muted, fontSize: 20 * SCALE, marginTop: 6 * SCALE },
   errorContainer: {
     backgroundColor: "#2a0e0e",
     padding: SPACING.sm * SCALE,

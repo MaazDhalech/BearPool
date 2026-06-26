@@ -208,7 +208,7 @@ export default function Login() {
         source: "login-screen",
         createdAt: serverTimestamp(),
       });
-      Alert.alert("Report Sent", "Thanks — we'll look into it shortly.", [
+      Alert.alert("Report Sent", "Thanks, we'll look into it shortly.", [
         { text: "OK", onPress: () => { bugSheetRef.current?.dismiss(); setBugEmail(""); setBugDescription(""); } },
       ]);
     } catch (err) {
@@ -281,11 +281,11 @@ export default function Login() {
       }
     } catch (err: any) {
       if (err.code === statusCodes.SIGN_IN_CANCELLED) {
-        // user cancelled — no error shown
+        // user cancelled - no error shown
       } else if (err.code === statusCodes.IN_PROGRESS) {
-        // already in progress — ignore
+        // already in progress - ignore
       } else if (err.code === "auth/account-exists-with-different-credential") {
-        // User already has an email/password account — offer to link Google to it
+        // User already has an email/password account - offer to link Google to it
         const pendingCredential = GoogleAuthProvider.credentialFromError(err);
         Alert.alert(
           "Account Already Exists",
@@ -355,7 +355,7 @@ export default function Login() {
 
       const result = await signInWithCredential(auth, firebaseCredential);
 
-      // Enforce @berkeley.edu — delete the created account and reject if not berkeley
+      // Enforce @berkeley.edu - delete the created account and reject if not berkeley
       const appleEmail = result.user.email;
       if (!appleEmail || !isBerkeleyEmail(appleEmail)) {
         await deleteUser(result.user);

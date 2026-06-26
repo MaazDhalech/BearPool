@@ -412,8 +412,8 @@ export default function EditRideScreen() {
         {
           text: "OK",
           onPress: () => {
-            // Navigate back to chats or home screen
-            router.replace("/(tabs)/chats");
+            // Pop the (now-deleted) ride screens off the stack, then land on chats
+            router.dismissTo("/(tabs)/chats");
           },
         },
       ]);

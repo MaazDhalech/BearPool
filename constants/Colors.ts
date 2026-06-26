@@ -1,6 +1,6 @@
 /**
  * BearPool theme colors.
- * To change the accent color, update ACCENT here — all files import it from this constant.
+ * To change the accent color, update ACCENT here - all files import it from this constant.
  */
 
 export const ACCENT = "#FFBE5C";        // Primary accent

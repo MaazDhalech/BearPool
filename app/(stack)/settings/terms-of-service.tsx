@@ -1,3 +1,4 @@
+import { ACCENT } from "@/constants/Colors";
 import {
     Box,
     HStack,
@@ -193,7 +194,7 @@ export default function TermsOfServiceScreen() {
           <Box px="$4">
             {loading ? (
               <Box py="$8" alignItems="center">
-                <Spinner size="large" color="white" />
+                <Spinner size="large" color={ACCENT} />
                 <Text color="#a0a0a0" mt="$4">
                   Loading terms of service...
                 </Text>

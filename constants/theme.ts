@@ -1,5 +1,5 @@
 /**
- * BearPool theme tokens — light + dark.
+ * BearPool theme tokens - light + dark.
  *
  * Both themes expose the SAME semantic keys so components can be migrated
  * mechanically: read a color from `useTheme()` instead of importing a raw hex
@@ -12,13 +12,13 @@
  *   <View style={{ backgroundColor: t.bg }}>          // was "#121212" / BG_PRIMARY
  *   <Text style={{ color: t.textSecondary }}>         // was "#a0a0a0" / TEXT_SECONDARY
  *
- * Colors.ts is kept intact — existing imports keep working during migration.
+ * Colors.ts is kept intact - existing imports keep working during migration.
  */
 
 import { ACCENT, ACCENT_DIM } from "./Colors";
 
 export type Theme = {
-  /** true when this is the dark theme — handy for one-off conditionals */
+  /** true when this is the dark theme - handy for one-off conditionals */
   isDark: boolean;
 
   // Brand

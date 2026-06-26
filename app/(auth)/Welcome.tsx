@@ -61,11 +61,11 @@ export default function Welcome() {
             <Text style={s.subtitle}>You're now part of the biggest Cal ride-share board.</Text>
           </View>
 
-          {/* Callout — clarify what BearPool is */}
+          {/* Callout - clarify what BearPool is */}
           <View style={s.callout}>
             <Text style={s.calloutTitle}>BearPool is for splitting rides</Text>
             <Text style={s.calloutBody}>
-              Coordinate any ride service with other verified Cal students — as of now, BearPool is not for carpooling in personal cars. Post a trip, find people heading the same way, and split the cost.
+              Coordinate any ride service with other verified Cal students. As of now, BearPool is not for carpooling in personal cars. Post a trip, find people heading the same way, and split the cost.
             </Text>
           </View>
 

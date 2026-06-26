@@ -666,7 +666,7 @@ export default function PostScreen() {
             </Text>
           </View>
 
-          {/* Test ride toggle — admin only */}
+          {/* Test ride toggle - admin only */}
           {isAdmin && (
             <View
               style={{
@@ -814,16 +814,14 @@ export default function PostScreen() {
                     activeOpacity={0.7}
                     style={{
                       flex: 1,
-                      backgroundColor: "transparent",
+                      backgroundColor: "#2a2a2a",
                       paddingVertical: 14,
                       borderRadius: 8,
-                      borderWidth: 1,
-                      borderColor: ACCENT,
                     }}
                   >
                     <Text
                       style={{
-                        color: ACCENT,
+                        color: "#ffffff",
                         textAlign: "center",
                         fontWeight: "600",
                         fontSize: 16,

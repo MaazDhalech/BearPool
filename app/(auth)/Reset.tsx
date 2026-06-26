@@ -125,7 +125,7 @@ export default function ResetPassword() {
     } catch (err: any) {
       const code = err?.code;
       if (code === "auth/user-not-found" || code === "auth/invalid-email") {
-        // Don't reveal whether email exists — show generic success
+        // Don't reveal whether email exists - show generic success
         setSent(true);
       } else if (code === "auth/too-many-requests") {
         setError("Too many requests. Please try again later.");

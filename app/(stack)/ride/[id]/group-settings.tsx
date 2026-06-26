@@ -265,7 +265,7 @@ export default function GroupSettings() {
                 hostId: newHostId,
               });
 
-              // Write system message — triggers push notifications via Cloud Function
+              // Write system message - triggers push notifications via Cloud Function
               const messagesRef = collection(
                 db,
                 "rides",
@@ -465,7 +465,7 @@ This ride has been permanently deleted from the system.
             text: "OK",
             onPress: () => {
               // Navigate back to chats or home screen
-              router.replace("/(tabs)/chats");
+              router.dismissTo("/(tabs)/chats");
             },
           },
         ],
@@ -579,7 +579,7 @@ This ride has been permanently deleted from the system.
               const updatedSnap = await getDoc(rideRef);
               console.log("Seats after update:", updatedSnap.data()?.seats);
 
-              router.replace("/(tabs)/chats");
+              router.dismissTo("/(tabs)/chats");
             } catch (error) {
               console.error("Error leaving group:", error);
               Alert.alert("Error", "Failed to leave group");

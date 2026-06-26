@@ -15,7 +15,7 @@ import { initialWindowMetrics } from "react-native-safe-area-context";
 
 const CIRCLE = 44;
 
-// Raw device top inset, computed once — so every NavHeader sits at the exact
+// Raw device top inset, computed once - so every NavHeader sits at the exact
 // same vertical spot on every screen, independent of each screen's container /
 // SafeAreaContext (gluestack Box, KeyboardAvoidingView, etc.). Mirrors Tippy.
 const TOP_INSET = initialWindowMetrics?.insets.top ?? 54;
@@ -77,7 +77,7 @@ type Props = {
 /**
  * Tippy-style header: a centered plain-text title flanked by circular
  * liquid-glass action buttons (back on the left, an optional action on the
- * right). The bar itself is transparent — only the side buttons are glass.
+ * right). The bar itself is transparent - only the side buttons are glass.
  * Self-contained (includes the top safe-area inset); render as the first child
  * of a screen.
  */
@@ -122,7 +122,7 @@ export function NavHeader({
         <View style={s.spacer} />
       )}
 
-      {/* Center — just text, no glass */}
+      {/* Center - just text, no glass */}
       {onTitlePress ? (
         <TouchableOpacity style={s.center} activeOpacity={0.7} onPress={onTitlePress}>
           {titleText}
@@ -169,7 +169,7 @@ const s = StyleSheet.create({
   },
   spacer: { width: CIRCLE, flexShrink: 0 },
   // Fixed height so the row is always CIRCLE tall whether or not side buttons
-  // are present — keeps the title at the exact same Y on every screen.
+  // are present - keeps the title at the exact same Y on every screen.
   center: { flex: 1, height: CIRCLE, alignItems: "center", justifyContent: "center" },
   title: { fontSize: 17, fontWeight: "600", letterSpacing: -0.2, textAlign: "center" },
   subtitle: { fontSize: TYPE.size.label, textAlign: "center", marginTop: 1 },

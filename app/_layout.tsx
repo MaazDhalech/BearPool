@@ -366,7 +366,7 @@ function RootLayoutContent() {
           setShowForceUpdate(true);
         }
       } catch (e) {
-        // Silently fail — don't block the app if Firestore is unreachable
+        // Silently fail - don't block the app if Firestore is unreachable
       }
     };
     checkVersion();
@@ -388,7 +388,7 @@ function RootLayoutContent() {
   if (!loaded || !isAuthLoaded || isLoading) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#000" }}>
-        <ActivityIndicator size="large" color="#fff" />
+        <ActivityIndicator size="large" color={ACCENT} />
       </View>
     );
   }
@@ -410,7 +410,16 @@ function RootLayoutContent() {
             contentStyle: { backgroundColor: "#000000" },
           }}
         >
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          {/* Tabs are a root destination - never swipeable back into auth */}
+          <Stack.Screen
+            name="(tabs)"
+            options={{ headerShown: false, gestureEnabled: false }}
+          />
+          {/* Edit Profile - native modal sheet, no swipe-dismiss (exit via Cancel/Save) */}
+          <Stack.Screen
+            name="edit-profile"
+            options={{ presentation: "modal", gestureEnabled: false }}
+          />
           <Stack.Screen name="+not-found" />
         </Stack>
       </View>

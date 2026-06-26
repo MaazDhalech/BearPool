@@ -327,11 +327,11 @@ const cleanupUserRides = async (userId: string) => {
           memberIds: arrayRemove(userId),
         });
       } else {
-        // No other members — delete the ride entirely
+        // No other members - delete the ride entirely
         await deleteDoc(rideDoc.ref);
       }
     } else {
-      // Regular member — remove and free up a seat
+      // Regular member - remove and free up a seat
       await updateDoc(rideDoc.ref, {
         memberIds: arrayRemove(userId),
         seats: increment(1),
@@ -498,7 +498,7 @@ const handleReauthAndDelete = async () => {
 
     try {
       if (value) {
-        // Enabling — check/request permission
+        // Enabling - check/request permission
         const { status } = await Notifications.getPermissionsAsync();
 
         if (status === "denied") {
@@ -657,7 +657,7 @@ const handleReauthAndDelete = async () => {
             {deletingAccount && (
               <Box mt="$4" p="$4" bg="#2a2a2a" borderRadius="$md">
                 <HStack space="sm" justifyContent="center" alignItems="center">
-                  <Spinner size="small" color="#ff6b6b" />
+                  <Spinner size="small" color={ACCENT} />
                   <Text color="#ff6b6b" textAlign="center">
                     Deleting account... Please wait.
                   </Text>
@@ -750,7 +750,7 @@ const handleReauthAndDelete = async () => {
           </ModalContent>
         </Modal>
 
-        {/* Notification Settings — native bottom sheet */}
+        {/* Notification Settings - native bottom sheet */}
         <RNModal
           visible={showNotifSettings}
           transparent

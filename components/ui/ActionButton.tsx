@@ -23,10 +23,10 @@ type Props = {
 };
 
 /**
- * Standard button.
- *  - primary:   filled accent (dark label)
- *  - secondary: outlined accent (accent label)
- *  - ghost:     subtle outline (muted label)
+ * Standard button. Filled hierarchy, no outlines.
+ *  - primary:   accent fill (dark label)
+ *  - secondary: subtle raised-surface fill (primary-text label)
+ *  - ghost:     transparent, borderless (muted label)
  */
 export function ActionButton({
   label,
@@ -41,14 +41,17 @@ export function ActionButton({
   const t = useTheme();
   const isDisabled = disabled || loading;
 
-  const bg = variant === "primary" ? t.accent : "transparent";
-  const borderColor =
-    variant === "secondary" ? t.accent : variant === "ghost" ? t.border : "transparent";
+  const bg =
+    variant === "primary"
+      ? t.accent
+      : variant === "secondary"
+      ? t.raised
+      : "transparent";
   const labelColor =
     variant === "primary"
       ? t.onAccent
       : variant === "secondary"
-      ? t.accent
+      ? t.textPrimary
       : t.textSecondary;
 
   return (
@@ -68,9 +71,7 @@ export function ActionButton({
           paddingHorizontal: SPACE.lg,
           paddingVertical: SPACE.sm + 2,
           borderRadius: 10,
-          borderWidth: variant === "primary" ? 0 : 1,
           backgroundColor: bg,
-          borderColor,
           opacity: isDisabled ? 0.5 : 1,
         },
         style,

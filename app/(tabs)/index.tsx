@@ -435,7 +435,7 @@ export default function HomeScreen() {
     };
   }, [sortOrder]);
 
-  // Re-filter rides whenever the blocked-users list changes — including when it
+  // Re-filter rides whenever the blocked-users list changes - including when it
   // becomes empty (unblocking the last user must un-hide their rides). The
   // initial population is skipped here since initializeData() already sets up
   // the listener with the freshly-fetched list.
@@ -911,7 +911,7 @@ export default function HomeScreen() {
                     )}
                   </View>
 
-                  {/* Notes — 1 line max */}
+                  {/* Notes - 1 line max */}
                   {ride.notes ? (
                     <Text
                       style={{ color: "#808080", fontSize: TYPE.size.caption, marginBottom: SPACE.sm }}
@@ -981,11 +981,10 @@ export default function HomeScreen() {
                           paddingHorizontal: SPACE.lg,
                           paddingVertical: SPACE.sm,
                           borderRadius: 8,
-                          borderWidth: 1,
-                          borderColor: ACCENT,
+                          backgroundColor: ACCENT,
                         }}
                       >
-                        <Text style={{ color: ACCENT, fontSize: TYPE.size.body, fontWeight: TYPE.weight.semibold }}>View Chat</Text>
+                        <Text style={{ color: "#121212", fontSize: TYPE.size.body, fontWeight: TYPE.weight.semibold }}>View Chat</Text>
                       </SpringPressable>
                     ) : !canJoin ? (
                       <View style={{ paddingHorizontal: SPACE.lg, paddingVertical: SPACE.sm, borderRadius: 8, borderWidth: 1, borderColor: "#444" }}>
@@ -1046,7 +1045,7 @@ export default function HomeScreen() {
                 <Text style={{ color: "#a0a0a0", textAlign: "center", fontSize: TYPE.size.body, lineHeight: TYPE.size.body * TYPE.leading.relaxed }}>
                   {searchQuery
                     ? "Try a different location or clear the search."
-                    : "Be the first — post a ride and find people to split the cost with."}
+                    : "Be the first to post a ride and find people to split the cost with."}
                 </Text>
                 {!searchQuery && (
                   <SpringPressable
