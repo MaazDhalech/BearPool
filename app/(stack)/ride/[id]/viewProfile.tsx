@@ -13,6 +13,7 @@ import {
     VStack
 } from "@gluestack-ui/themed";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { NavHeader } from "@/components/ui/NavHeader";
 import {
     arrayRemove,
     arrayUnion,
@@ -314,20 +315,10 @@ export default function UserProfileScreen() {
   const initials = (userProfile.first_name?.[0] || "") + (userProfile.last_name?.[0] || "") || userProfile.username?.[0] || "U";
 
   return (
-    <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-      <Box flex={1} bg="#121212" px="$4" py="$6">
-        <HStack justifyContent="space-between" alignItems="center" mb="$6" mt="$8">
-          <Heading size="xl" color="white">
-            Profile
-          </Heading>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            accessibilityRole="button"
-            accessibilityLabel="Done"
-          >
-            <Text color={ACCENT} fontSize="$lg">Done</Text>
-          </TouchableOpacity>
-        </HStack>
+    <Box flex={1} bg="#121212">
+      <NavHeader title="Profile" />
+      <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+        <Box flex={1} bg="#121212" px="$4" py="$6">
 
         <VStack space="lg" alignItems="center">
           <Avatar size="2xl" bg="#1e1e1e" borderRadius="$full" mb="$4">
@@ -428,6 +419,7 @@ export default function UserProfileScreen() {
           </VStack>
         </VStack>
       </Box>
-    </ScrollView>
+      </ScrollView>
+    </Box>
   );
 }

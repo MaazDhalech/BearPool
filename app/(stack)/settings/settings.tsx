@@ -1,6 +1,7 @@
 import { ACCENT } from "@/constants/Colors";
 import { db, auth } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
+import { NavHeader } from "@/components/ui/NavHeader";
 import { deleteUser, EmailAuthProvider, GoogleAuthProvider, OAuthProvider, reauthenticateWithCredential, signOut as firebaseSignOut } from "firebase/auth";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import * as AppleAuthentication from "expo-apple-authentication";
@@ -585,21 +586,9 @@ const handleReauthAndDelete = async () => {
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
     >
       <Box flex={1} bg="#121212">
+        <NavHeader title="Settings" />
         <ScrollView showsVerticalScrollIndicator={false}>
           <Box px="$4" py="$6">
-            {/* Header */}
-            <HStack alignItems="center" mb="$6" mt="$8">
-              <TouchableOpacity
-                onPress={handleGoBack}
-                accessibilityRole="button"
-                accessibilityLabel="Go back"
-              >
-                <Icon as={ChevronLeft} size="xl" color="white" />
-              </TouchableOpacity>
-              <Heading size="xl" color="white" ml="$3">
-                Settings
-              </Heading>
-            </HStack>
 
             {/* Settings Items */}
             <VStack space="sm">

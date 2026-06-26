@@ -3,7 +3,7 @@ import { TYPE } from "@/constants/Typography";
 import { SPACE } from "@/constants/Spacing";
 import { FadeSlideIn } from "@/components/FadeSlideIn";
 import { SpringPressable } from "@/components/SpringPressable";
-import { ScreenTitle } from "@/components/ui/ScreenTitle";
+import { NavHeader } from "@/components/ui/NavHeader";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { FilterPill } from "@/components/ui/FilterPill";
 import { db } from "@/services/firebaseConfig";
@@ -753,9 +753,10 @@ export default function HomeScreen() {
         style={{ position: "absolute", top: 0, left: 0, right: 0, height: 280 }}
         pointerEvents="none"
       />
+      <NavHeader title="Home" showBack={false} />
       <ScrollView
         style={{ backgroundColor: "transparent" }}
-        contentContainerStyle={{ paddingHorizontal: SPACE.lg, paddingBottom: 120 }}
+        contentContainerStyle={{ paddingHorizontal: SPACE.lg, paddingTop: SPACE.md, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -767,9 +768,6 @@ export default function HomeScreen() {
           />
         }
       >
-        {/* Title */}
-        <ScreenTitle>{"Upcoming\nRide Groups"}</ScreenTitle>
-
         {/* Search + Sort */}
         <HStack alignItems="center" space="sm" mb="$3">
           <SearchInput

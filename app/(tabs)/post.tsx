@@ -19,7 +19,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { SpringPressable } from "@/components/SpringPressable";
-import { ScreenTitle } from "@/components/ui/ScreenTitle";
+import { NavHeader } from "@/components/ui/NavHeader";
 import { Stack, useRouter } from "expo-router";
 import {
   Timestamp,
@@ -429,15 +429,13 @@ export default function PostScreen() {
         style={{ position: "absolute", top: 0, left: 0, right: 0, height: 280 }}
         pointerEvents="none"
       />
+      <NavHeader title="Post" showBack={false} />
       <ScrollView
         contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 16, paddingVertical: 20, paddingBottom: 120 }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ marginTop: 60, marginBottom: 20 }}>
-          <ScreenTitle style={{ marginTop: 0, marginBottom: SPACE["2xl"], textAlign: "left" }}>
-            Post a Ride
-          </ScreenTitle>
+        <View style={{ marginBottom: 20 }}>
 
           {/* From */}
           <View style={{ marginBottom: SPACE.lg }}>

@@ -21,6 +21,7 @@ import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import { addDoc, collection, doc, getDoc, serverTimestamp } from "firebase/firestore";
 import { ChevronLeft } from "lucide-react-native";
+import { NavHeader } from "@/components/ui/NavHeader";
 import { useEffect, useState } from "react";
 import {
     Alert,
@@ -175,6 +176,7 @@ export default function ContactSupportScreen() {
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
     >
       <Box flex={1} bg="#121212">
+        <NavHeader title="Contact Support" />
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -184,19 +186,6 @@ export default function ContactSupportScreen() {
           }}
         >
           <Box px="$4" py="$6">
-            {/* Header */}
-            <HStack alignItems="center" mb="$6" mt="$8">
-              <TouchableOpacity
-                onPress={handleGoBack}
-                accessibilityRole="button"
-                accessibilityLabel="Go back"
-              >
-                <Icon as={ChevronLeft} size="xl" color="white" />
-              </TouchableOpacity>
-              <Heading size="xl" color="white" ml="$3">
-                Contact Support
-              </Heading>
-            </HStack>
 
             {/* Description */}
             <Text color="#a0a0a0" fontSize="$sm" mb="$6" lineHeight="$md">

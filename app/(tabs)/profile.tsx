@@ -1,7 +1,7 @@
 import { ACCENT } from "@/constants/Colors";
 import { TYPE } from "@/constants/Typography";
 import { SPACE } from "@/constants/Spacing";
-import { ScreenTitle } from "@/components/ui/ScreenTitle";
+import { NavHeader } from "@/components/ui/NavHeader";
 import { ActionButton } from "@/components/ui/ActionButton";
 import { GlassSurface } from "@/components/ui/GlassSurface";
 import { db } from "@/services/firebaseConfig";
@@ -322,6 +322,13 @@ export default function ProfileScreen() {
         style={{ position: "absolute", top: 0, left: 0, right: 0, height: 280 }}
         pointerEvents="none"
       />
+      <NavHeader
+        title="Profile"
+        showBack={false}
+        rightIcon={isEditing ? undefined : "menu"}
+        rightLabel="Open settings"
+        onRightPress={() => router.push("/(stack)/settings/settings")}
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
@@ -330,34 +337,7 @@ export default function ProfileScreen() {
           contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
         >
-          <View style={{ paddingHorizontal: SPACE.lg, paddingBottom: SPACE.lg }}>
-            {/* Header */}
-            <HStack
-              justifyContent="space-between"
-              alignItems="center"
-              style={{ marginTop: SPACE["4xl"], marginBottom: SPACE["2xl"] }}
-            >
-              <ScreenTitle style={{ marginTop: 0, marginBottom: 0 }}>
-                {isEditing ? "Edit\nProfile" : "Your\nProfile"}
-              </ScreenTitle>
-              {!isEditing && (
-                <TouchableOpacity
-                  onPress={() => router.push("/(stack)/settings/settings")}
-                  accessibilityRole="button"
-                  accessibilityLabel="Open settings"
-                  style={{
-                    padding: SPACE.sm,
-                    backgroundColor: "#1e1e1e",
-                    borderRadius: 8,
-                    borderWidth: 1,
-                    borderColor: "#333",
-                  }}
-                >
-                  <Icon as={Menu} size="xl" color="white" />
-                </TouchableOpacity>
-              )}
-            </HStack>
-
+          <View style={{ paddingHorizontal: SPACE.lg, paddingTop: SPACE.md, paddingBottom: SPACE.lg }}>
             <VStack space="lg" alignItems="center">
               {/* Avatar */}
               <TouchableOpacity

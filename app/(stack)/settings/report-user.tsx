@@ -1,6 +1,7 @@
 import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
+import { NavHeader } from "@/components/ui/NavHeader";
 import {
   Box,
   Button,
@@ -226,24 +227,13 @@ export default function ReportUserScreen() {
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
     >
       <Box flex={1} bg="#121212">
+        <NavHeader title="Report User" />
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingBottom: 60, flexGrow: 1 }}
         >
           <Box px="$4" py="$6">
-            <HStack alignItems="center" mb="$6" mt="$8">
-              <TouchableOpacity
-                onPress={() => router.back()}
-                accessibilityRole="button"
-                accessibilityLabel="Go back"
-              >
-                <Icon as={ChevronLeft} size="xl" color="white" />
-              </TouchableOpacity>
-              <Heading size="xl" color="white" ml="$3">
-                Report User
-              </Heading>
-            </HStack>
 
             <Text color="#a0a0a0" fontSize="$sm" mb="$6" lineHeight="$md">
               You’re about to report{" "}

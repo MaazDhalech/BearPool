@@ -1,16 +1,28 @@
-import { GlassSurface } from "@/components/ui/GlassSurface";
-import { SPACE } from "@/constants/Spacing";
 import { TYPE } from "@/constants/Typography";
 import { useTheme } from "@/hooks/useTheme";
+import { isLiquidGlassSupported, LiquidGlassView } from "@callstack/liquid-glass";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React from "react";
-import { Text, TouchableOpacity, View, type ViewStyle } from "react-native";
+import {
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  type ViewStyle,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const BTN = 40;
+const CIRCLE = 44;
 
-/** Circular liquid-glass icon button used on the header edges. */
+// Translucent "glassy" look on platforms/OS versions without real liquid glass.
+const glassFallback = {
+  backgroundColor: "rgba(128,128,128,0.18)",
+  borderWidth: StyleSheet.hairlineWidth,
+  borderColor: "rgba(255,255,255,0.12)",
+} as const;
+
+/** Circular liquid-glass action button (back / trailing action). */
 function CircleButton({
   name,
   onPress,
@@ -22,27 +34,23 @@ function CircleButton({
 }) {
   const t = useTheme();
   return (
-    <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.7}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-    >
-      <GlassSurface
-        fallbackColor={t.raised}
-        style={{
-          width: BTN,
-          height: BTN,
-          borderRadius: BTN / 2,
-          alignItems: "center",
-          justifyContent: "center",
-          overflow: "hidden",
-        }}
+    <View style={[s.circle, !isLiquidGlassSupported && glassFallback]}>
+      {isLiquidGlassSupported && (
+        <LiquidGlassView
+          colorScheme="dark"
+          style={[StyleSheet.absoluteFill, { borderRadius: CIRCLE / 2 }]}
+        />
+      )}
+      <TouchableOpacity
+        onPress={onPress}
+        hitSlop={10}
+        style={s.circleInner}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
       >
         <Ionicons name={name} size={20} color={t.textPrimary} />
-      </GlassSurface>
-    </TouchableOpacity>
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -52,21 +60,21 @@ type Props = {
   /** Defaults to router.back(). */
   onBack?: () => void;
   showBack?: boolean;
-  /** Trailing circular action button. */
+  /** Trailing circular glass action. */
   rightIcon?: keyof typeof Ionicons.glyphMap;
   onRightPress?: () => void;
   rightLabel?: string;
-  /** Makes the centered title block tappable. */
+  /** Makes the centered title tappable. */
   onTitlePress?: () => void;
   style?: ViewStyle;
 };
 
 /**
- * Centered one-line navigation header: a circular back button on the left, a
- * centered bold title with an optional subtitle, and an optional circular action
- * on the right. The edge buttons use liquid glass (falling back to a solid
- * surface). Self-contained — render as the first child of the screen; do NOT
- * wrap it in another safe-area / paddingTop container.
+ * Tippy-style header: a centered plain-text title flanked by circular
+ * liquid-glass action buttons (back on the left, an optional action on the
+ * right). The bar itself is transparent — only the side buttons are glass.
+ * Self-contained (includes the top safe-area inset); render as the first child
+ * of a screen.
  */
 export function NavHeader({
   title,
@@ -82,79 +90,81 @@ export function NavHeader({
   const t = useTheme();
   const insets = useSafeAreaInsets();
 
-  const titleBlock = (
-    <View style={{ flex: 1, alignItems: "center", paddingHorizontal: SPACE.sm }}>
+  const titleText = (
+    <>
       {title ? (
-        <Text
-          numberOfLines={1}
-          style={{
-            color: t.textPrimary,
-            fontSize: TYPE.size.subheading,
-            fontWeight: TYPE.weight.bold,
-            textAlign: "center",
-          }}
-        >
+        <Text numberOfLines={1} style={[s.title, { color: t.textPrimary }]}>
           {title}
         </Text>
       ) : null}
       {subtitle ? (
-        <Text
-          numberOfLines={1}
-          style={{
-            color: t.textSecondary,
-            fontSize: TYPE.size.label,
-            textAlign: "center",
-            marginTop: 1,
-          }}
-        >
+        <Text numberOfLines={1} style={[s.subtitle, { color: t.textSecondary }]}>
           {subtitle}
         </Text>
       ) : null}
-    </View>
+    </>
   );
 
   return (
-    <View style={[{ paddingTop: insets.top, backgroundColor: t.bg }, style]}>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          paddingHorizontal: SPACE.md,
-          paddingVertical: SPACE.sm,
-          minHeight: BTN + SPACE.sm,
-        }}
-      >
-        {/* Left slot (fixed width so the title stays centered) */}
-        <View style={{ width: BTN }}>
-          {showBack ? (
-            <CircleButton
-              name="arrow-back"
-              onPress={onBack ?? (() => router.back())}
-              accessibilityLabel="Go back"
-            />
-          ) : null}
-        </View>
+    <View style={[{ paddingTop: insets.top }, s.container, style]}>
+      {/* Left */}
+      {showBack ? (
+        <CircleButton
+          name="chevron-back"
+          onPress={onBack ?? (() => router.back())}
+          accessibilityLabel="Go back"
+        />
+      ) : (
+        <View style={s.spacer} />
+      )}
 
-        {/* Centered title */}
-        {onTitlePress ? (
-          <TouchableOpacity style={{ flex: 1 }} activeOpacity={0.7} onPress={onTitlePress}>
-            {titleBlock}
-          </TouchableOpacity>
-        ) : (
-          titleBlock
-        )}
+      {/* Center — just text, no glass */}
+      {onTitlePress ? (
+        <TouchableOpacity style={s.center} activeOpacity={0.7} onPress={onTitlePress}>
+          {titleText}
+        </TouchableOpacity>
+      ) : (
+        <View style={s.center}>{titleText}</View>
+      )}
 
-        {/* Right slot (mirrors the left so the title is truly centered) */}
-        <View style={{ width: BTN, alignItems: "flex-end" }}>
-          {rightIcon ? (
-            <CircleButton
-              name={rightIcon}
-              onPress={onRightPress ?? (() => {})}
-              accessibilityLabel={rightLabel ?? "More"}
-            />
-          ) : null}
-        </View>
-      </View>
+      {/* Right */}
+      {rightIcon ? (
+        <CircleButton
+          name={rightIcon}
+          onPress={onRightPress ?? (() => {})}
+          accessibilityLabel={rightLabel ?? "More"}
+        />
+      ) : (
+        <View style={s.spacer} />
+      )}
     </View>
   );
 }
+
+const s = StyleSheet.create({
+  container: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingBottom: 10,
+    gap: 10,
+    backgroundColor: "transparent",
+  },
+  circle: {
+    width: CIRCLE,
+    height: CIRCLE,
+    borderRadius: CIRCLE / 2,
+    overflow: "hidden",
+    flexShrink: 0,
+  },
+  circleInner: {
+    width: CIRCLE,
+    height: CIRCLE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  spacer: { width: CIRCLE, flexShrink: 0 },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  title: { fontSize: 17, fontWeight: "600", letterSpacing: -0.2, textAlign: "center" },
+  subtitle: { fontSize: TYPE.size.label, textAlign: "center", marginTop: 1 },
+});

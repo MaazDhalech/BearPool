@@ -10,6 +10,7 @@ import {
 } from "@gluestack-ui/themed";
 import { useRouter } from "expo-router";
 import { ChevronLeft, ExternalLink } from "lucide-react-native";
+import { NavHeader } from "@/components/ui/NavHeader";
 import { useEffect, useState } from "react";
 import {
     Alert,
@@ -123,17 +124,8 @@ export default function PrivacyPolicyScreen() {
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
     >
       <Box flex={1} bg="#121212">
-        {/* Header */}
+        <NavHeader title="Privacy Policy" />
         <Box px="$4" py="$6">
-          <HStack alignItems="center" mb="$6" mt="$8">
-            <TouchableOpacity onPress={handleGoBack}>
-              <Icon as={ChevronLeft} size="xl" color="white" />
-            </TouchableOpacity>
-            <Heading size="xl" color="white" ml="$3">
-              Privacy Policy
-            </Heading>
-          </HStack>
-
           {/* Action Buttons */}
           <HStack space="md" mb="$4">
             <TouchableOpacity
