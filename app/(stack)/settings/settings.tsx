@@ -2,6 +2,7 @@ import { ACCENT } from "@/constants/Colors";
 import { db, auth } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { NavHeader } from "@/components/ui/NavHeader";
+import { Sheet } from "@/components/ui/Sheet";
 import { deleteUser, EmailAuthProvider, GoogleAuthProvider, OAuthProvider, reauthenticateWithCredential, signOut as firebaseSignOut } from "firebase/auth";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import * as AppleAuthentication from "expo-apple-authentication";
@@ -12,16 +13,8 @@ import {
   Box,
   Button,
   ButtonText,
-  CloseIcon,
   HStack,
-  Heading,
   Icon,
-  Modal,
-  ModalBackdrop,
-  ModalBody,
-  ModalCloseButton,
-  ModalContent,
-  ModalHeader,
   ScrollView,
   Spinner,
   Text,
@@ -667,108 +660,82 @@ const handleReauthAndDelete = async () => {
           </Box>
         </ScrollView>
 
-        {/* Blocked Users Modal */}
-        <Modal
-          isOpen={showBlockedUsers}
+        {/* Blocked Users - bottom sheet */}
+        <Sheet
+          visible={showBlockedUsers}
           onClose={() => setShowBlockedUsers(false)}
-          finalFocusRef={undefined}
+          title="Blocked Users"
         >
-          <ModalBackdrop />
-          <ModalContent bg="#1e1e1e" maxWidth="$96" maxHeight="$3/4">
-            <ModalHeader>
-              <Heading size="lg" color="white">
-                Blocked Users
-              </Heading>
-              <ModalCloseButton>
-                <Icon as={CloseIcon} color="white" />
-              </ModalCloseButton>
-            </ModalHeader>
-            <ModalBody>
-              {loadingBlockedUsers ? (
-                <Box py="$4" alignItems="center">
-                  <Text color="#a0a0a0">Loading blocked users...</Text>
-                </Box>
-              ) : blockedUsers.length === 0 ? (
-                <Box py="$4" alignItems="center">
-                  <Text color="#a0a0a0">No blocked users</Text>
-                </Box>
-              ) : (
-                <ScrollView showsVerticalScrollIndicator={false}>
-                  <VStack space="md" py="$2">
-                    {blockedUsers.map((blockedUser) => (
-                      <HStack
-                        key={blockedUser.id}
-                        space="md"
-                        alignItems="center"
-                        bg="#2a2a2a"
-                        p="$3"
-                        borderRadius="$md"
+          <RNView style={{ paddingHorizontal: 24, maxHeight: 400 }}>
+            {loadingBlockedUsers ? (
+              <Box py="$4" alignItems="center">
+                <Text color="#a0a0a0">Loading blocked users...</Text>
+              </Box>
+            ) : blockedUsers.length === 0 ? (
+              <Box py="$4" alignItems="center">
+                <Text color="#a0a0a0">No blocked users</Text>
+              </Box>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <VStack space="md" py="$2">
+                  {blockedUsers.map((blockedUser) => (
+                    <HStack
+                      key={blockedUser.id}
+                      space="md"
+                      alignItems="center"
+                      bg="#2a2a2a"
+                      p="$3"
+                      borderRadius="$md"
+                    >
+                      <Avatar size="md" bg="#333">
+                        {blockedUser.avatar ? (
+                          <AvatarImage
+                            source={{ uri: blockedUser.avatar }}
+                            alt="Avatar"
+                          />
+                        ) : (
+                          <Avatar.FallbackText color="white">
+                            {(blockedUser.first_name?.[0] || "") +
+                              (blockedUser.last_name?.[0] || "") || "U"}
+                          </Avatar.FallbackText>
+                        )}
+                      </Avatar>
+
+                      <VStack flex={1}>
+                        <Text color="white" fontWeight="$semibold">
+                          {blockedUser.username}
+                        </Text>
+                        <Text color="#a0a0a0" fontSize="$sm">
+                          {blockedUser.first_name} {blockedUser.last_name}
+                        </Text>
+                      </VStack>
+
+                      <Button
+                        size="sm"
+                        bg="#ff6b6b"
+                        onPress={() =>
+                          handleUnblockUser(blockedUser.id, blockedUser.username)
+                        }
                       >
-                        <Avatar size="md" bg="#333">
-                          {blockedUser.avatar ? (
-                            <AvatarImage
-                              source={{ uri: blockedUser.avatar }}
-                              alt="Avatar"
-                            />
-                          ) : (
-                            <Avatar.FallbackText color="white">
-                              {(blockedUser.first_name?.[0] || "") +
-                                (blockedUser.last_name?.[0] || "") || "U"}
-                            </Avatar.FallbackText>
-                          )}
-                        </Avatar>
+                        <ButtonText color="white" fontSize="$sm">
+                          Unblock
+                        </ButtonText>
+                      </Button>
+                    </HStack>
+                  ))}
+                </VStack>
+              </ScrollView>
+            )}
+          </RNView>
+        </Sheet>
 
-                        <VStack flex={1}>
-                          <Text color="white" fontWeight="$semibold">
-                            {blockedUser.username}
-                          </Text>
-                          <Text color="#a0a0a0" fontSize="$sm">
-                            {blockedUser.first_name} {blockedUser.last_name}
-                          </Text>
-                        </VStack>
-
-                        <Button
-                          size="sm"
-                          bg="#ff6b6b"
-                          onPress={() =>
-                            handleUnblockUser(
-                              blockedUser.id,
-                              blockedUser.username
-                            )
-                          }
-                        >
-                          <ButtonText color="white" fontSize="$sm">
-                            Unblock
-                          </ButtonText>
-                        </Button>
-                      </HStack>
-                    ))}
-                  </VStack>
-                </ScrollView>
-              )}
-            </ModalBody>
-          </ModalContent>
-        </Modal>
-
-        {/* Notification Settings - native bottom sheet */}
-        <RNModal
+        {/* Notification Settings - bottom sheet */}
+        <Sheet
           visible={showNotifSettings}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setShowNotifSettings(false)}
+          onClose={() => setShowNotifSettings(false)}
+          title="Notifications"
         >
-          <TouchableWithoutFeedback onPress={() => setShowNotifSettings(false)}>
-            <RNView style={styles.notifBackdrop} />
-          </TouchableWithoutFeedback>
-          <RNView style={styles.notifSheet}>
-            <RNView style={styles.notifHandle} />
-            <HStack justifyContent="space-between" alignItems="center" mb="$5">
-              <Heading size="lg" color="white">Notifications</Heading>
-              <TouchableOpacity onPress={() => setShowNotifSettings(false)}>
-                <Icon as={CloseIcon} color="#a0a0a0" size="lg" />
-              </TouchableOpacity>
-            </HStack>
-
+          <RNView style={{ paddingHorizontal: 24 }}>
             <RNView style={styles.notifRow}>
               <RNView style={{ flex: 1, marginRight: 16 }}>
                 <Text color="white" fontWeight="$semibold" fontSize="$md">Push Notifications</Text>
@@ -796,7 +763,7 @@ const handleReauthAndDelete = async () => {
               </RNView>
             )}
           </RNView>
-        </RNModal>
+        </Sheet>
 
         {/* Re-auth modal for account deletion */}
         <RNModal

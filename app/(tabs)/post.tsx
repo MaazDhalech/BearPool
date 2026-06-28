@@ -97,7 +97,7 @@ export default function PostScreen() {
   useEffect(() => {
     if (showSuccessPopup) {
       modalOpacity.value = withTiming(1, { duration: 200 });
-      modalScale.value = withSpring(1, { damping: 20, stiffness: 320 });
+      modalScale.value = withSpring(1, { damping: 28, stiffness: 320, overshootClamping: true });
     } else {
       modalOpacity.value = 0;
       modalScale.value = 0.88;

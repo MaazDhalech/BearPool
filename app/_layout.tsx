@@ -420,6 +420,15 @@ function RootLayoutContent() {
             name="edit-profile"
             options={{ presentation: "modal", gestureEnabled: false }}
           />
+          {/* Detail / form screens presented as modal sheets */}
+          <Stack.Screen name="(stack)/ride/[id]/edit" options={{ presentation: "modal" }} />
+          <Stack.Screen name="(stack)/ride/[id]/group-settings" options={{ presentation: "modal" }} />
+          <Stack.Screen name="(stack)/ride/[id]/viewProfile" options={{ presentation: "modal" }} />
+          <Stack.Screen name="(stack)/settings/settings" options={{ presentation: "modal" }} />
+          <Stack.Screen name="(stack)/settings/report-user" options={{ presentation: "modal" }} />
+          <Stack.Screen name="(stack)/settings/contact-support" options={{ presentation: "modal" }} />
+          <Stack.Screen name="(stack)/settings/privacy-policy" options={{ presentation: "modal" }} />
+          <Stack.Screen name="(stack)/settings/terms-of-service" options={{ presentation: "modal" }} />
           <Stack.Screen name="+not-found" />
         </Stack>
       </View>

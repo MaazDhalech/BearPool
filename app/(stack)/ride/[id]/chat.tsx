@@ -1,10 +1,20 @@
 import { ACCENT } from "@/constants/Colors";
+import { ImageLightbox } from "@/components/ImageLightbox";
+import { findLinks, LinkedText } from "@/components/LinkedText";
+import { LinkPreview } from "@/components/LinkPreview";
+import { MessageReactions, type Reaction } from "@/components/MessageReactions";
+import { PhonePreview } from "@/components/PhonePreview";
 import { NavHeader } from "@/components/ui/NavHeader";
+import { Sheet, SheetAction, SHEET_DESTRUCTIVE } from "@/components/ui/Sheet";
 import { SPACE } from "@/constants/Spacing";
 import { TYPE } from "@/constants/Typography";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
-import { db } from "@/services/firebaseConfig";
+import { db, storage } from "@/services/firebaseConfig";
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import * as ImageManipulator from "expo-image-manipulator";
+import * as ImagePicker from "expo-image-picker";
+import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
 import {
   Avatar,
   HStack,
@@ -22,9 +32,11 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  limit,
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   Timestamp,
@@ -38,6 +50,7 @@ import {
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
+  ActivityIndicator,
   Platform,
   TouchableOpacity,
   View,
@@ -88,6 +101,7 @@ type ReplyMeta = {
   text: string;
   senderName: string;
   senderId: string;
+  imageUrl?: string;
 };
 
 type Message = {
@@ -102,7 +116,14 @@ type Message = {
   deleted?: boolean;
   sent?: boolean;
   replyTo?: ReplyMeta | null;
+  reactions?: Reaction[] | null;
+  imageUrl?: string;
+  imageWidth?: number;
+  imageHeight?: number;
 };
+
+const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "👎"];
+const MESSAGE_PAGE_SIZE = 50;
 
 type ProcessedMessage = Message & {
   isFirstInGroup: boolean;
@@ -242,7 +263,7 @@ function SwipeableMessage({
     })
     .onEnd(() => {
       if (Math.abs(tx.value) >= REPLY_THRESHOLD) runOnJS(onReply)();
-      tx.value = withSpring(0, { damping: 20, stiffness: 220 });
+      tx.value = withSpring(0, { damping: 26, stiffness: 220, overshootClamping: true });
       hapticFired.value = false;
     });
 
@@ -307,6 +328,12 @@ export default function RideChatScreen() {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [memberReadAt, setMemberReadAt] = useState<Record<string, number>>({});
   const [replyTo, setReplyTo] = useState<ReplyMeta | null>(null);
+  const [actionSheetMsg, setActionSheetMsg] = useState<Message | null>(null);
+  const [messageLimit, setMessageLimit] = useState(MESSAGE_PAGE_SIZE);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [lightboxUri, setLightboxUri] = useState<string | null>(null);
   const inputRef = useRef<any>(null);
 
   const userMapRef = useRef<UserMap>({});
@@ -402,7 +429,7 @@ export default function RideChatScreen() {
       duration: 150,
       useNativeDriver: false,
     }).start();
-    sendScale.value = withSpring(0.88, { damping: 18, stiffness: 500 });
+    sendScale.value = withSpring(0.88, { damping: 22, stiffness: 500, overshootClamping: true });
   };
 
   const animatePressOut = () => {
@@ -411,7 +438,7 @@ export default function RideChatScreen() {
       duration: 150,
       useNativeDriver: false,
     }).start();
-    sendScale.value = withSpring(1, { damping: 12, stiffness: 300 });
+    sendScale.value = withSpring(1, { damping: 20, stiffness: 300, overshootClamping: true });
   };
 
   const interpolatedColor = animatedValue.interpolate({
@@ -637,18 +664,30 @@ export default function RideChatScreen() {
     userMapRef.current = userMap;
   }, [userMap]);
 
-  // ── Messages subscription ─────────────────────────────
+  const loadEarlier = useCallback(() => {
+    setLoadingEarlier(true);
+    setMessageLimit((l) => l + MESSAGE_PAGE_SIZE);
+  }, []);
+
+  // ── Messages subscription (paginated: live window of the latest N) ─────
   useEffect(() => {
     if (!rideId) return;
 
+    // Fetch the most recent `messageLimit` messages, kept live. "Load earlier"
+    // grows the window. orderBy desc + limit, then reverse to ascending.
     const q = query(
       collection(db, "rides", String(rideId), "messages"),
-      orderBy("timestamp", "asc"),
+      orderBy("timestamp", "desc"),
+      limit(messageLimit),
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as Message[];
+      const msgs = snapshot.docs
+        .map((d) => ({ id: d.id, ...d.data() }) as Message)
+        .reverse();
       setMessages(msgs);
+      setHasMoreMessages(snapshot.size >= messageLimit);
+      setLoadingEarlier(false);
 
       if (isFocused) {
         let newestSenderId: string | null = null;
@@ -675,13 +714,17 @@ export default function RideChatScreen() {
     });
 
     return () => unsubscribe();
-  }, [rideId, isFocused, markReadIfAllowed, user?.uid]);
+  }, [rideId, isFocused, markReadIfAllowed, user?.uid, messageLimit]);
 
   // ── Fetch user details (separate from snapshot to avoid async race) ──
   useEffect(() => {
     if (messages.length === 0) return;
     const uniqueIds = Array.from(
-      new Set(messages.map((m) => m.senderId).filter(Boolean) as string[]),
+      new Set([
+        ...(messages.map((m) => m.senderId).filter(Boolean) as string[]),
+        // Reactors may not have sent a message — resolve their names too.
+        ...messages.flatMap((m) => (m.reactions ?? []).flatMap((r) => r.userIds)),
+      ]),
     );
     const newMap = { ...userMapRef.current };
     let hasUpdates = false;
@@ -845,32 +888,50 @@ export default function RideChatScreen() {
     [user?.uid, rideId],
   );
 
-  const handleLongPress = useCallback(
-    (msg: Message) => {
-      if (msg.deleted) return;
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      const options: any[] = [{ text: "Cancel", style: "cancel" }];
-      if (msg.senderId === user?.uid) {
-        options.unshift({
-          text: "Delete",
-          style: "destructive",
-          onPress: () =>
-            updateDoc(doc(db, "rides", String(rideId), "messages", msg.id), { deleted: true }),
+  const handleLongPress = useCallback((msg: Message) => {
+    if (msg.deleted) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setActionSheetMsg(msg);
+  }, []);
+
+  // Toggle the current user's reaction on a message (read-modify-write so the
+  // nested userIds arrays stay consistent under concurrent reactions).
+  const toggleReaction = useCallback(
+    async (messageId: string, emoji: string) => {
+      if (!rideId || !user?.uid) return;
+      const uid = user.uid;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const ref = doc(db, "rides", String(rideId), "messages", messageId);
+      try {
+        await runTransaction(db, async (txn) => {
+          const snap = await txn.get(ref);
+          if (!snap.exists()) return;
+          const data = snap.data();
+          const reactions: Reaction[] = Array.isArray(data.reactions)
+            ? data.reactions.map((r: Reaction) => ({
+                emoji: r.emoji,
+                userIds: [...(r.userIds || [])],
+              }))
+            : [];
+
+          const existing = reactions.find((r) => r.emoji === emoji);
+          if (existing) {
+            existing.userIds = existing.userIds.includes(uid)
+              ? existing.userIds.filter((id) => id !== uid)
+              : [...existing.userIds, uid];
+          } else {
+            reactions.push({ emoji, userIds: [uid] });
+          }
+
+          txn.update(ref, {
+            reactions: reactions.filter((r) => r.userIds.length > 0),
+          });
         });
-      } else if (msg.senderId) {
-        options.unshift({
-          text: "Report User",
-          style: "destructive",
-          onPress: () =>
-            router.push({
-              pathname: "/(stack)/settings/report-user",
-              params: { userId: msg.senderId, rideId: rideId as string },
-            }),
-        });
+      } catch (err) {
+        console.error("Failed to toggle reaction", err);
       }
-      Alert.alert("Message Options", undefined, options);
     },
-    [user?.uid, rideId],
+    [rideId, user?.uid],
   );
 
   const handleReply = useCallback(
@@ -884,6 +945,7 @@ export default function RideChatScreen() {
         text: msg.text,
         senderName: name,
         senderId: msg.senderId || "",
+        ...(msg.imageUrl ? { imageUrl: msg.imageUrl } : {}),
       });
       // Defer so the input is rendered and the swipe gesture has settled,
       // otherwise the focus() no-ops and the keyboard never opens.
@@ -929,6 +991,70 @@ export default function RideChatScreen() {
     clearTyping();
     scrollToBottom(true);
     await sendMessage(filtered);
+  };
+
+  // ── Attach a photo ───────────────────────────────────
+  const handleAttachImage = async () => {
+    if (!rideId || !user?.uid || uploadingImage) return;
+
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Photo Access Needed", "Allow photo library access to share images.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      quality: 0.9,
+    });
+    if (result.canceled) return;
+
+    const asset = result.assets[0];
+    setUploadingImage(true);
+    try {
+      // Resize + compress.
+      const manip = await ImageManipulator.manipulateAsync(
+        asset.uri,
+        [{ resize: { width: 1280 } }],
+        { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG },
+      );
+      // Fetch the file into a native-backed Blob via XHR. (fetch().blob() and
+      // base64 uploadString both break Firebase Storage's Blob handling in RN.)
+      const blob: Blob = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.onload = () => resolve(xhr.response);
+        xhr.onerror = () => reject(new Error("Failed to read image"));
+        xhr.responseType = "blob";
+        xhr.open("GET", manip.uri, true);
+        xhr.send(null);
+      });
+      const fileName = `${Date.now()}-${user.uid}.jpg`;
+      const sRef = storageRef(storage, `rides/${String(rideId)}/chat/${fileName}`);
+      await uploadBytes(sRef, blob, { contentType: "image/jpeg" });
+      // @ts-ignore - RN Blob exposes close() to free memory
+      blob.close?.();
+      const imageUrl = await getDownloadURL(sRef);
+
+      const senderName =
+        userMap[user.uid]?.name || user.displayName || "Anonymous";
+      await addDoc(collection(db, "rides", String(rideId), "messages"), {
+        text: "",
+        senderId: user.uid,
+        senderName,
+        timestamp: serverTimestamp(),
+        imageUrl,
+        imageWidth: manip.width,
+        imageHeight: manip.height,
+        ...(replyTo ? { replyTo } : {}),
+      });
+      setReplyTo(null);
+      scrollToBottom(true);
+    } catch (err) {
+      console.error("Failed to upload image:", err);
+      Alert.alert("Upload Failed", "Could not send the photo. Please try again.");
+    } finally {
+      setUploadingImage(false);
+    }
   };
 
   // ── Render item ──────────────────────────────────────
@@ -1003,6 +1129,19 @@ export default function RideChatScreen() {
         avatar: msg.avatar || DEFAULT_AVATAR,
       };
       const { isFirstInGroup, isLastInGroup } = msg;
+      const links = findLinks(msg.text);
+      const firstPhone = links.find((l) => l.type === "phone");
+      const firstUrl = links.find((l) => l.type === "url");
+      const trimmedText = msg.text.trim();
+      const isOnlyPhone = !!firstPhone && trimmedText === firstPhone.value;
+      const isOnlyUrl = !!firstUrl && trimmedText === firstUrl.value;
+      const hasImage = !!msg.imageUrl;
+      const bareBubble = isOnlyPhone || isOnlyUrl || hasImage;
+      const linkColor = isCurrentUser ? "#0a3d91" : "#5ab0ff";
+      const imgW = 240;
+      const imgAspect =
+        msg.imageWidth && msg.imageHeight ? msg.imageWidth / msg.imageHeight : 1;
+      const imgH = Math.min(Math.max(imgW / imgAspect, 120), 320);
 
       // Border radii - iMessage-style chain rounding
       const R = 18;
@@ -1021,7 +1160,6 @@ export default function RideChatScreen() {
             borderBottomRightRadius: R,
           };
 
-      const AVATAR_COL = 32 + SPACE.sm;
 
       return (
         <SwipeableMessage onReply={() => handleReply(msg)} mirrored={isCurrentUser}>
@@ -1033,44 +1171,24 @@ export default function RideChatScreen() {
             paddingHorizontal: SPACE.md,
           }}
         >
-          {/* Avatar column - only for other users */}
-          {!isCurrentUser && (
-            <View style={{ width: AVATAR_COL, alignSelf: "stretch", justifyContent: "center" }}>
-              {isLastInGroup ? (
-                <TouchableOpacity
-                  onPress={() => handleUserPress(msg.senderId || "")}
-                  activeOpacity={0.7}
-                >
-                  <Avatar size="sm" bgColor="#252525">
-                    <Avatar.Image source={{ uri: sender.avatar }} alt="avatar" />
-                  </Avatar>
-                </TouchableOpacity>
-              ) : null}
-            </View>
-          )}
-
           {/* Bubble column */}
           <View
             style={{
-              maxWidth: "72%",
+              maxWidth: "78%",
               alignItems: isCurrentUser ? "flex-end" : "flex-start",
             }}
           >
-            {/* Sender name - first in group, other users only */}
+            {/* Inline pfp + username header - first in group, other users only */}
             {!isCurrentUser && isFirstInGroup && (
               <TouchableOpacity
                 onPress={() => handleUserPress(msg.senderId || "")}
                 activeOpacity={0.7}
+                style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4, marginLeft: 2 }}
               >
-                <Text
-                  style={{
-                    fontSize: TYPE.size.label,
-                    color: "#777",
-                    marginBottom: 3,
-                    marginLeft: 2,
-                    fontWeight: "500",
-                  }}
-                >
+                <Avatar size="xs" bgColor="#252525">
+                  <Avatar.Image source={{ uri: sender.avatar }} alt="avatar" />
+                </Avatar>
+                <Text style={{ fontSize: TYPE.size.label, color: "#777", fontWeight: "500" }}>
                   {sender.name}
                 </Text>
               </TouchableOpacity>
@@ -1083,19 +1201,26 @@ export default function RideChatScreen() {
               delayLongPress={200}
             >
               <View
-                style={[
-                  {
-                    backgroundColor: isCurrentUser ? ACCENT : "#252525",
-                    paddingHorizontal: SPACE.md,
-                    paddingVertical: SPACE.sm,
-                  },
-                  bubbleStyle,
-                ]}
+                style={
+                  bareBubble
+                    ? undefined
+                    : [
+                        {
+                          backgroundColor: isCurrentUser ? ACCENT : "#252525",
+                          paddingHorizontal: SPACE.md,
+                          paddingVertical: SPACE.sm,
+                        },
+                        bubbleStyle,
+                      ]
+                }
               >
                 {/* Quoted reply preview */}
                 {msg.replyTo && (
                   <View
                     style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
                       borderLeftWidth: 3,
                       borderLeftColor: isCurrentUser ? "rgba(18,18,18,0.45)" : ACCENT,
                       backgroundColor: isCurrentUser
@@ -1107,40 +1232,96 @@ export default function RideChatScreen() {
                       marginBottom: 5,
                     }}
                   >
-                    <Text
-                      numberOfLines={1}
-                      style={{
-                        fontSize: TYPE.size.label,
-                        fontWeight: "600",
-                        color: isCurrentUser ? "rgba(18,18,18,0.8)" : ACCENT,
-                        marginBottom: 1,
-                      }}
-                    >
-                      {msg.replyTo.senderName}
-                    </Text>
-                    <Text
-                      numberOfLines={2}
-                      style={{
-                        fontSize: TYPE.size.label,
-                        color: isCurrentUser ? "rgba(18,18,18,0.65)" : "#aaa",
-                      }}
-                    >
-                      {msg.replyTo.text}
-                    </Text>
+                    {msg.replyTo.imageUrl ? (
+                      <Image
+                        source={{ uri: msg.replyTo.imageUrl }}
+                        style={{ width: 34, height: 34, borderRadius: 5, backgroundColor: "#2a2a2a" }}
+                        contentFit="cover"
+                      />
+                    ) : null}
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        numberOfLines={1}
+                        style={{
+                          fontSize: TYPE.size.label,
+                          fontWeight: "600",
+                          color: isCurrentUser ? "rgba(18,18,18,0.8)" : ACCENT,
+                          marginBottom: 1,
+                        }}
+                      >
+                        {msg.replyTo.senderName}
+                      </Text>
+                      <Text
+                        numberOfLines={2}
+                        style={{
+                          fontSize: TYPE.size.label,
+                          color: isCurrentUser ? "rgba(18,18,18,0.65)" : "#aaa",
+                        }}
+                      >
+                        {msg.replyTo.imageUrl && !msg.replyTo.text?.trim()
+                          ? "📷 Photo"
+                          : msg.replyTo.text}
+                      </Text>
+                    </View>
                   </View>
                 )}
 
-                <Text
-                  style={{
-                    color: isCurrentUser ? "#121212" : "#e8e8e8",
-                    fontSize: TYPE.size.body,
-                    lineHeight: TYPE.size.body * 1.45,
-                  }}
-                >
-                  {msg.text}
-                </Text>
+                {hasImage ? (
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => setLightboxUri(msg.imageUrl!)}
+                    onLongPress={() => handleLongPress(msg)}
+                    delayLongPress={200}
+                  >
+                    <Image
+                      source={{ uri: msg.imageUrl }}
+                      style={{ width: imgW, height: imgH, borderRadius: 14, backgroundColor: "#2a2a2a" }}
+                      contentFit="cover"
+                      transition={150}
+                    />
+                  </TouchableOpacity>
+                ) : isOnlyPhone ? (
+                  <PhonePreview phone={firstPhone!.value} alignRight={isCurrentUser} />
+                ) : isOnlyUrl ? (
+                  <LinkPreview url={firstUrl!.value} onlyLink linkColor="#5ab0ff" />
+                ) : (
+                  <LinkedText
+                    text={msg.text}
+                    linkColor={linkColor}
+                    style={{
+                      color: isCurrentUser ? "#121212" : "#e8e8e8",
+                      fontSize: TYPE.size.body,
+                      lineHeight: TYPE.size.body * 1.45,
+                    }}
+                  />
+                )}
+
               </View>
             </TouchableOpacity>
+
+            {/* Phone card when a number is part of a longer message */}
+            {firstPhone && !isOnlyPhone && (
+              <PhonePreview
+                phone={firstPhone.value}
+                alignRight={isCurrentUser}
+                style={{ marginTop: 4 }}
+              />
+            )}
+
+            {/* Link preview when a URL is part of a longer message */}
+            {firstUrl && !isOnlyUrl && (
+              <View style={{ marginTop: 4, alignSelf: isCurrentUser ? "flex-end" : "flex-start" }}>
+                <LinkPreview url={firstUrl.value} linkColor={linkColor} />
+              </View>
+            )}
+
+            {/* Reactions */}
+            <MessageReactions
+              reactions={msg.reactions}
+              currentUserId={user?.uid}
+              onToggle={(emoji) => toggleReaction(msg.id, emoji)}
+              alignRight={isCurrentUser}
+            />
 
             {/* Meta: time + read receipts, below the last bubble of a group */}
             {isLastInGroup && msg.timestamp?.toDate && (
@@ -1171,13 +1352,11 @@ export default function RideChatScreen() {
             )}
           </View>
 
-          {/* Mirror spacer so current-user bubbles don't kiss the right edge */}
-          {isCurrentUser && <View style={{ width: AVATAR_COL }} />}
         </View>
         </SwipeableMessage>
       );
     },
-    [user?.uid, userMap, handleUserPress, handleLongPress, isSeenByAll, handleReply],
+    [user?.uid, userMap, handleUserPress, handleLongPress, isSeenByAll, handleReply, toggleReaction],
   );
 
   const keyExtractor = useCallback(
@@ -1298,6 +1477,39 @@ export default function RideChatScreen() {
               </View>
             ) : null
           }
+          ListFooterComponent={
+            hasMoreMessages ? (
+              <View style={{ alignItems: "center", paddingVertical: SPACE.md }}>
+                <TouchableOpacity
+                  onPress={loadEarlier}
+                  disabled={loadingEarlier}
+                  activeOpacity={0.8}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: SPACE.sm,
+                    backgroundColor: "#1e1e1e",
+                    borderRadius: 999,
+                    paddingHorizontal: SPACE.lg,
+                    paddingVertical: SPACE.sm,
+                    borderWidth: 1,
+                    borderColor: "#2a2a2a",
+                  }}
+                >
+                  {loadingEarlier ? (
+                    <ActivityIndicator size="small" color={ACCENT} />
+                  ) : (
+                    <>
+                      <Ionicons name="chevron-up" size={14} color={ACCENT} />
+                      <Text style={{ color: ACCENT, fontSize: TYPE.size.label, fontWeight: TYPE.weight.semibold }}>
+                        Load earlier messages
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            ) : null
+          }
           ListEmptyComponent={
             <View style={{ flexGrow: 1, justifyContent: "center" }}>
               <ChatEmptyState />
@@ -1338,12 +1550,19 @@ export default function RideChatScreen() {
                 color={ACCENT}
                 style={{ marginRight: 8 }}
               />
+              {replyTo.imageUrl ? (
+                <Image
+                  source={{ uri: replyTo.imageUrl }}
+                  style={{ width: 34, height: 34, borderRadius: 5, backgroundColor: "#2a2a2a", marginRight: 8 }}
+                  contentFit="cover"
+                />
+              ) : null}
               <View style={{ flex: 1 }}>
                 <Text style={{ color: ACCENT, fontSize: TYPE.size.label, fontWeight: "600", marginBottom: 1 }}>
                   Replying to {replyTo.senderName}
                 </Text>
                 <Text numberOfLines={1} style={{ color: "#999", fontSize: TYPE.size.label }}>
-                  {replyTo.text}
+                  {replyTo.imageUrl && !replyTo.text?.trim() ? "📷 Photo" : replyTo.text}
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setReplyTo(null)} hitSlop={10} style={{ padding: 4 }}>
@@ -1366,6 +1585,18 @@ export default function RideChatScreen() {
           )}
 
           <View style={{ flexDirection: "row", alignItems: "flex-end", gap: SPACE.sm }}>
+            <TouchableOpacity
+              onPress={handleAttachImage}
+              disabled={uploadingImage}
+              activeOpacity={0.7}
+              style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center" }}
+            >
+              {uploadingImage ? (
+                <ActivityIndicator size="small" color={ACCENT} />
+              ) : (
+                <Ionicons name="image-outline" size={24} color="#888" />
+              )}
+            </TouchableOpacity>
             <Input
               flex={1}
               size="md"
@@ -1431,6 +1662,110 @@ export default function RideChatScreen() {
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Long-press action sheet: reactions + message actions */}
+      <Sheet visible={!!actionSheetMsg} onClose={() => setActionSheetMsg(null)}>
+        {/* Who reacted with what */}
+        {!!actionSheetMsg?.reactions?.length && (
+          <View style={{ paddingHorizontal: SPACE.lg, paddingBottom: SPACE.sm }}>
+            {actionSheetMsg.reactions.map((r) => (
+              <View
+                key={r.emoji}
+                style={{ flexDirection: "row", alignItems: "center", gap: SPACE.sm, paddingVertical: 4 }}
+              >
+                <Text style={{ fontSize: 18 }}>{r.emoji}</Text>
+                <Text numberOfLines={1} style={{ flex: 1, color: "#bbb", fontSize: TYPE.size.label }}>
+                  {r.userIds
+                    .map((uid) => (uid === user?.uid ? "You" : userMap[uid]?.name || "Someone"))
+                    .join(", ")}
+                </Text>
+              </View>
+            ))}
+            <View style={{ height: 1, backgroundColor: "#2a2a2a", marginTop: SPACE.sm }} />
+          </View>
+        )}
+
+        {/* Emoji reactions */}
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-around",
+            paddingHorizontal: SPACE.md,
+            paddingBottom: SPACE.md,
+          }}
+        >
+          {REACTION_EMOJIS.map((emoji) => {
+            const mine = !!actionSheetMsg?.reactions
+              ?.find((r) => r.emoji === emoji)
+              ?.userIds.includes(user?.uid || "");
+            return (
+              <TouchableOpacity
+                key={emoji}
+                activeOpacity={0.7}
+                onPress={() => {
+                  if (actionSheetMsg) toggleReaction(actionSheetMsg.id, emoji);
+                  setActionSheetMsg(null);
+                }}
+                style={{
+                  width: 46,
+                  height: 46,
+                  borderRadius: 23,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: mine ? "rgba(10,132,255,0.18)" : "#2a2a2a",
+                  borderWidth: mine ? 1 : 0,
+                  borderColor: "#0a84ff",
+                }}
+              >
+                <Text style={{ fontSize: 24 }}>{emoji}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <View style={{ height: 1, backgroundColor: "#2a2a2a", marginBottom: 4 }} />
+
+        <SheetAction
+          icon="arrow-undo-outline"
+          label="Reply"
+          onPress={() => {
+            const m = actionSheetMsg;
+            setActionSheetMsg(null);
+            if (m) handleReply(m);
+          }}
+        />
+        {actionSheetMsg?.senderId === user?.uid ? (
+          <SheetAction
+            icon="trash-outline"
+            label="Delete"
+            tint={SHEET_DESTRUCTIVE}
+            onPress={() => {
+              const m = actionSheetMsg;
+              setActionSheetMsg(null);
+              if (m)
+                updateDoc(doc(db, "rides", String(rideId), "messages", m.id), { deleted: true });
+            }}
+          />
+        ) : (
+          <SheetAction
+            icon="flag-outline"
+            label="Report"
+            tint={SHEET_DESTRUCTIVE}
+            onPress={() => {
+              const m = actionSheetMsg;
+              setActionSheetMsg(null);
+              if (m?.senderId)
+                router.push({
+                  pathname: "/(stack)/settings/report-user",
+                  params: { userId: m.senderId, rideId: rideId as string },
+                });
+            }}
+          />
+        )}
+      </Sheet>
+
+      {/* Full-screen image viewer */}
+      <ImageLightbox uri={lightboxUri} onClose={() => setLightboxUri(null)} />
     </View>
   );
 }

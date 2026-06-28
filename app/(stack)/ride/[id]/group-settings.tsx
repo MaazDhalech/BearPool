@@ -29,6 +29,8 @@ import {
   collection,
 } from "firebase/firestore";
 import { Menu as MenuIcon } from "lucide-react-native";
+import * as Haptics from "expo-haptics";
+import { Sheet, SheetAction, SHEET_DESTRUCTIVE } from "@/components/ui/Sheet";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Modal, TextInput, TouchableOpacity, View } from "react-native";
 import { NavHeader } from "@/components/ui/NavHeader";
@@ -50,7 +52,7 @@ export default function GroupSettings() {
 
   const [ride, setRide] = useState<any>(null);
   const [users, setUsers] = useState<User[]>([]);
-  const [openMenuUserId, setOpenMenuUserId] = useState<string | null>(null);
+  const [actionSheetUser, setActionSheetUser] = useState<User | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletionReason, setDeletionReason] = useState("");
   const [customReason, setCustomReason] = useState("");
@@ -614,9 +616,19 @@ This ride has been permanently deleted from the system.
 
       <ScrollView px="$4" py="$4" showsVerticalScrollIndicator={false}>
         <VStack space="lg">
+          <Text color="#777" fontSize="$xs" textAlign="center">
+            Tip: long press a user to see more
+          </Text>
           {users.map((u) => (
-            <HStack
+            <Pressable
               key={u.id}
+              onLongPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                setActionSheetUser(u);
+              }}
+              delayLongPress={250}
+            >
+            <HStack
               alignItems="center"
               justifyContent="space-between"
               bg="#1e1e1e"
@@ -643,71 +655,15 @@ This ride has been permanently deleted from the system.
                   </Text>
                 </VStack>
               </HStack>
-              <Box position="relative">
-                <Pressable
-                  onPress={() =>
-                    setOpenMenuUserId((prev) => (prev === u.id ? null : u.id))
-                  }
-                  p="$2"
-                  borderRadius="$full"
-                >
-                  <Icon as={MenuIcon} size="lg" color="#a0a0a0" />
-                </Pressable>
-                {openMenuUserId === u.id && (
-                  <Box
-                    position="absolute"
-                    top="$8"
-                    right={0}
-                    bg="#2a2a2a"
-                    borderWidth={1}
-                    borderColor="#333"
-                    borderRadius="$md"
-                    px="$3"
-                    py="$2"
-                    zIndex={10}
-                    minWidth={150}
-                  >
-                    <Pressable
-                      onPress={() => {
-                        setOpenMenuUserId(null);
-                        handleViewProfile(u.id);
-                      }}
-                      p="$2"
-                      borderRadius="$sm"
-                      $pressed={{ bg: "#3a3a3a" }}
-                    >
-                      <Text color="white">View Profile</Text>
-                    </Pressable>
-                    {isHost && u.id !== user?.uid && (
-                      <>
-                        <Pressable
-                          onPress={() => {
-                            setOpenMenuUserId(null);
-                            handleAssignHost(u.id);
-                          }}
-                          p="$2"
-                          borderRadius="$sm"
-                          $pressed={{ bg: "#3a3a3a" }}
-                        >
-                          <Text color="#4CAF50">Make Host</Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => {
-                            setOpenMenuUserId(null);
-                            handleKick(u.id);
-                          }}
-                          p="$2"
-                          borderRadius="$sm"
-                          $pressed={{ bg: "#3a3a3a" }}
-                        >
-                          <Text color="#ff5555">Remove</Text>
-                        </Pressable>
-                      </>
-                    )}
-                  </Box>
-                )}
-              </Box>
+              <Pressable
+                onPress={() => setActionSheetUser(u)}
+                p="$2"
+                borderRadius="$full"
+              >
+                <Icon as={MenuIcon} size="lg" color="#a0a0a0" />
+              </Pressable>
             </HStack>
+            </Pressable>
           ))}
 
           {/* Delete Ride Button - Only visible to host */}
@@ -930,7 +886,7 @@ This ride has been permanently deleted from the system.
               )}
 
               <Text color="#a0a0a0" mb={6}>
-                Tell us why you're deleting this ride. A report will be sent to our team.
+                Tell us why you&apos;re deleting this ride. A report will be sent to our team.
               </Text>
 
               <VStack space="md" mb={6}>
@@ -1036,6 +992,59 @@ This ride has been permanently deleted from the system.
           </View>
         </View>
       </Modal>
+
+      {/* User action sheet (long-press a member or tap the menu) */}
+      <Sheet visible={!!actionSheetUser} onClose={() => setActionSheetUser(null)}>
+        {/* Member header */}
+        <HStack space="sm" alignItems="center" px="$5" py="$3">
+          <Avatar size="sm">
+            <AvatarImage source={{ uri: actionSheetUser?.avatar }} />
+          </Avatar>
+          <VStack>
+            <Text color="white" fontWeight="$semibold">
+              {actionSheetUser?.name}
+            </Text>
+            <Text color="#a0a0a0" fontSize="$sm">
+              @{actionSheetUser?.username}
+            </Text>
+          </VStack>
+        </HStack>
+        <View style={{ height: 1, backgroundColor: "#2a2a2a", marginBottom: 4 }} />
+
+        <SheetAction
+          icon="person-outline"
+          label="View Profile"
+          onPress={() => {
+            const x = actionSheetUser;
+            setActionSheetUser(null);
+            if (x) handleViewProfile(x.id);
+          }}
+        />
+        {isHost && actionSheetUser?.id !== user?.uid && (
+          <>
+            <SheetAction
+              icon="ribbon-outline"
+              label="Make Host"
+              tint="#4CAF50"
+              onPress={() => {
+                const x = actionSheetUser;
+                setActionSheetUser(null);
+                if (x) handleAssignHost(x.id);
+              }}
+            />
+            <SheetAction
+              icon="person-remove-outline"
+              label="Remove"
+              tint={SHEET_DESTRUCTIVE}
+              onPress={() => {
+                const x = actionSheetUser;
+                setActionSheetUser(null);
+                if (x) handleKick(x.id);
+              }}
+            />
+          </>
+        )}
+      </Sheet>
     </Box>
   );
 }

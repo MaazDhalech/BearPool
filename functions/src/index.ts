@@ -211,10 +211,11 @@ export const onRideMessageCreated = onDocumentCreated(
         ? message.senderName
         : "New message";
 
+    const bodyText = String(message.text || "").trim();
     const payload: ExpoPushPayload = {
       sound: "default",
       title: `${rideLabel} — ${senderLabel}`,
-      body: formatBody(String(message.text || "")),
+      body: bodyText ? formatBody(bodyText) : message.imageUrl ? "📷 Photo" : "New message",
       data: { type: "chat_message", rideId },
     };
 
