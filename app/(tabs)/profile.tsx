@@ -1,3 +1,4 @@
+import { darkTheme } from "@/constants/theme";
 import { ACCENT } from "@/constants/Colors";
 import { TYPE } from "@/constants/Typography";
 import { SPACE } from "@/constants/Spacing";
@@ -86,8 +87,8 @@ export default function ProfileScreen() {
 
   if (!isLoaded || loading) {
     return (
-      <Box flex={1} bg="#121212" justifyContent="center" alignItems="center">
-        <Text color="#a0a0a0">Loading profile...</Text>
+      <Box flex={1} bg={darkTheme.bg} justifyContent="center" alignItems="center">
+        <Text color={darkTheme.textSecondary}>Loading profile...</Text>
       </Box>
     );
   }
@@ -108,7 +109,7 @@ export default function ProfileScreen() {
     (display.firstName?.[0] || "") + (display.lastName?.[0] || "") || "U";
 
   return (
-    <Box flex={1} bg="#121212">
+    <Box flex={1} bg={darkTheme.bg}>
       <LinearGradient
         colors={["rgba(255, 190, 92, 0.28)", "transparent"]}
         style={{ position: "absolute", top: 0, left: 0, right: 0, height: 280 }}
@@ -129,42 +130,42 @@ export default function ProfileScreen() {
           <VStack space="lg" alignItems="center">
             {/* Avatar */}
             <View style={{ alignItems: "center" }}>
-              <Avatar size="2xl" bg="#1e1e1e" borderRadius="$full">
+              <Avatar size="2xl" bg={darkTheme.surface} borderRadius="$full">
                 {display.avatar ? (
                   <AvatarImage source={{ uri: display.avatar }} alt="Avatar" />
                 ) : (
-                  <Avatar.FallbackText color="white">{initials}</Avatar.FallbackText>
+                  <Avatar.FallbackText color={darkTheme.textPrimary}>{initials}</Avatar.FallbackText>
                 )}
               </Avatar>
             </View>
 
             {/* Name + username */}
             <VStack alignItems="center" space="xs" style={{ marginBottom: SPACE.sm }}>
-              <Text style={{ color: "#ffffff", fontSize: TYPE.size.heading, fontWeight: TYPE.weight.bold, textAlign: "center" }}>
+              <Text style={{ color: darkTheme.textPrimary, fontSize: TYPE.size.heading, fontWeight: TYPE.weight.bold, textAlign: "center" }}>
                 {display.firstName} {display.lastName}
               </Text>
               {display.username ? (
-                <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.body }}>
+                <Text style={{ color: darkTheme.textSecondary, fontSize: TYPE.size.body }}>
                   @{display.username}
                 </Text>
               ) : null}
             </VStack>
 
             {/* Stats card */}
-            <GlassSurface fallbackColor="#1e1e1e" style={{ flexDirection: "row", borderRadius: 12, borderWidth: 1, borderColor: "#333", overflow: "hidden", width: "100%" }}>
-              <View style={{ flex: 1, alignItems: "center", paddingVertical: SPACE.lg, borderRightWidth: 1, borderRightColor: "#333" }}>
+            <GlassSurface fallbackColor={darkTheme.surface} style={{ flexDirection: "row", borderRadius: 12, borderWidth: 1, borderColor: darkTheme.border, overflow: "hidden", width: "100%" }}>
+              <View style={{ flex: 1, alignItems: "center", paddingVertical: SPACE.lg, borderRightWidth: 1, borderRightColor: darkTheme.border }}>
                 <Text style={{ color: ACCENT, fontSize: TYPE.size.heading, fontWeight: TYPE.weight.bold }}>{display.ridesJoined ?? 0}</Text>
-                <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.label, marginTop: 2 }}>Joined</Text>
+                <Text style={{ color: darkTheme.textSecondary, fontSize: TYPE.size.label, marginTop: 2 }}>Joined</Text>
               </View>
               <View style={{ flex: 1, alignItems: "center", paddingVertical: SPACE.lg }}>
                 <Text style={{ color: ACCENT, fontSize: TYPE.size.heading, fontWeight: TYPE.weight.bold }}>{display.ridesHosted ?? 0}</Text>
-                <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.label, marginTop: 2 }}>Hosted</Text>
+                <Text style={{ color: darkTheme.textSecondary, fontSize: TYPE.size.label, marginTop: 2 }}>Hosted</Text>
               </View>
             </GlassSurface>
 
             {/* Details */}
             <VStack space="sm" w="100%" style={{ marginTop: SPACE.lg }}>
-              <View style={{ backgroundColor: "#1e1e1e", borderRadius: 12, borderWidth: 1, borderColor: "#333", overflow: "hidden" }}>
+              <View style={{ backgroundColor: darkTheme.surface, borderRadius: 12, borderWidth: 1, borderColor: darkTheme.border, overflow: "hidden" }}>
                 {[
                   { label: "Email", value: display.email },
                   {
@@ -175,9 +176,9 @@ export default function ProfileScreen() {
                       : "Not specified",
                   },
                 ].map((row, i) => (
-                  <View key={row.label} style={{ paddingHorizontal: SPACE.lg, paddingVertical: SPACE.md, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: "#2a2a2a" }}>
-                    <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.label, marginBottom: 2 }}>{row.label}</Text>
-                    <Text style={{ color: "#ffffff", fontSize: TYPE.size.body, fontWeight: TYPE.weight.medium }}>{row.value}</Text>
+                  <View key={row.label} style={{ paddingHorizontal: SPACE.lg, paddingVertical: SPACE.md, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: darkTheme.raised }}>
+                    <Text style={{ color: darkTheme.textSecondary, fontSize: TYPE.size.label, marginBottom: 2 }}>{row.label}</Text>
+                    <Text style={{ color: darkTheme.textPrimary, fontSize: TYPE.size.body, fontWeight: TYPE.weight.medium }}>{row.value}</Text>
                   </View>
                 ))}
               </View>

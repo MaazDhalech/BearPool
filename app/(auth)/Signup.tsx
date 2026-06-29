@@ -1,7 +1,8 @@
+import { darkTheme } from "@/constants/theme";
 import TOSOverlay from "@/components/TOSOverlay";
 import { ACCENT } from "@/constants/Colors";
 import { auth, db } from "@/services/firebaseConfig";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { Link, Stack, useRouter } from "expo-router";
 import {
   createUserWithEmailAndPassword,
@@ -36,13 +37,13 @@ const isBerkeleyEmail = (email: string) =>
 //  DESIGN TOKENS (same as Login)
 // ─────────────────────────────────────────────
 const palette = {
-  bg: "#121212",
-  surface: "#1e1e1e",
-  rim: "#252525",
+  bg: darkTheme.bg,
+  surface: darkTheme.surface,
+  rim: darkTheme.surfaceAlt,
   accent: ACCENT,
-  ink: "#ffffff",
-  muted: "#a1a1a6",
-  ghost: "#545456",
+  ink: darkTheme.textPrimary,
+  muted: darkTheme.textSecondary,
+  ghost: darkTheme.textGhost,
 };
 
 const SPACING = { xs: 8, sm: 16, md: 24, lg: 32, xl: 48 };
@@ -81,7 +82,7 @@ const StyledInput = React.forwardRef<
           style={p.visibilityToggle}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <MaterialCommunityIcons
+          <Ionicons
             name={isPasswordVisible ? "eye-outline" : "eye-off-outline"}
             size={22 * SCALE}
             color={palette.muted}
@@ -282,7 +283,7 @@ export default function Signup() {
               style={s.backButton}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <MaterialCommunityIcons name="chevron-left" size={28} color={palette.ink} />
+              <Ionicons name="chevron-back" size={28} color={palette.ink} />
             </TouchableOpacity>
             <ScrollView
               contentContainerStyle={s.scrollContent}
@@ -402,10 +403,10 @@ export default function Signup() {
                       { label: "One special character (!@#$%^&*)", met: /[!@#$%^&*]/.test(password) },
                     ].map(({ label, met }) => (
                       <View key={label} style={s.ruleRow}>
-                        <MaterialCommunityIcons
-                          name={met ? "check-circle" : "circle-outline"}
+                        <Ionicons
+                          name={met ? "checkmark-circle" : "ellipse-outline"}
                           size={14 * SCALE}
-                          color={met ? "#4caf50" : palette.ghost}
+                          color={met ? darkTheme.success : palette.ghost}
                         />
                         <Text style={[s.ruleText, met && s.ruleMet]}>{label}</Text>
                       </View>
@@ -439,7 +440,7 @@ export default function Signup() {
                 >
                   <View style={[s.checkbox, tosAccepted && s.checkboxChecked]}>
                     {tosAccepted && (
-                      <MaterialCommunityIcons name="check" size={16 * SCALE} color={palette.bg} />
+                      <Ionicons name="checkmark" size={16 * SCALE} color={palette.bg} />
                     )}
                   </View>
                   <Text style={s.tosText}>
@@ -517,14 +518,14 @@ const s = StyleSheet.create({
   brandTitle: { color: palette.ink, fontSize: 42 * SCALE, fontWeight: "800" },
   subtitle: { color: palette.muted, fontSize: 20 * SCALE, marginTop: 6 * SCALE },
   errorContainer: {
-    backgroundColor: "#2a0e0e",
+    backgroundColor: darkTheme.errorBg,
     padding: SPACING.sm * SCALE,
     borderRadius: BORDER_RADIUS.sm,
     marginBottom: SPACING.md * SCALE,
     borderWidth: 1,
-    borderColor: "#4a1e1e",
+    borderColor: darkTheme.errorBorder,
   },
-  errorText: { color: "#ff7d7d", textAlign: "center" },
+  errorText: { color: darkTheme.errorText, textAlign: "center" },
   formArea: { width: "100%" },
   nameRow: { flexDirection: "row", gap: SPACING.sm * SCALE },
   nameField: { flex: 1 },
@@ -580,9 +581,9 @@ const s = StyleSheet.create({
   },
   ruleRow: { flexDirection: "row", alignItems: "center", marginBottom: 4 * SCALE },
   ruleText: { color: palette.ghost, fontSize: 13 * SCALE, marginLeft: 6 * SCALE },
-  ruleMet: { color: "#4caf50" },
+  ruleMet: { color: darkTheme.success },
   passwordMismatch: {
-    color: "#ff7d7d",
+    color: darkTheme.errorText,
     fontSize: 13 * SCALE,
     marginTop: -SPACING.sm * SCALE,
     marginBottom: SPACING.md * SCALE,

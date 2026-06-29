@@ -1,6 +1,7 @@
+import { darkTheme } from "@/constants/theme";
 import { ACCENT } from "@/constants/Colors";
 import { auth } from "@/services/firebaseConfig";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { Stack, useRouter } from "expo-router";
 import { sendPasswordResetEmail } from "firebase/auth";
 import React from "react";
@@ -23,13 +24,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 //  DESIGN TOKENS
 // ─────────────────────────────────────────────
 const palette = {
-  bg: "#121212",
-  surface: "#1e1e1e",
-  rim: "#252525",
+  bg: darkTheme.bg,
+  surface: darkTheme.surface,
+  rim: darkTheme.surfaceAlt,
   accent: ACCENT,
-  ink: "#ffffff",
-  muted: "#a1a1a6",
-  ghost: "#545456",
+  ink: darkTheme.textPrimary,
+  muted: darkTheme.textSecondary,
+  ghost: darkTheme.textGhost,
 };
 
 const SPACING = { xs: 8, sm: 16, md: 24, lg: 32, xl: 48 };
@@ -151,7 +152,7 @@ export default function ResetPassword() {
               style={s.backButton}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <MaterialCommunityIcons name="chevron-left" size={28} color={palette.ink} />
+              <Ionicons name="chevron-back" size={28} color={palette.ink} />
             </TouchableOpacity>
 
             <View style={s.centerContent}>
@@ -175,7 +176,7 @@ export default function ResetPassword() {
                   <View style={s.successContainer}>
                     <Text style={s.successText}>
                       Password reset email sent! Click the link in your email to set a new password.{"\n\n"}
-                      Can't find it? Check your spam folder.
+                      Can&apos;t find it? Check your spam folder.
                     </Text>
                   </View>
                 ) : (
@@ -251,14 +252,14 @@ const s = StyleSheet.create({
   },
   formArea: { width: "100%" },
   errorContainer: {
-    backgroundColor: "#2a0e0e",
+    backgroundColor: darkTheme.errorBg,
     padding: SPACING.sm * SCALE,
     borderRadius: BORDER_RADIUS.sm,
     marginBottom: SPACING.md * SCALE,
     borderWidth: 1,
-    borderColor: "#4a1e1e",
+    borderColor: darkTheme.errorBorder,
   },
-  errorText: { color: "#ff7d7d", textAlign: "center" },
+  errorText: { color: darkTheme.errorText, textAlign: "center" },
   successContainer: {
     backgroundColor: "#0e2a1a",
     padding: SPACING.md * SCALE,
@@ -267,7 +268,7 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#1a4a2e",
   },
-  successText: { color: "#4caf50", textAlign: "center", lineHeight: 22, fontSize: 15 * SCALE },
+  successText: { color: darkTheme.success, textAlign: "center", lineHeight: 22, fontSize: 15 * SCALE },
   cta: {
     backgroundColor: palette.accent,
     height: 60 * SCALE,

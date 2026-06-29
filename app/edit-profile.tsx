@@ -1,3 +1,4 @@
+import { darkTheme } from "@/constants/theme";
 import { ACCENT } from "@/constants/Colors";
 import { TYPE } from "@/constants/Typography";
 import { SPACE } from "@/constants/Spacing";
@@ -260,7 +261,7 @@ export default function EditProfileScreen() {
   const email = profileData?.firebaseData?.email || "";
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#121212" }}>
+    <View style={{ flex: 1, backgroundColor: darkTheme.bg }}>
       <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
         {/* Header */}
         <View style={styles.header}>
@@ -293,16 +294,16 @@ export default function EditProfileScreen() {
                 style={{ alignItems: "center", marginBottom: SPACE["2xl"] }}
               >
                 <View style={{ position: "relative" }}>
-                  <Avatar size="2xl" bg="#1e1e1e" borderRadius="$full" opacity={avatarUploading ? 0.5 : 1}>
+                  <Avatar size="2xl" bg={darkTheme.surface} borderRadius="$full" opacity={avatarUploading ? 0.5 : 1}>
                     {avatar ? (
                       <AvatarImage source={{ uri: avatar }} alt="Avatar" />
                     ) : (
-                      <Avatar.FallbackText color="white">{initials}</Avatar.FallbackText>
+                      <Avatar.FallbackText color={darkTheme.textPrimary}>{initials}</Avatar.FallbackText>
                     )}
                   </Avatar>
                   {/* Camera badge */}
                   <View style={styles.cameraBadge}>
-                    <Ionicons name="camera" size={15} color="#121212" />
+                    <Ionicons name="camera" size={15} color={darkTheme.bg} />
                   </View>
                   {avatarUploading && (
                     <View style={styles.avatarSpinner}>
@@ -310,7 +311,7 @@ export default function EditProfileScreen() {
                     </View>
                   )}
                 </View>
-                <Text style={{ color: avatarUploading ? "#666" : ACCENT, fontSize: TYPE.size.label, marginTop: SPACE.sm, fontWeight: TYPE.weight.semibold }}>
+                <Text style={{ color: avatarUploading ? darkTheme.textMuted : ACCENT, fontSize: TYPE.size.label, marginTop: SPACE.sm, fontWeight: TYPE.weight.semibold }}>
                   {avatarUploading ? "Uploading..." : "Change photo"}
                 </Text>
               </TouchableOpacity>
@@ -318,16 +319,16 @@ export default function EditProfileScreen() {
               {/* First name */}
               <Text style={styles.label}>First Name</Text>
               <Input
-                bg="#1e1e1e"
+                bg={darkTheme.surface}
                 borderWidth={1}
-                borderColor={formErrors.firstName ? "#ff6b6b" : "#2a2a2a"}
+                borderColor={formErrors.firstName ? darkTheme.danger : darkTheme.raised}
                 borderRadius="$xl"
                 h="$12"
               >
                 <InputField
-                  color="white"
+                  color={darkTheme.textPrimary}
                   placeholder="First name"
-                  placeholderTextColor="#555"
+                  placeholderTextColor={darkTheme.textGhost}
                   px="$4"
                   fontSize="$md"
                   value={formData.firstName}
@@ -339,16 +340,16 @@ export default function EditProfileScreen() {
               {/* Last name */}
               <Text style={[styles.label, { marginTop: SPACE.lg }]}>Last Name</Text>
               <Input
-                bg="#1e1e1e"
+                bg={darkTheme.surface}
                 borderWidth={1}
-                borderColor={formErrors.lastName ? "#ff6b6b" : "#2a2a2a"}
+                borderColor={formErrors.lastName ? darkTheme.danger : darkTheme.raised}
                 borderRadius="$xl"
                 h="$12"
               >
                 <InputField
-                  color="white"
+                  color={darkTheme.textPrimary}
                   placeholder="Last name"
-                  placeholderTextColor="#555"
+                  placeholderTextColor={darkTheme.textGhost}
                   px="$4"
                   fontSize="$md"
                   value={formData.lastName}
@@ -360,16 +361,16 @@ export default function EditProfileScreen() {
               {/* Username */}
               <Text style={[styles.label, { marginTop: SPACE.lg }]}>Username</Text>
               <Input
-                bg="#1e1e1e"
+                bg={darkTheme.surface}
                 borderWidth={1}
-                borderColor={formErrors.username ? "#ff6b6b" : "#2a2a2a"}
+                borderColor={formErrors.username ? darkTheme.danger : darkTheme.raised}
                 borderRadius="$xl"
                 h="$12"
               >
                 <InputField
-                  color="white"
+                  color={darkTheme.textPrimary}
                   placeholder="Username"
-                  placeholderTextColor="#555"
+                  placeholderTextColor={darkTheme.textGhost}
                   autoCapitalize="none"
                   px="$4"
                   fontSize="$md"
@@ -395,7 +396,7 @@ export default function EditProfileScreen() {
                       style={[styles.chip, selected ? styles.chipOn : styles.chipOff]}
                     >
                       <Text style={{
-                        color: selected ? ACCENT : "#a0a0a0",
+                        color: selected ? ACCENT : darkTheme.textSecondary,
                         fontSize: TYPE.size.body,
                         fontWeight: selected ? TYPE.weight.semibold : TYPE.weight.regular,
                       }}>
@@ -415,7 +416,7 @@ export default function EditProfileScreen() {
                 ]}
               >
                 <Text style={{
-                  color: formData.gender === null ? ACCENT : "#a0a0a0",
+                  color: formData.gender === null ? ACCENT : darkTheme.textSecondary,
                   fontSize: TYPE.size.body,
                   fontWeight: formData.gender === null ? TYPE.weight.semibold : TYPE.weight.regular,
                 }}>
@@ -427,7 +428,7 @@ export default function EditProfileScreen() {
               <Text style={[styles.label, { marginTop: SPACE.lg }]}>Email</Text>
               <View style={styles.readonly}>
                 <Text style={{ color: "#cfcfcf", fontSize: TYPE.size.body }}>{email}</Text>
-                <Ionicons name="lock-closed" size={14} color="#666" />
+                <Ionicons name="lock-closed" size={14} color={darkTheme.textMuted} />
               </View>
             </ScrollView>
 
@@ -456,11 +457,11 @@ const styles = StyleSheet.create({
   headerTitle: {
     flex: 1,
     textAlign: "center",
-    color: "#ffffff",
+    color: darkTheme.textPrimary,
     fontSize: TYPE.size.subheading,
     fontWeight: TYPE.weight.bold,
   },
-  cancel: { color: "#a0a0a0", fontSize: TYPE.size.body },
+  cancel: { color: darkTheme.textSecondary, fontSize: TYPE.size.body },
   cameraBadge: {
     position: "absolute",
     bottom: 0,
@@ -472,7 +473,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 3,
-    borderColor: "#121212",
+    borderColor: darkTheme.bg,
   },
   avatarSpinner: {
     position: "absolute",
@@ -484,15 +485,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   label: {
-    color: "#8a8a8a",
+    color: darkTheme.textFaint,
     fontSize: TYPE.size.label,
     fontWeight: TYPE.weight.semibold,
     marginBottom: SPACE.sm,
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
-  helper: { color: "#666", fontSize: TYPE.size.micro, marginBottom: SPACE.sm, lineHeight: TYPE.size.micro * 1.5 },
-  error: { color: "#ff6b6b", fontSize: TYPE.size.label, marginTop: SPACE.xs },
+  helper: { color: darkTheme.textMuted, fontSize: TYPE.size.micro, marginBottom: SPACE.sm, lineHeight: TYPE.size.micro * 1.5 },
+  error: { color: darkTheme.danger, fontSize: TYPE.size.label, marginTop: SPACE.xs },
   chip: {
     flex: 1,
     paddingVertical: SPACE.md,
@@ -500,7 +501,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
   },
-  chipOff: { backgroundColor: "#1e1e1e" },
+  chipOff: { backgroundColor: darkTheme.surface },
   chipOn: { backgroundColor: "#3a2f12", borderWidth: 1, borderColor: ACCENT },
   readonly: {
     flexDirection: "row",
@@ -516,6 +517,6 @@ const styles = StyleSheet.create({
     paddingTop: SPACE.md,
     borderTopWidth: 1,
     borderTopColor: "#1f1f1f",
-    backgroundColor: "#121212",
+    backgroundColor: darkTheme.bg,
   },
 });

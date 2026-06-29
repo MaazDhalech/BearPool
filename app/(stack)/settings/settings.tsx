@@ -1,3 +1,4 @@
+import { darkTheme } from "@/constants/theme";
 import { ACCENT } from "@/constants/Colors";
 import { db, auth } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
@@ -14,7 +15,6 @@ import {
   Button,
   ButtonText,
   HStack,
-  Icon,
   ScrollView,
   Spinner,
   Text,
@@ -38,16 +38,7 @@ import {
   updateDoc,
   where
 } from "firebase/firestore";
-import {
-  Bell,
-  ChevronLeft,
-  FileText,
-  HelpCircle,
-  LogOut,
-  Shield,
-  Trash2,
-  UserX,
-} from "lucide-react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import {
   Alert,
@@ -76,7 +67,7 @@ interface BlockedUser {
 }
 
 interface SettingsItemProps {
-  icon: any;
+  icon: keyof typeof Ionicons.glyphMap;
   title: string;
   subtitle?: string;
   onPress: () => void;
@@ -96,43 +87,38 @@ const SettingsItem: React.FC<SettingsItemProps> = ({
     onPress={onPress}
     activeOpacity={0.7}
     style={{
-      backgroundColor: "#1e1e1e",
+      backgroundColor: darkTheme.surface,
       padding: 16,
       borderRadius: 12,
       marginBottom: 12,
       borderWidth: 1,
-      borderColor: "#333",
+      borderColor: darkTheme.border,
     }}
   >
     <HStack space="md" alignItems="center">
-      <Box bg="#2a2a2a" p="$3" borderRadius="$md">
-        <Icon as={icon} size="lg" color={color} />
+      <Box bg={darkTheme.raised} p="$3" borderRadius="$md">
+        <Ionicons name={icon} size={24} color={color} />
       </Box>
       <VStack flex={1}>
         <HStack justifyContent="space-between" alignItems="center">
-          <Text color="white" fontSize="$lg" fontWeight="$semibold">
+          <Text color={darkTheme.textPrimary} fontSize="$lg" fontWeight="$semibold">
             {title}
           </Text>
           {badge && (
-            <Box bg="#ff6b6b" px="$2" py="$1" borderRadius="$full">
-              <Text color="white" fontSize="$xs" fontWeight="$bold">
+            <Box bg={darkTheme.danger} px="$2" py="$1" borderRadius="$full">
+              <Text color={darkTheme.textPrimary} fontSize="$xs" fontWeight="$bold">
                 {badge}
               </Text>
             </Box>
           )}
         </HStack>
         {subtitle && (
-          <Text color="#a0a0a0" fontSize="$sm" mt="$1">
+          <Text color={darkTheme.textSecondary} fontSize="$sm" mt="$1">
             {subtitle}
           </Text>
         )}
       </VStack>
-      <Icon
-        as={ChevronLeft}
-        size="md"
-        color="#a0a0a0"
-        style={{ transform: [{ rotate: "180deg" }] }}
-      />
+      <Ionicons name="chevron-forward" size={20} color={darkTheme.textSecondary} />
     </HStack>
   </TouchableOpacity>
 );
@@ -566,8 +552,8 @@ const handleReauthAndDelete = async () => {
 
   if (loading) {
     return (
-      <Box flex={1} bg="#121212" justifyContent="center" alignItems="center">
-        <Text color="#a0a0a0">Loading settings...</Text>
+      <Box flex={1} bg={darkTheme.bg} justifyContent="center" alignItems="center">
+        <Text color={darkTheme.textSecondary}>Loading settings...</Text>
       </Box>
     );
   }
@@ -578,7 +564,7 @@ const handleReauthAndDelete = async () => {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
     >
-      <Box flex={1} bg="#121212">
+      <Box flex={1} bg={darkTheme.bg}>
         <NavHeader title="Settings" />
         <ScrollView showsVerticalScrollIndicator={false}>
           <Box px="$4" py="$6">
@@ -586,11 +572,11 @@ const handleReauthAndDelete = async () => {
             {/* Settings Items */}
             <VStack space="sm">
               <SettingsItem
-                icon={UserX}
+                icon="person-remove-outline"
                 title="Blocked Users"
                 subtitle="Manage users you've blocked"
                 onPress={() => setShowBlockedUsers(true)}
-                color="#ff6b6b"
+                color={darkTheme.danger}
                 badge={
                   profileData?.blockedUsers?.length > 0
                     ? profileData.blockedUsers.length.toString()
@@ -599,15 +585,15 @@ const handleReauthAndDelete = async () => {
               />
 
               <SettingsItem
-                icon={Shield}
+                icon="shield-checkmark-outline"
                 title="Privacy Policy"
                 subtitle="View our privacy policy"
                 onPress={handlePrivacySettings}
-                color="#4CAF50"
+                color={darkTheme.success}
               />
 
               <SettingsItem
-                icon={FileText}
+                icon="document-text-outline"
                 title="Terms of Service"
                 subtitle="Read our terms of service"
                 onPress={() => router.push("/(stack)/settings/terms-of-service")}
@@ -615,7 +601,7 @@ const handleReauthAndDelete = async () => {
               />
 
               <SettingsItem
-                icon={Bell}
+                icon="notifications-outline"
                 title="Notifications"
                 subtitle="Manage your notification preferences"
                 onPress={handleNotificationSettings}
@@ -623,7 +609,7 @@ const handleReauthAndDelete = async () => {
               />
 
               <SettingsItem
-                icon={HelpCircle}
+                icon="help-circle-outline"
                 title="Help & Support"
                 subtitle="Get help or contact our support team"
                 onPress={handleHelpSupport}
@@ -631,27 +617,27 @@ const handleReauthAndDelete = async () => {
               />
 
               <SettingsItem
-                icon={LogOut}
+                icon="log-out-outline"
                 title="Log Out"
                 subtitle="Sign out of your account"
                 onPress={handleLogout}
-                color="#ff6b6b"
+                color={darkTheme.danger}
               />
 
               <SettingsItem
-                icon={Trash2}
+                icon="trash-outline"
                 title="Delete Account"
                 subtitle="Permanently delete your account and all data"
                 onPress={handleDeleteAccount}
-                color="#ff5555"
+                color={darkTheme.danger}
               />
             </VStack>
 
             {deletingAccount && (
-              <Box mt="$4" p="$4" bg="#2a2a2a" borderRadius="$md">
+              <Box mt="$4" p="$4" bg={darkTheme.raised} borderRadius="$md">
                 <HStack space="sm" justifyContent="center" alignItems="center">
                   <Spinner size="small" color={ACCENT} />
-                  <Text color="#ff6b6b" textAlign="center">
+                  <Text color={darkTheme.danger} textAlign="center">
                     Deleting account... Please wait.
                   </Text>
                 </HStack>
@@ -669,11 +655,11 @@ const handleReauthAndDelete = async () => {
           <RNView style={{ paddingHorizontal: 24, maxHeight: 400 }}>
             {loadingBlockedUsers ? (
               <Box py="$4" alignItems="center">
-                <Text color="#a0a0a0">Loading blocked users...</Text>
+                <Text color={darkTheme.textSecondary}>Loading blocked users...</Text>
               </Box>
             ) : blockedUsers.length === 0 ? (
               <Box py="$4" alignItems="center">
-                <Text color="#a0a0a0">No blocked users</Text>
+                <Text color={darkTheme.textSecondary}>No blocked users</Text>
               </Box>
             ) : (
               <ScrollView showsVerticalScrollIndicator={false}>
@@ -683,18 +669,18 @@ const handleReauthAndDelete = async () => {
                       key={blockedUser.id}
                       space="md"
                       alignItems="center"
-                      bg="#2a2a2a"
+                      bg={darkTheme.raised}
                       p="$3"
                       borderRadius="$md"
                     >
-                      <Avatar size="md" bg="#333">
+                      <Avatar size="md" bg={darkTheme.border}>
                         {blockedUser.avatar ? (
                           <AvatarImage
                             source={{ uri: blockedUser.avatar }}
                             alt="Avatar"
                           />
                         ) : (
-                          <Avatar.FallbackText color="white">
+                          <Avatar.FallbackText color={darkTheme.textPrimary}>
                             {(blockedUser.first_name?.[0] || "") +
                               (blockedUser.last_name?.[0] || "") || "U"}
                           </Avatar.FallbackText>
@@ -702,22 +688,22 @@ const handleReauthAndDelete = async () => {
                       </Avatar>
 
                       <VStack flex={1}>
-                        <Text color="white" fontWeight="$semibold">
+                        <Text color={darkTheme.textPrimary} fontWeight="$semibold">
                           {blockedUser.username}
                         </Text>
-                        <Text color="#a0a0a0" fontSize="$sm">
+                        <Text color={darkTheme.textSecondary} fontSize="$sm">
                           {blockedUser.first_name} {blockedUser.last_name}
                         </Text>
                       </VStack>
 
                       <Button
                         size="sm"
-                        bg="#ff6b6b"
+                        bg={darkTheme.danger}
                         onPress={() =>
                           handleUnblockUser(blockedUser.id, blockedUser.username)
                         }
                       >
-                        <ButtonText color="white" fontSize="$sm">
+                        <ButtonText color={darkTheme.textPrimary} fontSize="$sm">
                           Unblock
                         </ButtonText>
                       </Button>
@@ -738,8 +724,8 @@ const handleReauthAndDelete = async () => {
           <RNView style={{ paddingHorizontal: 24 }}>
             <RNView style={styles.notifRow}>
               <RNView style={{ flex: 1, marginRight: 16 }}>
-                <Text color="white" fontWeight="$semibold" fontSize="$md">Push Notifications</Text>
-                <Text color="#a0a0a0" fontSize="$sm" mt="$1">
+                <Text color={darkTheme.textPrimary} fontWeight="$semibold" fontSize="$md">Push Notifications</Text>
+                <Text color={darkTheme.textSecondary} fontSize="$sm" mt="$1">
                   Ride updates, chat messages, member activity
                 </Text>
               </RNView>
@@ -747,8 +733,8 @@ const handleReauthAndDelete = async () => {
                 value={notifEnabled}
                 onValueChange={handleNotifToggle}
                 disabled={savingNotif}
-                trackColor={{ false: "#444", true: ACCENT }}
-                thumbColor="#ffffff"
+                trackColor={{ false: darkTheme.borderStrong, true: ACCENT }}
+                thumbColor={darkTheme.textPrimary}
               />
             </RNView>
 
@@ -758,7 +744,7 @@ const handleReauthAndDelete = async () => {
                   Notifications are blocked in your device settings.
                 </Text>
                 <Button size="sm" bg={ACCENT} onPress={() => Linking.openSettings()}>
-                  <ButtonText color="#121212">Open Device Settings</ButtonText>
+                  <ButtonText color={darkTheme.bg}>Open Device Settings</ButtonText>
                 </Button>
               </RNView>
             )}
@@ -789,7 +775,7 @@ const handleReauthAndDelete = async () => {
               <TextInput
                 style={styles.reauthInput}
                 placeholder="Your password"
-                placeholderTextColor="#555"
+                placeholderTextColor={darkTheme.textGhost}
                 secureTextEntry
                 value={reauthPassword}
                 onChangeText={setReauthPassword}
@@ -826,7 +812,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.6)",
   },
   notifSheet: {
-    backgroundColor: "#1e1e1e",
+    backgroundColor: darkTheme.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingHorizontal: 24,
@@ -836,7 +822,7 @@ const styles = StyleSheet.create({
   notifHandle: {
     width: 36,
     height: 4,
-    backgroundColor: "#555",
+    backgroundColor: darkTheme.textGhost,
     borderRadius: 2,
     alignSelf: "center",
     marginBottom: 20,
@@ -844,12 +830,12 @@ const styles = StyleSheet.create({
   notifRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#2a2a2a",
+    backgroundColor: darkTheme.raised,
     borderRadius: 12,
     padding: 16,
   },
   notifWarning: {
-    backgroundColor: "#2a2a2a",
+    backgroundColor: darkTheme.raised,
     borderRadius: 12,
     padding: 16,
     marginTop: 12,
@@ -863,7 +849,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   reauthSheet: {
-    backgroundColor: "#1e1e1e",
+    backgroundColor: darkTheme.surface,
     borderRadius: 20,
     marginHorizontal: 24,
     paddingHorizontal: 24,
@@ -871,35 +857,35 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
   },
   reauthTitle: {
-    color: "#ffffff",
+    color: darkTheme.textPrimary,
     fontSize: 18,
     fontWeight: "700",
     marginBottom: 8,
   },
   reauthSubtitle: {
-    color: "#a0a0a0",
+    color: darkTheme.textSecondary,
     fontSize: 14,
     marginBottom: 20,
     lineHeight: 20,
   },
   reauthInput: {
-    backgroundColor: "#2a2a2a",
+    backgroundColor: darkTheme.raised,
     borderRadius: 10,
     height: 50,
     paddingHorizontal: 16,
-    color: "#ffffff",
+    color: darkTheme.textPrimary,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: "#333",
+    borderColor: darkTheme.border,
     marginBottom: 12,
   },
   reauthError: {
-    color: "#ff7d7d",
+    color: darkTheme.errorText,
     fontSize: 13,
     marginBottom: 12,
   },
   reauthBtn: {
-    backgroundColor: "#ff5555",
+    backgroundColor: darkTheme.danger,
     borderRadius: 10,
     height: 50,
     alignItems: "center",
@@ -910,7 +896,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   reauthBtnText: {
-    color: "#ffffff",
+    color: darkTheme.textPrimary,
     fontSize: 16,
     fontWeight: "700",
   },

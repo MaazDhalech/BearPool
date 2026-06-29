@@ -30,20 +30,30 @@ export type Theme = {
   // Surfaces (low → high elevation)
   bg: string;
   surface: string;
+  /** Between surface and raised */
+  surfaceAlt: string;
   raised: string;
 
   // Text
   textPrimary: string;
+  /** Near-white body text */
+  textBright: string;
   textSecondary: string;
   textMuted: string;
+  /** Fainter than textMuted */
+  textFaint: string;
   /** Very low-emphasis text: hints, disabled labels, fine print */
   textGhost: string;
 
   // Lines
   border: string;
+  /** Lighter divider/border than border */
+  borderStrong: string;
   borderSubtle: string;
 
   // Status
+  /** Destructive-action red (delete / leave / report) */
+  danger: string;
   error: string;
   errorText: string;
   errorBg: string;
@@ -66,16 +76,21 @@ export const darkTheme: Theme = {
 
   bg: "#121212",
   surface: "#1e1e1e",
+  surfaceAlt: "#252525",
   raised: "#2a2a2a",
 
   textPrimary: "#ffffff",
+  textBright: "#e8e8e8",
   textSecondary: "#a0a0a0",
   textMuted: "#666666",
+  textFaint: "#888888",
   textGhost: "#545456",
 
   border: "#333333",
+  borderStrong: "#444444",
   borderSubtle: "#222222",
 
+  danger: "#ff6b6b",
   error: "#ff4444",
   errorText: "#ff7d7d",
   errorBg: "#2a0e0e",
@@ -95,16 +110,21 @@ export const lightTheme: Theme = {
 
   bg: "#ffffff",
   surface: "#f4f4f5",
+  surfaceAlt: "#ececef",
   raised: "#e9e9ec",
 
   textPrimary: "#11181c",
+  textBright: "#11181c",
   textSecondary: "#52525b",
   textMuted: "#8a8a90",
+  textFaint: "#9a9aa0",
   textGhost: "#aeaeb2",
 
   border: "#d8d8dc",
+  borderStrong: "#c8c8cc",
   borderSubtle: "#ececef",
 
+  danger: "#d92626",
   error: "#d92626",
   errorText: "#b91c1c",
   errorBg: "#fdecec",

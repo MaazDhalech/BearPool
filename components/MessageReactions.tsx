@@ -1,3 +1,4 @@
+import { darkTheme } from "@/constants/theme";
 import { TYPE } from "@/constants/Typography";
 import { Text, TouchableOpacity, View } from "react-native";
 
@@ -40,7 +41,7 @@ export function MessageReactions({ reactions, currentUserId, onToggle, alignRigh
               flexDirection: "row",
               alignItems: "center",
               gap: 3,
-              backgroundColor: mine ? "rgba(10,132,255,0.18)" : "#2a2a2a",
+              backgroundColor: mine ? "rgba(10,132,255,0.18)" : darkTheme.raised,
               borderWidth: 1,
               borderColor: mine ? "#0a84ff" : "transparent",
               borderRadius: 999,
@@ -52,7 +53,7 @@ export function MessageReactions({ reactions, currentUserId, onToggle, alignRigh
             <Text
               style={{
                 fontSize: TYPE.size.micro,
-                color: mine ? "#cfe4ff" : "#9a9a9a",
+                color: mine ? "#cfe4ff" : darkTheme.textSecondary,
                 fontWeight: "600",
               }}
             >

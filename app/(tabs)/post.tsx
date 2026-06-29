@@ -1,3 +1,4 @@
+import { darkTheme } from "@/constants/theme";
 import { ACCENT } from "@/constants/Colors";
 import { TYPE } from "@/constants/Typography";
 import { SPACE } from "@/constants/Spacing";
@@ -422,7 +423,7 @@ export default function PostScreen() {
     <Stack.Screen options={{ gestureEnabled: false }} />
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={{ flex: 1, backgroundColor: "#121212" }}
+      style={{ flex: 1, backgroundColor: darkTheme.bg }}
     >
       <LinearGradient
         colors={["rgba(255, 190, 92, 0.28)", "transparent"]}
@@ -439,21 +440,21 @@ export default function PostScreen() {
 
           {/* From */}
           <View style={{ marginBottom: SPACE.lg }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: SPACE.sm, fontSize: TYPE.size.caption }}>
+            <Text style={{ color: darkTheme.textSecondary, marginBottom: SPACE.sm, fontSize: TYPE.size.caption }}>
               From
             </Text>
             <TextInput
               value={from}
               placeholder="e.g. Berkeley – Unit 1"
-              placeholderTextColor="#666"
+              placeholderTextColor={darkTheme.textMuted}
               onChangeText={(text) => handleTextChange(text, setFrom)}
               style={{
-                backgroundColor: "#1e1e1e",
-                color: "#ffffff",
+                backgroundColor: darkTheme.surface,
+                color: darkTheme.textPrimary,
                 padding: 14,
                 borderRadius: 8,
                 borderWidth: 1,
-                borderColor: "#333",
+                borderColor: darkTheme.border,
                 fontSize: 16,
               }}
             />
@@ -461,21 +462,21 @@ export default function PostScreen() {
 
           {/* To */}
           <View style={{ marginBottom: SPACE.lg }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: SPACE.sm, fontSize: TYPE.size.caption }}>
+            <Text style={{ color: darkTheme.textSecondary, marginBottom: SPACE.sm, fontSize: TYPE.size.caption }}>
               To
             </Text>
             <TextInput
               value={to}
               placeholder="e.g. SFO Terminal 2"
-              placeholderTextColor="#666"
+              placeholderTextColor={darkTheme.textMuted}
               onChangeText={(text) => handleTextChange(text, setTo)}
               style={{
-                backgroundColor: "#1e1e1e",
-                color: "#ffffff",
+                backgroundColor: darkTheme.surface,
+                color: darkTheme.textPrimary,
                 padding: 14,
                 borderRadius: 8,
                 borderWidth: 1,
-                borderColor: "#333",
+                borderColor: darkTheme.border,
                 fontSize: 16,
               }}
             />
@@ -483,24 +484,24 @@ export default function PostScreen() {
 
           {/* Date Picker */}
           <View style={{ marginBottom: SPACE.lg }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: SPACE.sm, fontSize: TYPE.size.caption }}>
+            <Text style={{ color: darkTheme.textSecondary, marginBottom: SPACE.sm, fontSize: TYPE.size.caption }}>
               Date
             </Text>
             <TouchableOpacity
               onPress={showDatePickerModal}
               activeOpacity={0.7}
               style={{
-                backgroundColor: "#1e1e1e",
+                backgroundColor: darkTheme.surface,
                 padding: 14,
                 borderRadius: 8,
                 borderWidth: 1,
-                borderColor: "#333",
+                borderColor: darkTheme.border,
                 flexDirection: "row",
                 justifyContent: "space-between",
                 alignItems: "center",
               }}
             >
-              <Text style={{ color: "#ffffff", fontSize: 16 }}>
+              <Text style={{ color: darkTheme.textPrimary, fontSize: 16 }}>
                 {formattedDate}
               </Text>
               <Ionicons name="calendar-outline" size={18} color={ACCENT} />
@@ -509,24 +510,24 @@ export default function PostScreen() {
 
           {/* Time Picker */}
           <View style={{ marginBottom: SPACE.lg }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: SPACE.sm, fontSize: TYPE.size.caption }}>
+            <Text style={{ color: darkTheme.textSecondary, marginBottom: SPACE.sm, fontSize: TYPE.size.caption }}>
               Time
             </Text>
             <TouchableOpacity
               onPress={showTimePickerModal}
               activeOpacity={0.7}
               style={{
-                backgroundColor: "#1e1e1e",
+                backgroundColor: darkTheme.surface,
                 padding: 14,
                 borderRadius: 8,
                 borderWidth: 1,
-                borderColor: "#333",
+                borderColor: darkTheme.border,
                 flexDirection: "row",
                 justifyContent: "space-between",
                 alignItems: "center",
               }}
             >
-              <Text style={{ color: "#ffffff", fontSize: 16 }}>
+              <Text style={{ color: darkTheme.textPrimary, fontSize: 16 }}>
                 {formattedTime}
               </Text>
               <Ionicons name="time-outline" size={18} color={ACCENT} />
@@ -535,17 +536,17 @@ export default function PostScreen() {
 
           {/* Seats */}
           <View style={{ marginBottom: SPACE.lg }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: SPACE.sm, fontSize: TYPE.size.caption }}>
+            <Text style={{ color: darkTheme.textSecondary, marginBottom: SPACE.sm, fontSize: TYPE.size.caption }}>
               Open seats
             </Text>
             <View
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                backgroundColor: "#1e1e1e",
+                backgroundColor: darkTheme.surface,
                 borderRadius: 8,
                 borderWidth: 1,
-                borderColor: "#333",
+                borderColor: darkTheme.border,
                 overflow: "hidden",
               }}
             >
@@ -556,13 +557,13 @@ export default function PostScreen() {
                 style={{
                   paddingVertical: 14,
                   paddingHorizontal: SPACE.xl,
-                  backgroundColor: getSafeSeats() <= 1 ? "transparent" : "#2a2a2a",
+                  backgroundColor: getSafeSeats() <= 1 ? "transparent" : darkTheme.raised,
                 }}
               >
-                <Text style={{ color: getSafeSeats() <= 1 ? "#555" : "white", fontSize: TYPE.size.subheading, fontWeight: TYPE.weight.medium }}>−</Text>
+                <Text style={{ color: getSafeSeats() <= 1 ? darkTheme.textGhost : darkTheme.textPrimary, fontSize: TYPE.size.subheading, fontWeight: TYPE.weight.medium }}>−</Text>
               </TouchableOpacity>
 
-              <Text style={{ color: "white", fontSize: TYPE.size.subheading, fontWeight: TYPE.weight.bold, flex: 1, textAlign: "center" }}>
+              <Text style={{ color: darkTheme.textPrimary, fontSize: TYPE.size.subheading, fontWeight: TYPE.weight.bold, flex: 1, textAlign: "center" }}>
                 {seats}
               </Text>
 
@@ -573,20 +574,20 @@ export default function PostScreen() {
                 style={{
                   paddingVertical: 14,
                   paddingHorizontal: SPACE.xl,
-                  backgroundColor: getSafeSeats() >= 5 ? "transparent" : "#2a2a2a",
+                  backgroundColor: getSafeSeats() >= 5 ? "transparent" : darkTheme.raised,
                 }}
               >
-                <Text style={{ color: getSafeSeats() >= 5 ? "#555" : "white", fontSize: TYPE.size.subheading, fontWeight: TYPE.weight.medium }}>+</Text>
+                <Text style={{ color: getSafeSeats() >= 5 ? darkTheme.textGhost : darkTheme.textPrimary, fontSize: TYPE.size.subheading, fontWeight: TYPE.weight.medium }}>+</Text>
               </TouchableOpacity>
             </View>
           </View>
 
           {/* Gender Preference */}
           <View style={{ marginBottom: SPACE.lg }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: SPACE.sm, fontSize: TYPE.size.caption }}>
+            <Text style={{ color: darkTheme.textSecondary, marginBottom: SPACE.sm, fontSize: TYPE.size.caption }}>
               Gender Preference
             </Text>
-            <Text style={{ color: "#666", fontSize: TYPE.size.micro, marginBottom: SPACE.sm }}>
+            <Text style={{ color: darkTheme.textMuted, fontSize: TYPE.size.micro, marginBottom: SPACE.sm }}>
               Only riders who match this selection will see your post. We hide other options to keep rides aligned with your profile.
             </Text>
             <View
@@ -603,19 +604,19 @@ export default function PostScreen() {
                   onPress={() => setGenderPref(option.value)}
                   activeOpacity={0.8}
                   style={{
-                    backgroundColor: genderPref === option.value ? "#2e2610" : "#1e1e1e",
+                    backgroundColor: genderPref === option.value ? "#2e2610" : darkTheme.surface,
                     paddingVertical: SPACE.md,
                     paddingHorizontal: SPACE.lg,
                     borderRadius: 8,
                     borderWidth: 1,
-                    borderColor: genderPref === option.value ? ACCENT : "#333",
+                    borderColor: genderPref === option.value ? ACCENT : darkTheme.border,
                     marginBottom: SPACE.sm,
                     width: allowedGenderPrefOptions.length > 1 ? "48%" : "100%",
                   }}
                 >
                   <Text
                     style={{
-                      color: genderPref === option.value ? ACCENT : "#a0a0a0",
+                      color: genderPref === option.value ? ACCENT : darkTheme.textSecondary,
                       textAlign: "center",
                       fontSize: TYPE.size.body,
                       fontWeight: genderPref === option.value ? TYPE.weight.semibold : TYPE.weight.regular,
@@ -630,25 +631,25 @@ export default function PostScreen() {
 
           {/* Notes */}
           <View style={{ marginBottom: SPACE["2xl"] }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: SPACE.sm, fontSize: TYPE.size.caption }}>
+            <Text style={{ color: darkTheme.textSecondary, marginBottom: SPACE.sm, fontSize: TYPE.size.caption }}>
               Notes
             </Text>
             <TextInput
               value={notes}
               placeholder="Optional"
-              placeholderTextColor="#666"
+              placeholderTextColor={darkTheme.textMuted}
               onChangeText={(text) =>
                 handleTextChange(text, setNotes, MAX_NOTES_LENGTH)
               }
               maxLength={MAX_NOTES_LENGTH}
               multiline
               style={{
-                backgroundColor: "#1e1e1e",
-                color: "#ffffff",
+                backgroundColor: darkTheme.surface,
+                color: darkTheme.textPrimary,
                 padding: 14,
                 borderRadius: 8,
                 borderWidth: 1,
-                borderColor: "#333",
+                borderColor: darkTheme.border,
                 fontSize: 16,
                 minHeight: 80,
                 textAlignVertical: "top",
@@ -656,7 +657,7 @@ export default function PostScreen() {
             />
             <Text
               style={{
-                color: "#666",
+                color: darkTheme.textMuted,
                 fontSize: 12,
                 marginTop: 4,
                 textAlign: "right",
@@ -685,15 +686,15 @@ export default function PostScreen() {
                 <Text style={{ color: ACCENT, fontWeight: "600", fontSize: 15 }}>
                   Test Ride
                 </Text>
-                <Text style={{ color: "#888", fontSize: 13, marginTop: 2 }}>
+                <Text style={{ color: darkTheme.textFaint, fontSize: 13, marginTop: 2 }}>
                   Only visible to admins
                 </Text>
               </View>
               <Switch
                 value={isTestRide}
                 onValueChange={setIsTestRide}
-                trackColor={{ false: "#444", true: ACCENT }}
-                thumbColor="#ffffff"
+                trackColor={{ false: darkTheme.borderStrong, true: ACCENT }}
+                thumbColor={darkTheme.textPrimary}
               />
             </View>
           )}
@@ -716,7 +717,7 @@ export default function PostScreen() {
           >
             <Text
               style={{
-                color: "#121212",
+                color: darkTheme.bg,
                 textAlign: "center",
                 fontWeight: TYPE.weight.semibold,
                 fontSize: TYPE.size.body,
@@ -748,14 +749,14 @@ export default function PostScreen() {
             <TouchableWithoutFeedback>
               <Animated.View
                 style={[modalAnimStyle, {
-                  backgroundColor: "#1e1e1e",
+                  backgroundColor: darkTheme.surface,
                   borderRadius: 16,
                   padding: 24,
                   width: "100%",
                   maxWidth: 400,
                   alignItems: "center",
                   borderWidth: 1,
-                  borderColor: "#333",
+                  borderColor: darkTheme.border,
                 }]}
               >
                 {/* Success Icon */}
@@ -764,19 +765,19 @@ export default function PostScreen() {
                     width: 60,
                     height: 60,
                     borderRadius: 30,
-                    backgroundColor: "#4CAF50",
+                    backgroundColor: darkTheme.success,
                     justifyContent: "center",
                     alignItems: "center",
                     marginBottom: 20,
                   }}
                 >
-                  <Ionicons name="checkmark" size={32} color="white" />
+                  <Ionicons name="checkmark" size={32} color={darkTheme.textPrimary} />
                 </View>
 
                 {/* Title */}
                 <Text
                   style={{
-                    color: "#ffffff",
+                    color: darkTheme.textPrimary,
                     fontSize: TYPE.size.subheading,
                     fontWeight: TYPE.weight.bold,
                     marginBottom: SPACE.sm,
@@ -789,7 +790,7 @@ export default function PostScreen() {
                 {/* Message */}
                 <Text
                   style={{
-                    color: "#a0a0a0",
+                    color: darkTheme.textSecondary,
                     fontSize: TYPE.size.body,
                     marginBottom: SPACE["2xl"],
                     textAlign: "center",
@@ -814,14 +815,14 @@ export default function PostScreen() {
                     activeOpacity={0.7}
                     style={{
                       flex: 1,
-                      backgroundColor: "#2a2a2a",
+                      backgroundColor: darkTheme.raised,
                       paddingVertical: 14,
                       borderRadius: 8,
                     }}
                   >
                     <Text
                       style={{
-                        color: "#ffffff",
+                        color: darkTheme.textPrimary,
                         textAlign: "center",
                         fontWeight: "600",
                         fontSize: 16,
@@ -844,7 +845,7 @@ export default function PostScreen() {
                   >
                     <Text
                       style={{
-                        color: "#121212",
+                        color: darkTheme.bg,
                         textAlign: "center",
                         fontWeight: "600",
                         fontSize: 16,
@@ -888,7 +889,7 @@ export default function PostScreen() {
               <TouchableWithoutFeedback>
                 <View
                   style={{
-                    backgroundColor: "#1e1e1e",
+                    backgroundColor: darkTheme.surface,
                     borderRadius: 16,
                     padding: 24,
                     width: "90%",
@@ -898,7 +899,7 @@ export default function PostScreen() {
                 >
                   <Text
                     style={{
-                      color: "#ffffff",
+                      color: darkTheme.textPrimary,
                       fontSize: 20,
                       fontWeight: "600",
                       marginBottom: 20,
@@ -913,9 +914,9 @@ export default function PostScreen() {
                     onChange={handleDateChange}
                     minimumDate={new Date()}
                     themeVariant="dark"
-                    textColor="#ffffff"
+                    textColor={darkTheme.textPrimary}
                     style={{
-                      backgroundColor: "#1e1e1e",
+                      backgroundColor: darkTheme.surface,
                       width: "100%",
                       height: 180,
                     }}
@@ -933,7 +934,7 @@ export default function PostScreen() {
                   >
                     <Text
                       style={{
-                        color: "#121212",
+                        color: darkTheme.bg,
                         textAlign: "center",
                         fontSize: 16,
                         fontWeight: "600",
@@ -969,7 +970,7 @@ export default function PostScreen() {
               <TouchableWithoutFeedback>
                 <View
                   style={{
-                    backgroundColor: "#1e1e1e",
+                    backgroundColor: darkTheme.surface,
                     borderRadius: 16,
                     padding: 24,
                     width: "90%",
@@ -979,7 +980,7 @@ export default function PostScreen() {
                 >
                   <Text
                     style={{
-                      color: "#ffffff",
+                      color: darkTheme.textPrimary,
                       fontSize: 20,
                       fontWeight: "600",
                       marginBottom: 20,
@@ -993,9 +994,9 @@ export default function PostScreen() {
                     display="spinner"
                     onChange={handleTimeChange}
                     themeVariant="dark"
-                    textColor="#ffffff"
+                    textColor={darkTheme.textPrimary}
                     style={{
-                      backgroundColor: "#1e1e1e",
+                      backgroundColor: darkTheme.surface,
                       width: "100%",
                       height: 180,
                     }}
@@ -1014,7 +1015,7 @@ export default function PostScreen() {
                   >
                     <Text
                       style={{
-                        color: "#121212",
+                        color: darkTheme.bg,
                         textAlign: "center",
                         fontSize: 16,
                         fontWeight: "600",
@@ -1041,9 +1042,9 @@ export default function PostScreen() {
           <TouchableWithoutFeedback onPress={() => setShowDatePicker(false)}>
             <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center" }}>
               <TouchableWithoutFeedback>
-                <View style={{ backgroundColor: "#1e1e1e", borderRadius: 16, padding: SPACE["2xl"], width: "90%", maxWidth: 400, alignItems: "center" }}>
+                <View style={{ backgroundColor: darkTheme.surface, borderRadius: 16, padding: SPACE["2xl"], width: "90%", maxWidth: 400, alignItems: "center" }}>
                   <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: SPACE.xl, width: "100%" }}>
-                    <Text style={{ color: "#ffffff", fontSize: TYPE.size.subheading, fontWeight: TYPE.weight.semibold }}>
+                    <Text style={{ color: darkTheme.textPrimary, fontSize: TYPE.size.subheading, fontWeight: TYPE.weight.semibold }}>
                       Select Date
                     </Text>
                     <TouchableOpacity onPress={() => setShowDatePicker(false)} style={{ padding: SPACE.sm }}>
@@ -1057,8 +1058,8 @@ export default function PostScreen() {
                     onChange={handleDateChange}
                     minimumDate={new Date()}
                     themeVariant="dark"
-                    textColor="#ffffff"
-                    style={{ backgroundColor: "#1e1e1e", width: "100%", height: 200 }}
+                    textColor={darkTheme.textPrimary}
+                    style={{ backgroundColor: darkTheme.surface, width: "100%", height: 200 }}
                   />
                 </View>
               </TouchableWithoutFeedback>
@@ -1078,9 +1079,9 @@ export default function PostScreen() {
           <TouchableWithoutFeedback onPress={() => setShowTimePicker(false)}>
             <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center" }}>
               <TouchableWithoutFeedback>
-                <View style={{ backgroundColor: "#1e1e1e", borderRadius: 16, padding: SPACE["2xl"], width: "90%", maxWidth: 400, alignItems: "center" }}>
+                <View style={{ backgroundColor: darkTheme.surface, borderRadius: 16, padding: SPACE["2xl"], width: "90%", maxWidth: 400, alignItems: "center" }}>
                   <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: SPACE.xl, width: "100%" }}>
-                    <Text style={{ color: "#ffffff", fontSize: TYPE.size.subheading, fontWeight: TYPE.weight.semibold }}>
+                    <Text style={{ color: darkTheme.textPrimary, fontSize: TYPE.size.subheading, fontWeight: TYPE.weight.semibold }}>
                       Select Time
                     </Text>
                     <TouchableOpacity onPress={() => setShowTimePicker(false)} style={{ padding: SPACE.sm }}>
@@ -1093,8 +1094,8 @@ export default function PostScreen() {
                     display="spinner"
                     onChange={handleTimeChange}
                     themeVariant="dark"
-                    textColor="#ffffff"
-                    style={{ backgroundColor: "#1e1e1e", width: "100%", height: 200 }}
+                    textColor={darkTheme.textPrimary}
+                    style={{ backgroundColor: darkTheme.surface, width: "100%", height: 200 }}
                     is24Hour={false}
                   />
                 </View>

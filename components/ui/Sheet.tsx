@@ -1,3 +1,4 @@
+import { darkTheme } from "@/constants/theme";
 import { SPACE } from "@/constants/Spacing";
 import { TYPE } from "@/constants/Typography";
 import { Ionicons } from "@expo/vector-icons";
@@ -66,7 +67,7 @@ export function SheetAction({
   icon,
   label,
   onPress,
-  tint = "#e8e8e8",
+  tint = darkTheme.textBright,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
@@ -81,12 +82,12 @@ export function SheetAction({
   );
 }
 
-export const SHEET_DESTRUCTIVE = "#ff5a5a";
+export const SHEET_DESTRUCTIVE = darkTheme.danger;
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" },
   sheet: {
-    backgroundColor: "#1e1e1e",
+    backgroundColor: darkTheme.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingTop: SPACE.sm,
@@ -107,18 +108,18 @@ const styles = StyleSheet.create({
     paddingTop: SPACE.sm,
     paddingBottom: SPACE.md,
   },
-  title: { color: "#ffffff", fontSize: TYPE.size.subheading, fontWeight: TYPE.weight.bold },
+  title: { color: darkTheme.textPrimary, fontSize: TYPE.size.subheading, fontWeight: TYPE.weight.bold },
   close: {
     position: "absolute",
     right: SPACE.lg,
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: "#2a2a2a",
+    backgroundColor: darkTheme.raised,
     alignItems: "center",
     justifyContent: "center",
   },
-  divider: { height: 1, backgroundColor: "#2a2a2a", marginBottom: 4 },
+  divider: { height: 1, backgroundColor: darkTheme.raised, marginBottom: 4 },
   action: {
     flexDirection: "row",
     alignItems: "center",

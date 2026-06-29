@@ -1,3 +1,4 @@
+import { darkTheme } from "@/constants/theme";
 import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
@@ -7,7 +8,6 @@ import {
   Button,
   HStack,
   Heading,
-  Icon,
   Input,
   InputField,
   ScrollView,
@@ -25,7 +25,6 @@ import {
   getDoc,
   serverTimestamp,
 } from "firebase/firestore";
-import { ChevronLeft } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -212,8 +211,8 @@ export default function ReportUserScreen() {
 
   if (loading) {
     return (
-      <Box flex={1} bg="#121212" justifyContent="center" alignItems="center">
-        <Text color="#a0a0a0">Loading report form...</Text>
+      <Box flex={1} bg={darkTheme.bg} justifyContent="center" alignItems="center">
+        <Text color={darkTheme.textSecondary}>Loading report form...</Text>
       </Box>
     );
   }
@@ -226,7 +225,7 @@ export default function ReportUserScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
     >
-      <Box flex={1} bg="#121212">
+      <Box flex={1} bg={darkTheme.bg}>
         <NavHeader title="Report User" />
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -235,9 +234,9 @@ export default function ReportUserScreen() {
         >
           <Box px="$4" py="$6">
 
-            <Text color="#a0a0a0" fontSize="$sm" mb="$6" lineHeight="$md">
+            <Text color={darkTheme.textSecondary} fontSize="$sm" mb="$6" lineHeight="$md">
               You’re about to report{" "}
-              <Text color="white" fontWeight="$semibold">
+              <Text color={darkTheme.textPrimary} fontWeight="$semibold">
                 {targetInfo?.name}
               </Text>{" "}
               (@{targetInfo?.username}). We’ll review your report within 24 hours.
@@ -245,7 +244,7 @@ export default function ReportUserScreen() {
 
             <VStack space="lg">
               <VStack space="sm">
-                <Text color="#a0a0a0" fontSize="$sm">
+                <Text color={darkTheme.textSecondary} fontSize="$sm">
                   Reason
                 </Text>
                 <HStack flexWrap="wrap" space="sm">
@@ -263,15 +262,15 @@ export default function ReportUserScreen() {
                         marginBottom: 8,
                         borderWidth: 1,
                         borderColor:
-                          form.reason === reason ? ACCENT : "#333",
+                          form.reason === reason ? ACCENT : darkTheme.border,
                         backgroundColor:
-                          form.reason === reason ? "#2e2610" : "#1e1e1e",
+                          form.reason === reason ? "#2e2610" : darkTheme.surface,
                       }}
                     >
                       <Text
                         style={{
                           color:
-                            form.reason === reason ? ACCENT : "#a0a0a0",
+                            form.reason === reason ? ACCENT : darkTheme.textSecondary,
                           fontWeight:
                             form.reason === reason ? "600" : "400",
                         }}
@@ -284,14 +283,14 @@ export default function ReportUserScreen() {
               </VStack>
 
               <VStack space="sm">
-                <Text color="#a0a0a0" fontSize="$sm">
+                <Text color={darkTheme.textSecondary} fontSize="$sm">
                   Additional details
                 </Text>
-                <Textarea bg="#2a2a2a" borderColor="#333" borderRadius="$lg">
+                <Textarea bg={darkTheme.raised} borderColor={darkTheme.border} borderRadius="$lg">
                   <TextareaInput
                     placeholder="Describe what happened..."
-                    placeholderTextColor="#666"
-                    color="white"
+                    placeholderTextColor={darkTheme.textMuted}
+                    color={darkTheme.textPrimary}
                     value={form.message}
                     onChangeText={(text) =>
                       setForm((prev) => ({ ...prev, message: text }))
@@ -304,14 +303,14 @@ export default function ReportUserScreen() {
               </VStack>
 
               <VStack space="sm">
-                <Text color="#a0a0a0" fontSize="$sm">
+                <Text color={darkTheme.textSecondary} fontSize="$sm">
                   Your email (optional)
                 </Text>
-                <Input bg="#2a2a2a" borderColor="#333">
+                <Input bg={darkTheme.raised} borderColor={darkTheme.border}>
                   <InputField
                     placeholder="We'll follow up here"
-                    placeholderTextColor="#666"
-                    color="white"
+                    placeholderTextColor={darkTheme.textMuted}
+                    color={darkTheme.textPrimary}
                     value={reporterInfo.email}
                     onChangeText={(text) =>
                       setReporterInfo((prev) => ({ ...prev, email: text }))
@@ -327,7 +326,7 @@ export default function ReportUserScreen() {
                 onPress={handleSubmit}
                 isDisabled={!canSubmit || submitting}
               >
-                <Text color="#121212" fontWeight="$semibold">
+                <Text color={darkTheme.bg} fontWeight="$semibold">
                   {submitting ? "Submitting..." : "Submit Report"}
                 </Text>
               </Button>

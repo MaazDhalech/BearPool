@@ -1,17 +1,18 @@
+import { darkTheme } from "@/constants/theme";
 import { ACCENT } from "@/constants/Colors";
 import {
     Box,
     HStack,
     Heading,
-    Icon,
     ScrollView,
     Spinner,
     Text,
     VStack,
 } from "@gluestack-ui/themed";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { ChevronLeft, ExternalLink } from "lucide-react-native";
 import { NavHeader } from "@/components/ui/NavHeader";
+import { useTheme } from "@/hooks/useTheme";
 import { useEffect, useState } from "react";
 import {
     Alert,
@@ -25,6 +26,7 @@ const GIST_URL = "https://gist.githubusercontent.com/MaazDhalech/5574b48ea3ce140
 
 export default function PrivacyPolicyScreen() {
   const router = useRouter();
+  const t = useTheme();
   const [privacyContent, setPrivacyContent] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -124,7 +126,7 @@ export default function PrivacyPolicyScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
     >
-      <Box flex={1} bg="#121212">
+      <Box flex={1} bg={t.bg}>
         <NavHeader title="Privacy Policy" />
         <Box px="$4" py="$6">
           {/* Action Buttons */}
@@ -132,15 +134,15 @@ export default function PrivacyPolicyScreen() {
             <TouchableOpacity
               onPress={handleRefresh}
               style={{
-                backgroundColor: "#2a2a2a",
+                backgroundColor: t.raised,
                 padding: 12,
                 borderRadius: 8,
                 borderWidth: 1,
-                borderColor: "#333",
+                borderColor: t.border,
                 flex: 1,
               }}
             >
-              <Text color="white" fontSize="$sm" textAlign="center">
+              <Text color={t.textPrimary} fontSize="$sm" textAlign="center">
                 Refresh
               </Text>
             </TouchableOpacity>
@@ -148,17 +150,17 @@ export default function PrivacyPolicyScreen() {
             <TouchableOpacity
               onPress={handleViewOriginal}
               style={{
-                backgroundColor: "#2a2a2a",
+                backgroundColor: t.raised,
                 padding: 12,
                 borderRadius: 8,
                 borderWidth: 1,
-                borderColor: "#333",
+                borderColor: t.border,
                 flex: 1,
               }}
             >
               <HStack space="xs" alignItems="center" justifyContent="center">
-                <Icon as={ExternalLink} size="sm" color="white" />
-                <Text color="white" fontSize="$sm">
+                <Ionicons name="open-outline" size={16} color={t.textPrimary} />
+                <Text color={t.textPrimary} fontSize="$sm">
                   View Original
                 </Text>
               </HStack>
@@ -175,31 +177,31 @@ export default function PrivacyPolicyScreen() {
             {loading ? (
               <Box py="$8" alignItems="center">
                 <Spinner size="large" color={ACCENT} />
-                <Text color="#a0a0a0" mt="$4">
+                <Text color={t.textSecondary} mt="$4">
                   Loading privacy policy...
                 </Text>
               </Box>
             ) : error ? (
               <Box py="$8" alignItems="center">
-                <Text color="#ff6b6b" mb="$4" textAlign="center">
+                <Text color={darkTheme.danger} mb="$4" textAlign="center">
                   {error}
                 </Text>
                 <TouchableOpacity
                   onPress={handleRefresh}
                   style={{
-                    backgroundColor: "#ff6b6b",
+                    backgroundColor: darkTheme.danger,
                     padding: 12,
                     borderRadius: 8,
                   }}
                 >
-                  <Text color="white" fontSize="$sm">
+                  <Text color={t.textPrimary} fontSize="$sm">
                     Try Again
                   </Text>
                 </TouchableOpacity>
               </Box>
             ) : sections.length === 0 ? (
               <Box py="$8" alignItems="center">
-                <Text color="#a0a0a0" textAlign="center">
+                <Text color={t.textSecondary} textAlign="center">
                   No privacy policy content available.
                 </Text>
               </Box>
@@ -208,16 +210,16 @@ export default function PrivacyPolicyScreen() {
                 {sections.map((section, index) => (
                   <Box
                     key={index}
-                    bg="#1e1e1e"
+                    bg={t.surface}
                     p="$4"
                     borderRadius="$md"
                     borderWidth={1}
-                    borderColor="#333"
+                    borderColor={t.border}
                   >
                     {section.title && (
                       <Heading 
                         size="md" 
-                        color="white" 
+                        color={t.textPrimary} 
                         mb={section.content.length > 0 ? "$3" : "$0"}
                         lineHeight="$lg"
                       >
@@ -228,7 +230,7 @@ export default function PrivacyPolicyScreen() {
                     {section.content.map((paragraph, pIndex) => (
                       <Text
                         key={pIndex}
-                        color="#e0e0e0"
+                        color={darkTheme.textBright}
                         fontSize="$sm"
                         lineHeight="$lg"
                         mb={pIndex < section.content.length - 1 ? "$2" : "$0"}

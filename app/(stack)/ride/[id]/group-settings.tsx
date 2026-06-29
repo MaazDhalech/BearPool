@@ -1,3 +1,4 @@
+import { darkTheme } from "@/constants/theme";
 import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { Ionicons } from "@expo/vector-icons";
@@ -8,7 +9,6 @@ import {
   Button,
   Heading,
   HStack,
-  Icon,
   Pressable,
   ScrollView,
   Text,
@@ -28,7 +28,6 @@ import {
   serverTimestamp,
   collection,
 } from "firebase/firestore";
-import { Menu as MenuIcon } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { Sheet, SheetAction, SHEET_DESTRUCTIVE } from "@/components/ui/Sheet";
 import { useEffect, useState } from "react";
@@ -611,12 +610,12 @@ This ride has been permanently deleted from the system.
   const hostCanLeave = !isHost || otherMembers.length === 0;
 
   return (
-    <Box flex={1} bg="#121212">
+    <Box flex={1} bg={darkTheme.bg}>
       <NavHeader title="Group Settings" />
 
       <ScrollView px="$4" py="$4" showsVerticalScrollIndicator={false}>
         <VStack space="lg">
-          <Text color="#777" fontSize="$xs" textAlign="center">
+          <Text color={darkTheme.textFaint} fontSize="$xs" textAlign="center">
             Tip: long press a user to see more
           </Text>
           {users.map((u) => (
@@ -631,7 +630,7 @@ This ride has been permanently deleted from the system.
             <HStack
               alignItems="center"
               justifyContent="space-between"
-              bg="#1e1e1e"
+              bg={darkTheme.surface}
               p="$4"
               borderRadius="$lg"
             >
@@ -641,11 +640,11 @@ This ride has been permanently deleted from the system.
                 </Avatar>
                 <VStack>
                   <HStack alignItems="center" space="xs">
-                    <Text color="white" fontWeight="$medium">
+                    <Text color={darkTheme.textPrimary} fontWeight="$medium">
                       {u.name}
                     </Text>
                     {u.id === ride.hostId && (
-                      <Text color="#4CAF50" fontSize="$xs" fontWeight="$bold">
+                      <Text color={darkTheme.success} fontSize="$xs" fontWeight="$bold">
                         (Host)
                       </Text>
                     )}
@@ -660,7 +659,7 @@ This ride has been permanently deleted from the system.
                 p="$2"
                 borderRadius="$full"
               >
-                <Icon as={MenuIcon} size="lg" color="#a0a0a0" />
+                <Ionicons name="ellipsis-horizontal" size={20} color={darkTheme.textSecondary} />
               </Pressable>
             </HStack>
             </Pressable>
@@ -671,21 +670,19 @@ This ride has been permanently deleted from the system.
             <Button
               mt="$2"
               size="md"
-              variant="outline"
-              borderColor="#ff5555"
-              backgroundColor="transparent"
+              variant="solid"
+              backgroundColor="#3a1f1f"
               onPress={() => handleDeleteRide(false)}
             >
-              <Text color="#ff5555">Delete Ride</Text>
+              <Text color={darkTheme.danger} fontWeight="$semibold">Delete Ride</Text>
             </Button>
           )}
 
           <Button
             mt="$6"
             size="md"
-            variant="outline"
-            borderColor={hostCanLeave ? "#ff5555" : "#666666"}
-            backgroundColor={hostCanLeave ? "transparent" : "#333333"}
+            variant="solid"
+            backgroundColor={hostCanLeave ? "#3a1f1f" : darkTheme.raised}
             opacity={hostCanLeave ? 1 : 0.6}
             onPress={
               hostCanLeave
@@ -699,7 +696,7 @@ This ride has been permanently deleted from the system.
                   }
             }
           >
-            <Text color={hostCanLeave ? "#ff5555" : "#666666"}>
+            <Text color={hostCanLeave ? darkTheme.danger : darkTheme.textMuted} fontWeight="$semibold">
               Leave Group
             </Text>
           </Button>
@@ -723,28 +720,28 @@ This ride has been permanently deleted from the system.
         >
           <View
             style={{
-              backgroundColor: "#1e1e1e",
+              backgroundColor: darkTheme.surface,
               borderRadius: 16,
               padding: 24,
               maxHeight: "80%",
             }}
           >
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Heading color="white" size="lg" mb={2}>
+              <Heading color={darkTheme.textPrimary} size="lg" mb={2}>
                 Remove Member
               </Heading>
               {userToKick && (
-                <Text color="white" mb={4} fontSize="$lg">
+                <Text color={darkTheme.textPrimary} mb={4} fontSize="$lg">
                   {userToKick.name} (@{userToKick.username})
                 </Text>
               )}
 
-              <Text color="#a0a0a0" mb={6}>
+              <Text color={darkTheme.textSecondary} mb={6}>
                 Select a reason for removing this member. This helps us keep BearPool safe.
               </Text>
 
               <VStack space="md" mb={6}>
-                <Text color="white" fontWeight="bold" fontSize={16}>
+                <Text color={darkTheme.textPrimary} fontWeight="bold" fontSize={16}>
                   Select a reason:
                 </Text>
 
@@ -757,7 +754,7 @@ This ride has been permanently deleted from the system.
                       alignItems: "center",
                       padding: 12,
                       backgroundColor:
-                        kickReason === reason ? "#2a2a2a" : "#252525",
+                        kickReason === reason ? darkTheme.raised : darkTheme.surfaceAlt,
                       borderRadius: 8,
                       marginBottom: 8,
                     }}
@@ -768,13 +765,13 @@ This ride has been permanently deleted from the system.
                         height: 20,
                         borderRadius: 10,
                         borderWidth: 2,
-                        borderColor: kickReason === reason ? "#ff5555" : "#666",
+                        borderColor: kickReason === reason ? darkTheme.danger : darkTheme.textMuted,
                         backgroundColor:
-                          kickReason === reason ? "#ff5555" : "transparent",
+                          kickReason === reason ? darkTheme.danger : "transparent",
                         marginRight: 12,
                       }}
                     />
-                    <Text color="white" flex={1}>
+                    <Text color={darkTheme.textPrimary} flex={1}>
                       {reason}
                     </Text>
                   </TouchableOpacity>
@@ -783,22 +780,22 @@ This ride has been permanently deleted from the system.
 
               {kickReason === "Other" && (
                 <VStack space="sm" mb={6}>
-                  <Text color="white" fontWeight="bold">
+                  <Text color={darkTheme.textPrimary} fontWeight="bold">
                     Please specify:
                   </Text>
                   <TextInput
                     style={{
-                      backgroundColor: "#252525",
-                      borderColor: "#333",
+                      backgroundColor: darkTheme.surfaceAlt,
+                      borderColor: darkTheme.border,
                       borderWidth: 1,
                       borderRadius: 8,
-                      color: "white",
+                      color: darkTheme.textPrimary,
                       padding: 12,
                       minHeight: 100,
                       textAlignVertical: "top",
                       fontSize: 16,
                     }}
-                    placeholderTextColor="#666"
+                    placeholderTextColor={darkTheme.textMuted}
                     multiline
                     onChangeText={setCustomKickReason}
                     value={customKickReason}
@@ -811,16 +808,16 @@ This ride has been permanently deleted from the system.
                 <Button
                   onPress={proceedWithKick}
                   disabled={kickSubmitting || !kickReason}
-                  bg="#ff5555"
+                  bg={darkTheme.danger}
                   opacity={kickSubmitting || !kickReason ? 0.6 : 1}
                 >
                   {kickSubmitting ? (
                     <HStack space="sm" alignItems="center">
-                      <ActivityIndicator size="small" color="white" />
-                      <Text color="white">Removing...</Text>
+                      <ActivityIndicator size="small" color={darkTheme.textPrimary} />
+                      <Text color={darkTheme.textPrimary}>Removing...</Text>
                     </HStack>
                   ) : (
-                    <Text color="white" fontWeight="bold">
+                    <Text color={darkTheme.textPrimary} fontWeight="bold">
                       Remove Member
                     </Text>
                   )}
@@ -836,11 +833,10 @@ This ride has been permanently deleted from the system.
                     }
                   }}
                   disabled={kickSubmitting}
-                  variant="outline"
-                  borderColor="#666"
-                  bg="transparent"
+                  variant="solid"
+                  bg={darkTheme.raised}
                 >
-                  <Text color="#a0a0a0">Cancel</Text>
+                  <Text color={darkTheme.textSecondary}>Cancel</Text>
                 </Button>
               </VStack>
             </ScrollView>
@@ -865,32 +861,32 @@ This ride has been permanently deleted from the system.
         >
           <View
             style={{
-              backgroundColor: "#1e1e1e",
+              backgroundColor: darkTheme.surface,
               borderRadius: 16,
               padding: 24,
               maxHeight: "80%",
             }}
           >
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Heading color="white" size="lg" mb={2}>
+              <Heading color={darkTheme.textPrimary} size="lg" mb={2}>
                 Delete Ride
               </Heading>
               {ride.from && ride.to ? (
-                <Text color="white" mb={4} fontSize="$lg">
+                <Text color={darkTheme.textPrimary} mb={4} fontSize="$lg">
                   {ride.from} → {ride.to}
                 </Text>
               ) : (
-                <Text color="white" mb={4} fontSize="$lg">
+                <Text color={darkTheme.textPrimary} mb={4} fontSize="$lg">
                   Untitled Ride
                 </Text>
               )}
 
-              <Text color="#a0a0a0" mb={6}>
+              <Text color={darkTheme.textSecondary} mb={6}>
                 Tell us why you&apos;re deleting this ride. A report will be sent to our team.
               </Text>
 
               <VStack space="md" mb={6}>
-                <Text color="white" fontWeight="bold" fontSize={16}>
+                <Text color={darkTheme.textPrimary} fontWeight="bold" fontSize={16}>
                   Select a reason for deletion:
                 </Text>
 
@@ -903,7 +899,7 @@ This ride has been permanently deleted from the system.
                       alignItems: "center",
                       padding: 12,
                       backgroundColor:
-                        deletionReason === reason ? "#2a2a2a" : "#252525",
+                        deletionReason === reason ? darkTheme.raised : darkTheme.surfaceAlt,
                       borderRadius: 8,
                       marginBottom: 8,
                     }}
@@ -915,13 +911,13 @@ This ride has been permanently deleted from the system.
                         borderRadius: 10,
                         borderWidth: 2,
                         borderColor:
-                          deletionReason === reason ? "#ff5555" : "#666",
+                          deletionReason === reason ? darkTheme.danger : darkTheme.textMuted,
                         backgroundColor:
-                          deletionReason === reason ? "#ff5555" : "transparent",
+                          deletionReason === reason ? darkTheme.danger : "transparent",
                         marginRight: 12,
                       }}
                     />
-                    <Text color="white" flex={1}>
+                    <Text color={darkTheme.textPrimary} flex={1}>
                       {reason}
                     </Text>
                   </TouchableOpacity>
@@ -929,22 +925,22 @@ This ride has been permanently deleted from the system.
               </VStack>
               {deletionReason === "Other" && (
                 <VStack space="sm" mb={6}>
-                  <Text color="white" fontWeight="bold">
+                  <Text color={darkTheme.textPrimary} fontWeight="bold">
                     Please specify:
                   </Text>
                   <TextInput
                     style={{
-                      backgroundColor: "#252525",
-                      borderColor: "#333",
+                      backgroundColor: darkTheme.surfaceAlt,
+                      borderColor: darkTheme.border,
                       borderWidth: 1,
                       borderRadius: 8,
-                      color: "white",
+                      color: darkTheme.textPrimary,
                       padding: 12,
                       minHeight: 100,
                       textAlignVertical: "top",
                       fontSize: 16,
                     }}
-                    placeholderTextColor="#666"
+                    placeholderTextColor={darkTheme.textMuted}
                     multiline
                     onChangeText={setCustomReason}
                     value={customReason}
@@ -957,16 +953,16 @@ This ride has been permanently deleted from the system.
                 <Button
                   onPress={handleSubmitDeletion}
                   disabled={submitting || !deletionReason}
-                  bg="#ff5555"
+                  bg={darkTheme.danger}
                   opacity={submitting || !deletionReason ? 0.6 : 1}
                 >
                   {submitting ? (
                     <HStack space="sm" alignItems="center">
-                      <ActivityIndicator size="small" color="white" />
-                      <Text color="white">Deleting...</Text>
+                      <ActivityIndicator size="small" color={darkTheme.textPrimary} />
+                      <Text color={darkTheme.textPrimary}>Deleting...</Text>
                     </HStack>
                   ) : (
-                    <Text color="white" fontWeight="bold">
+                    <Text color={darkTheme.textPrimary} fontWeight="bold">
                       Delete Ride & Send Report
                     </Text>
                   )}
@@ -981,11 +977,10 @@ This ride has been permanently deleted from the system.
                     }
                   }}
                   disabled={submitting}
-                  variant="outline"
-                  borderColor="#666"
-                  bg="transparent"
+                  variant="solid"
+                  bg={darkTheme.raised}
                 >
-                  <Text color="#a0a0a0">Cancel</Text>
+                  <Text color={darkTheme.textSecondary}>Cancel</Text>
                 </Button>
               </VStack>
             </ScrollView>
@@ -1001,15 +996,15 @@ This ride has been permanently deleted from the system.
             <AvatarImage source={{ uri: actionSheetUser?.avatar }} />
           </Avatar>
           <VStack>
-            <Text color="white" fontWeight="$semibold">
+            <Text color={darkTheme.textPrimary} fontWeight="$semibold">
               {actionSheetUser?.name}
             </Text>
-            <Text color="#a0a0a0" fontSize="$sm">
+            <Text color={darkTheme.textSecondary} fontSize="$sm">
               @{actionSheetUser?.username}
             </Text>
           </VStack>
         </HStack>
-        <View style={{ height: 1, backgroundColor: "#2a2a2a", marginBottom: 4 }} />
+        <View style={{ height: 1, backgroundColor: darkTheme.raised, marginBottom: 4 }} />
 
         <SheetAction
           icon="person-outline"
@@ -1025,7 +1020,7 @@ This ride has been permanently deleted from the system.
             <SheetAction
               icon="ribbon-outline"
               label="Make Host"
-              tint="#4CAF50"
+              tint={darkTheme.success}
               onPress={() => {
                 const x = actionSheetUser;
                 setActionSheetUser(null);

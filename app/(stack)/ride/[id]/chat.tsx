@@ -1,3 +1,4 @@
+import { darkTheme } from "@/constants/theme";
 import { ACCENT } from "@/constants/Colors";
 import { ImageLightbox } from "@/components/ImageLightbox";
 import { findLinks, LinkedText } from "@/components/LinkedText";
@@ -164,7 +165,7 @@ function ChatEmptyState() {
       </ReAnimated.View>
       <Text
         style={{
-          color: "#ffffff",
+          color: darkTheme.textPrimary,
           fontSize: TYPE.size.subheading,
           fontWeight: TYPE.weight.bold,
           textAlign: "center",
@@ -175,7 +176,7 @@ function ChatEmptyState() {
       </Text>
       <Text
         style={{
-          color: "#a0a0a0",
+          color: darkTheme.textSecondary,
           fontSize: TYPE.size.body,
           textAlign: "center",
           lineHeight: TYPE.size.body * 1.7,
@@ -216,7 +217,7 @@ function TypingDots() {
   const s2 = useAnimatedStyle(() => ({ opacity: 0.35 + d2.value * 0.65, transform: [{ translateY: -d2.value * 4 }] }));
   const s3 = useAnimatedStyle(() => ({ opacity: 0.35 + d3.value * 0.65, transform: [{ translateY: -d3.value * 4 }] }));
 
-  const dot = { width: 6, height: 6, borderRadius: 3, backgroundColor: "#888" as const };
+  const dot = { width: 6, height: 6, borderRadius: 3, backgroundColor: darkTheme.textFaint };
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 2 }}>
       <ReAnimated.View style={[dot, s1]} />
@@ -293,11 +294,11 @@ function SwipeableMessage({
           hintStyle,
         ]}
       >
-        <Ionicons name="arrow-undo" size={18} color="#9a9a9a" />
+        <Ionicons name="arrow-undo" size={18} color={darkTheme.textSecondary} />
         <Text
           style={{
             fontSize: TYPE.size.micro,
-            color: "#9a9a9a",
+            color: darkTheme.textSecondary,
             fontWeight: "600",
             marginTop: 2,
           }}
@@ -443,7 +444,7 @@ export default function RideChatScreen() {
 
   const interpolatedColor = animatedValue.interpolate({
     inputRange: [0, 1],
-    outputRange: [ACCENT, "#2a2a2a"],
+    outputRange: [ACCENT, darkTheme.raised],
   });
 
   // ── Helpers ──────────────────────────────────────────
@@ -1064,7 +1065,7 @@ export default function RideChatScreen() {
         return (
           <View style={{ alignItems: "center", paddingVertical: SPACE.md }}>
             <Text
-              style={{ fontSize: TYPE.size.label, color: "#555", fontWeight: "500" }}
+              style={{ fontSize: TYPE.size.label, color: darkTheme.textGhost, fontWeight: "500" }}
             >
               {item.text}
             </Text>
@@ -1083,7 +1084,7 @@ export default function RideChatScreen() {
           <View style={{ alignItems: "center", paddingVertical: SPACE.md }}>
             <View
               style={{
-                backgroundColor: isArchivedNotice ? "#2d2d00" : "#1e1e1e",
+                backgroundColor: isArchivedNotice ? "#2d2d00" : darkTheme.surface,
                 borderWidth: isArchivedNotice ? 1 : 0,
                 borderColor: "#555500",
                 borderRadius: 999,
@@ -1094,7 +1095,7 @@ export default function RideChatScreen() {
               <Text
                 style={{
                   fontSize: TYPE.size.label,
-                  color: isArchivedNotice ? "#ffff99" : "#555",
+                  color: isArchivedNotice ? "#ffff99" : darkTheme.textGhost,
                   textAlign: "center",
                 }}
               >
@@ -1112,7 +1113,7 @@ export default function RideChatScreen() {
             : userMap[msg.senderId || ""]?.name || msg.senderName || "Someone";
         return (
           <View style={{ alignItems: "center", paddingVertical: SPACE.md, paddingHorizontal: SPACE.md }}>
-            <Text style={{ fontSize: TYPE.size.label, color: "#666", fontStyle: "italic" }}>
+            <Text style={{ fontSize: TYPE.size.label, color: darkTheme.textMuted, fontStyle: "italic" }}>
               {deleter} deleted a message
             </Text>
           </View>
@@ -1185,10 +1186,10 @@ export default function RideChatScreen() {
                 activeOpacity={0.7}
                 style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4, marginLeft: 2 }}
               >
-                <Avatar size="xs" bgColor="#252525">
+                <Avatar size="xs" bgColor={darkTheme.surfaceAlt}>
                   <Avatar.Image source={{ uri: sender.avatar }} alt="avatar" />
                 </Avatar>
-                <Text style={{ fontSize: TYPE.size.label, color: "#777", fontWeight: "500" }}>
+                <Text style={{ fontSize: TYPE.size.label, color: darkTheme.textFaint, fontWeight: "500" }}>
                   {sender.name}
                 </Text>
               </TouchableOpacity>
@@ -1206,7 +1207,7 @@ export default function RideChatScreen() {
                     ? undefined
                     : [
                         {
-                          backgroundColor: isCurrentUser ? ACCENT : "#252525",
+                          backgroundColor: isCurrentUser ? ACCENT : darkTheme.surfaceAlt,
                           paddingHorizontal: SPACE.md,
                           paddingVertical: SPACE.sm,
                         },
@@ -1235,7 +1236,7 @@ export default function RideChatScreen() {
                     {msg.replyTo.imageUrl ? (
                       <Image
                         source={{ uri: msg.replyTo.imageUrl }}
-                        style={{ width: 34, height: 34, borderRadius: 5, backgroundColor: "#2a2a2a" }}
+                        style={{ width: 34, height: 34, borderRadius: 5, backgroundColor: darkTheme.raised }}
                         contentFit="cover"
                       />
                     ) : null}
@@ -1275,7 +1276,7 @@ export default function RideChatScreen() {
                   >
                     <Image
                       source={{ uri: msg.imageUrl }}
-                      style={{ width: imgW, height: imgH, borderRadius: 14, backgroundColor: "#2a2a2a" }}
+                      style={{ width: imgW, height: imgH, borderRadius: 14, backgroundColor: darkTheme.raised }}
                       contentFit="cover"
                       transition={150}
                     />
@@ -1289,7 +1290,7 @@ export default function RideChatScreen() {
                     text={msg.text}
                     linkColor={linkColor}
                     style={{
-                      color: isCurrentUser ? "#121212" : "#e8e8e8",
+                      color: isCurrentUser ? darkTheme.bg : darkTheme.textBright,
                       fontSize: TYPE.size.body,
                       lineHeight: TYPE.size.body * 1.45,
                     }}
@@ -1335,7 +1336,7 @@ export default function RideChatScreen() {
                   alignSelf: isCurrentUser ? "flex-end" : "flex-start",
                 }}
               >
-                <Text style={{ fontSize: 10, color: "#777" }}>
+                <Text style={{ fontSize: 10, color: darkTheme.textFaint }}>
                   {msg.timestamp
                     .toDate()
                     .toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
@@ -1344,9 +1345,9 @@ export default function RideChatScreen() {
                   (isSeenByAll(msg) ? (
                     <Ionicons name="checkmark-done" size={13} color="#0a84ff" />
                   ) : msg.sent ? (
-                    <Ionicons name="checkmark" size={12} color="#8a8a8a" />
+                    <Ionicons name="checkmark" size={12} color={darkTheme.textFaint} />
                   ) : (
-                    <Ionicons name="time-outline" size={11} color="#777" />
+                    <Ionicons name="time-outline" size={11} color={darkTheme.textFaint} />
                   ))}
               </View>
             )}
@@ -1366,7 +1367,7 @@ export default function RideChatScreen() {
 
   // ── Render ───────────────────────────────────────────
   return (
-    <View style={{ flex: 1, backgroundColor: "#121212" }}>
+    <View style={{ flex: 1, backgroundColor: darkTheme.bg }}>
       {/* ── Top chrome (outside KAV - stays put when keyboard opens) ── */}
       <NavHeader
         title={rideInfo ? `${rideInfo.from} → ${rideInfo.to}` : undefined}
@@ -1402,14 +1403,14 @@ export default function RideChatScreen() {
             paddingVertical: 6,
             alignItems: "center",
             borderBottomWidth: 1,
-            borderBottomColor: "#2a2a2a",
+            borderBottomColor: darkTheme.raised,
           }}
         >
           <Text
             style={{
               fontSize: TYPE.size.micro,
               fontWeight: "600",
-              color: timeUntilArchive.includes("Archives in") ? "#ffcc00" : "#777",
+              color: timeUntilArchive.includes("Archives in") ? "#ffcc00" : darkTheme.textFaint,
             }}
           >
             {timeUntilArchive} · Ride chats archive 6 hours after start time
@@ -1452,7 +1453,7 @@ export default function RideChatScreen() {
                 <View style={{ flexDirection: "row", alignItems: "flex-end", gap: SPACE.sm }}>
                   <View
                     style={{
-                      backgroundColor: "#252525",
+                      backgroundColor: darkTheme.surfaceAlt,
                       borderRadius: 18,
                       borderBottomLeftRadius: 5,
                       paddingHorizontal: 12,
@@ -1465,7 +1466,7 @@ export default function RideChatScreen() {
                 <Text
                   style={{
                     fontSize: TYPE.size.micro,
-                    color: "#555",
+                    color: darkTheme.textGhost,
                     marginTop: 4,
                     marginLeft: 2,
                   }}
@@ -1488,12 +1489,12 @@ export default function RideChatScreen() {
                     flexDirection: "row",
                     alignItems: "center",
                     gap: SPACE.sm,
-                    backgroundColor: "#1e1e1e",
+                    backgroundColor: darkTheme.surface,
                     borderRadius: 999,
                     paddingHorizontal: SPACE.lg,
                     paddingVertical: SPACE.sm,
                     borderWidth: 1,
-                    borderColor: "#2a2a2a",
+                    borderColor: darkTheme.raised,
                   }}
                 >
                   {loadingEarlier ? (
@@ -1523,9 +1524,9 @@ export default function RideChatScreen() {
             paddingHorizontal: SPACE.md,
             paddingTop: SPACE.sm,
             paddingBottom: inputPadBottom,
-            backgroundColor: "#121212",
+            backgroundColor: darkTheme.bg,
             borderTopWidth: 1,
-            borderTopColor: "#2a2a2a",
+            borderTopColor: darkTheme.raised,
           }}
         >
           {/* Reply preview */}
@@ -1534,7 +1535,7 @@ export default function RideChatScreen() {
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                backgroundColor: "#1e1e1e",
+                backgroundColor: darkTheme.surface,
                 borderRadius: 10,
                 borderLeftWidth: 3,
                 borderLeftColor: ACCENT,
@@ -1553,7 +1554,7 @@ export default function RideChatScreen() {
               {replyTo.imageUrl ? (
                 <Image
                   source={{ uri: replyTo.imageUrl }}
-                  style={{ width: 34, height: 34, borderRadius: 5, backgroundColor: "#2a2a2a", marginRight: 8 }}
+                  style={{ width: 34, height: 34, borderRadius: 5, backgroundColor: darkTheme.raised, marginRight: 8 }}
                   contentFit="cover"
                 />
               ) : null}
@@ -1561,12 +1562,12 @@ export default function RideChatScreen() {
                 <Text style={{ color: ACCENT, fontSize: TYPE.size.label, fontWeight: "600", marginBottom: 1 }}>
                   Replying to {replyTo.senderName}
                 </Text>
-                <Text numberOfLines={1} style={{ color: "#999", fontSize: TYPE.size.label }}>
+                <Text numberOfLines={1} style={{ color: darkTheme.textSecondary, fontSize: TYPE.size.label }}>
                   {replyTo.imageUrl && !replyTo.text?.trim() ? "📷 Photo" : replyTo.text}
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setReplyTo(null)} hitSlop={10} style={{ padding: 4 }}>
-                <Ionicons name="close" size={18} color="#888" />
+                <Ionicons name="close" size={18} color={darkTheme.textFaint} />
               </TouchableOpacity>
             </View>
           )}
@@ -1574,7 +1575,7 @@ export default function RideChatScreen() {
           {input.length > MAX_CHARS * 0.8 && (
             <Text
               style={{
-                color: input.length >= MAX_CHARS ? "#ff5555" : "#a0a0a0",
+                color: input.length >= MAX_CHARS ? darkTheme.danger : darkTheme.textSecondary,
                 fontSize: TYPE.size.micro,
                 textAlign: "right",
                 marginBottom: 4,
@@ -1594,7 +1595,7 @@ export default function RideChatScreen() {
               {uploadingImage ? (
                 <ActivityIndicator size="small" color={ACCENT} />
               ) : (
-                <Ionicons name="image-outline" size={24} color="#888" />
+                <Ionicons name="image-outline" size={24} color={darkTheme.textFaint} />
               )}
             </TouchableOpacity>
             <Input
@@ -1602,7 +1603,7 @@ export default function RideChatScreen() {
               size="md"
               borderWidth={0}
               borderRadius="$2xl"
-              backgroundColor={isArchived ? "#1a1a1a" : "#2a2a2a"}
+              backgroundColor={isArchived ? "#1a1a1a" : darkTheme.raised}
             >
               <InputField
                 ref={inputRef}
@@ -1611,8 +1612,8 @@ export default function RideChatScreen() {
                     ? "Chat archived, still open for messages"
                     : "Message..."
                 }
-                placeholderTextColor={isArchived ? "#444" : "#666"}
-                color="white"
+                placeholderTextColor={isArchived ? darkTheme.borderStrong : darkTheme.textMuted}
+                color={darkTheme.textPrimary}
                 value={input}
                 onChangeText={(text) => {
                   if (text.length <= MAX_CHARS) setInput(text);
@@ -1655,7 +1656,7 @@ export default function RideChatScreen() {
                     opacity: !input.trim() ? 0.35 : 1,
                   }}
                 >
-                  <Ionicons name="arrow-up" size={20} color="#121212" />
+                  <Ionicons name="arrow-up" size={20} color={darkTheme.bg} />
                 </Animated.View>
               </ReAnimated.View>
             </Pressable>
@@ -1681,7 +1682,7 @@ export default function RideChatScreen() {
                 </Text>
               </View>
             ))}
-            <View style={{ height: 1, backgroundColor: "#2a2a2a", marginTop: SPACE.sm }} />
+            <View style={{ height: 1, backgroundColor: darkTheme.raised, marginTop: SPACE.sm }} />
           </View>
         )}
 
@@ -1712,7 +1713,7 @@ export default function RideChatScreen() {
                   borderRadius: 23,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: mine ? "rgba(10,132,255,0.18)" : "#2a2a2a",
+                  backgroundColor: mine ? "rgba(10,132,255,0.18)" : darkTheme.raised,
                   borderWidth: mine ? 1 : 0,
                   borderColor: "#0a84ff",
                 }}
@@ -1723,7 +1724,7 @@ export default function RideChatScreen() {
           })}
         </View>
 
-        <View style={{ height: 1, backgroundColor: "#2a2a2a", marginBottom: 4 }} />
+        <View style={{ height: 1, backgroundColor: darkTheme.raised, marginBottom: 4 }} />
 
         <SheetAction
           icon="arrow-undo-outline"

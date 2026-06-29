@@ -1,3 +1,4 @@
+import { darkTheme } from "@/constants/theme";
 // components/TOSOverlay.tsx
 import { ACCENT } from "@/constants/Colors";
 import {
@@ -5,15 +6,14 @@ import {
   Button,
   Heading,
   HStack,
-  Icon,
   Modal,
   ScrollView,
   Spinner,
   Text,
   VStack,
 } from "@gluestack-ui/themed";
+import { Ionicons } from "@expo/vector-icons";
 import { Link } from "expo-router";
-import { ChevronLeft, ExternalLink } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { Linking, TouchableOpacity } from "react-native";
 
@@ -126,14 +126,14 @@ export default function TOSOverlay({ visible, onClose, onAccept }: Props) {
   return (
     <Modal isOpen={visible} onClose={onClose} size="full">
       <Modal.Backdrop />
-      <Modal.Content bg="#121212" p="$4" maxHeight="95%">
+      <Modal.Content bg={darkTheme.bg} p="$4" maxHeight="95%">
         {/* Header */}
         <Box px="$4" py="$4">
           <HStack alignItems="center" mb="$4">
             <TouchableOpacity onPress={onClose}>
-              <Icon as={ChevronLeft} size="xl" color="white" />
+              <Ionicons name="chevron-back" size={24} color={darkTheme.textPrimary} />
             </TouchableOpacity>
-            <Heading size="xl" color="white" ml="$3">
+            <Heading size="xl" color={darkTheme.textPrimary} ml="$3">
               Terms of Service
             </Heading>
           </HStack>
@@ -143,15 +143,15 @@ export default function TOSOverlay({ visible, onClose, onAccept }: Props) {
             <TouchableOpacity
               onPress={fetchTermsOfService}
               style={{
-                backgroundColor: "#2a2a2a",
+                backgroundColor: darkTheme.raised,
                 padding: 12,
                 borderRadius: 8,
                 borderWidth: 1,
-                borderColor: "#333",
+                borderColor: darkTheme.border,
                 flex: 1,
               }}
             >
-              <Text color="white" fontSize="$sm" textAlign="center">
+              <Text color={darkTheme.textPrimary} fontSize="$sm" textAlign="center">
                 Refresh
               </Text>
             </TouchableOpacity>
@@ -163,17 +163,17 @@ export default function TOSOverlay({ visible, onClose, onAccept }: Props) {
                 );
               }}
               style={{
-                backgroundColor: "#2a2a2a",
+                backgroundColor: darkTheme.raised,
                 padding: 12,
                 borderRadius: 8,
                 borderWidth: 1,
-                borderColor: "#333",
+                borderColor: darkTheme.border,
                 flex: 1,
               }}
             >
               <HStack space="xs" alignItems="center" justifyContent="center">
-                <Icon as={ExternalLink} size="sm" color="white" />
-                <Text color="white" fontSize="$sm">
+                <Ionicons name="open-outline" size={16} color={darkTheme.textPrimary} />
+                <Text color={darkTheme.textPrimary} fontSize="$sm">
                   View Original
                 </Text>
               </HStack>
@@ -189,32 +189,32 @@ export default function TOSOverlay({ visible, onClose, onAccept }: Props) {
           <Box px="$4">
             {loading ? (
               <Box py="$8" alignItems="center">
-                <Spinner size="large" color="white" />
-                <Text color="#a0a0a0" mt="$4">
+                <Spinner size="large" color={darkTheme.textPrimary} />
+                <Text color={darkTheme.textSecondary} mt="$4">
                   Loading terms of service...
                 </Text>
               </Box>
             ) : error ? (
               <Box py="$8" alignItems="center">
-                <Text color="#ff6b6b" mb="$4" textAlign="center">
+                <Text color={darkTheme.danger} mb="$4" textAlign="center">
                   {error}
                 </Text>
                 <TouchableOpacity
                   onPress={fetchTermsOfService}
                   style={{
-                    backgroundColor: "#ff6b6b",
+                    backgroundColor: darkTheme.danger,
                     padding: 12,
                     borderRadius: 8,
                   }}
                 >
-                  <Text color="white" fontSize="$sm">
+                  <Text color={darkTheme.textPrimary} fontSize="$sm">
                     Try Again
                   </Text>
                 </TouchableOpacity>
               </Box>
             ) : sections.length === 0 ? (
               <Box py="$8" alignItems="center">
-                <Text color="#a0a0a0" textAlign="center">
+                <Text color={darkTheme.textSecondary} textAlign="center">
                   No terms of service content available.
                 </Text>
               </Box>
@@ -223,16 +223,16 @@ export default function TOSOverlay({ visible, onClose, onAccept }: Props) {
                 {sections.map((section, index) => (
                   <Box
                     key={index}
-                    bg="#1e1e1e"
+                    bg={darkTheme.surface}
                     p="$4"
                     borderRadius="$md"
                     borderWidth={1}
-                    borderColor="#333"
+                    borderColor={darkTheme.border}
                   >
                     {section.title && (
                       <Heading
                         size={index === 0 ? "lg" : "md"}
-                        color="white"
+                        color={darkTheme.textPrimary}
                         mb={section.content.length > 0 ? "$3" : "$0"}
                         lineHeight="$lg"
                       >
@@ -247,7 +247,7 @@ export default function TOSOverlay({ visible, onClose, onAccept }: Props) {
                       return (
                         <Text
                           key={pIndex}
-                          color={isSubheading ? "#4CAF50" : "#e0e0e0"}
+                          color={isSubheading ? darkTheme.success : darkTheme.textBright}
                           fontSize={isSubheading ? "$md" : "$sm"}
                           fontWeight={isSubheading ? "$semibold" : "$normal"}
                           lineHeight="$lg"
@@ -268,11 +268,11 @@ export default function TOSOverlay({ visible, onClose, onAccept }: Props) {
         {/* Accept / Cancel Buttons */}
         <Box px="$4" pb="$4" mt="$4">
           <HStack space="md">
-            <Button variant="outline" onPress={onClose} flex={1} borderColor="#666">
-              <Text color="#a0a0a0">Cancel</Text>
+            <Button variant="outline" onPress={onClose} flex={1} borderColor={darkTheme.textMuted}>
+              <Text color={darkTheme.textSecondary}>Cancel</Text>
             </Button>
             <Button bg={ACCENT} onPress={onAccept} flex={1} isDisabled={loading || !!error}>
-              <Text color="#121212" fontWeight="$semibold">
+              <Text color={darkTheme.bg} fontWeight="$semibold">
                 I Agree
               </Text>
             </Button>
@@ -281,7 +281,7 @@ export default function TOSOverlay({ visible, onClose, onAccept }: Props) {
           <Box mt="$3" alignItems="center">
             <Link href="/(stack)/settings/terms-of-service" asChild>
               <TouchableOpacity style={{ flexDirection: "row", alignItems: "center" }}>
-                <ExternalLink size={16} color={ACCENT} />
+                <Ionicons name="open-outline" size={16} color={ACCENT} />
                 <Text color={ACCENT} ml="$1" fontSize="$sm">
                   Open full version
                 </Text>

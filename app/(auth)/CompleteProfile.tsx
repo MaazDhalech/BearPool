@@ -1,8 +1,9 @@
+import { darkTheme } from "@/constants/theme";
 import TOSOverlay from "@/components/TOSOverlay";
 import { ACCENT } from "@/constants/Colors";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { db } from "@/services/firebaseConfig";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { Stack, useRouter } from "expo-router";
 import { doc, setDoc } from "firebase/firestore";
 import * as filter from "leo-profanity";
@@ -28,13 +29,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 //  DESIGN TOKENS
 // ─────────────────────────────────────────────
 const palette = {
-  bg: "#121212",
-  surface: "#1e1e1e",
-  rim: "#252525",
+  bg: darkTheme.bg,
+  surface: darkTheme.surface,
+  rim: darkTheme.surfaceAlt,
   accent: ACCENT,
-  ink: "#ffffff",
-  muted: "#a1a1a6",
-  ghost: "#545456",
+  ink: darkTheme.textPrimary,
+  muted: darkTheme.textSecondary,
+  ghost: darkTheme.textGhost,
 };
 
 const SPACING = { xs: 8, sm: 16, md: 24, lg: 32, xl: 48 };
@@ -304,7 +305,7 @@ export default function CompleteProfile() {
               >
                 <View style={[s.checkbox, tosAccepted && s.checkboxChecked]}>
                   {tosAccepted && (
-                    <MaterialCommunityIcons name="check" size={14} color={palette.bg} />
+                    <Ionicons name="checkmark" size={14} color={palette.bg} />
                   )}
                 </View>
                 <Text style={s.tosText}>
@@ -368,14 +369,14 @@ const s = StyleSheet.create({
     textAlign: "center",
   },
   errorContainer: {
-    backgroundColor: "#2a0e0e",
+    backgroundColor: darkTheme.errorBg,
     padding: SPACING.sm * SCALE,
     borderRadius: BORDER_RADIUS.sm,
     marginBottom: SPACING.md * SCALE,
     borderWidth: 1,
-    borderColor: "#4a1e1e",
+    borderColor: darkTheme.errorBorder,
   },
-  errorText: { color: "#ff7d7d", textAlign: "center" },
+  errorText: { color: darkTheme.errorText, textAlign: "center" },
   nameRow: {
     flexDirection: "row",
     gap: SPACING.sm * SCALE,

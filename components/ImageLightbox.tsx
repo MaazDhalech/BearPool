@@ -1,3 +1,4 @@
+import { darkTheme } from "@/constants/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useEffect } from "react";
@@ -118,7 +119,7 @@ export function ImageLightbox({ uri, onClose }: { uri: string | null; onClose: (
         hitSlop={12}
         style={[styles.close, { top: insets.top + 8 }]}
       >
-        <Ionicons name="close" size={26} color="#fff" />
+        <Ionicons name="close" size={26} color={darkTheme.textPrimary} />
       </TouchableOpacity>
     </Modal>
   );

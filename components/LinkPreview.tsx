@@ -1,3 +1,4 @@
+import { darkTheme } from "@/constants/theme";
 import { SPACE } from "@/constants/Spacing";
 import { TYPE } from "@/constants/Typography";
 import { useEffect, useState } from "react";
@@ -131,10 +132,10 @@ export function LinkPreview({
         {
           width: 280,
           maxWidth: "100%",
-          backgroundColor: "#1e1e1e",
+          backgroundColor: darkTheme.surface,
           borderRadius: 16,
           borderWidth: 1,
-          borderColor: "#2a2a2a",
+          borderColor: darkTheme.raised,
           overflow: "hidden",
         },
         style,
@@ -143,16 +144,16 @@ export function LinkPreview({
       {meta.image ? (
         <Image
           source={{ uri: meta.image }}
-          style={{ width: "100%", height: 180, backgroundColor: "#2a2a2a" }}
+          style={{ width: "100%", height: 180, backgroundColor: darkTheme.raised }}
           resizeMode="cover"
         />
       ) : null}
       <View style={{ paddingHorizontal: SPACE.md, paddingVertical: SPACE.md, gap: 3 }}>
-        <Text numberOfLines={1} style={{ color: "#888", fontSize: TYPE.size.label, textTransform: "uppercase", letterSpacing: 0.4 }}>
+        <Text numberOfLines={1} style={{ color: darkTheme.textFaint, fontSize: TYPE.size.label, textTransform: "uppercase", letterSpacing: 0.4 }}>
           {meta.site || hostOf(url)}
         </Text>
         {meta.title ? (
-          <Text numberOfLines={2} style={{ color: "#e8e8e8", fontSize: TYPE.size.body, fontWeight: "600", lineHeight: TYPE.size.body * 1.3 }}>
+          <Text numberOfLines={2} style={{ color: darkTheme.textBright, fontSize: TYPE.size.body, fontWeight: "600", lineHeight: TYPE.size.body * 1.3 }}>
             {meta.title}
           </Text>
         ) : null}

@@ -1,3 +1,4 @@
+import { darkTheme } from "@/constants/theme";
 // components/RideFeedbackModal.tsx
 import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
@@ -9,7 +10,6 @@ import {
     ButtonText,
     HStack,
     Heading,
-    Icon,
     Pressable,
     ScrollView,
     Spinner,
@@ -28,7 +28,7 @@ import {
     serverTimestamp,
     updateDoc,
 } from "firebase/firestore";
-import { Calendar, MapPin, Star, Users, X } from "lucide-react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import {
     Alert,
@@ -196,15 +196,15 @@ export default function RideFeedbackModal({
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case "active":
-        return "#4CAF50";
+        return darkTheme.success;
       case "archived":
-        return "#FF6B6B";
+        return darkTheme.danger;
       case "full":
         return "#FFA726";
       case "inactive":
-        return "#9E9E9E";
+        return darkTheme.textSecondary;
       default:
-        return "#9E9E9E";
+        return darkTheme.textSecondary;
     }
   };
 
@@ -522,11 +522,11 @@ ${feedbackForm.issueDetails}
     disabled?: boolean;
   }) => (
     <VStack space="xs" mb="$4" bg="#1a1a1a" p="$3" borderRadius="$lg">
-      <Text color="white" fontSize="$sm" fontWeight="$semibold" mb="$1">
+      <Text color={darkTheme.textPrimary} fontSize="$sm" fontWeight="$semibold" mb="$1">
         {label}
       </Text>
       {description && (
-        <Text color="#888" fontSize="$xs" mb="$2">
+        <Text color={darkTheme.textFaint} fontSize="$xs" mb="$2">
           {description}
         </Text>
       )}
@@ -539,17 +539,16 @@ ${feedbackForm.issueDetails}
             opacity={disabled ? 0.5 : 1}
             style={{ padding: 4 }}
           >
-            <Icon
-              as={Star}
-              size="xl"
-              color={star <= rating ? "#FFD700" : "#444"}
-              fill={star <= rating ? "#FFD700" : "transparent"}
+            <Ionicons
+              name={star <= rating ? "star" : "star-outline"}
+              size={24}
+              color={star <= rating ? "#FFD700" : darkTheme.borderStrong}
             />
           </Pressable>
         ))}
       </HStack>
       <Text
-        color={rating === 0 ? "#666" : "#FFD700"}
+        color={rating === 0 ? darkTheme.textMuted : "#FFD700"}
         fontSize="$xs"
         textAlign="center"
         mt="$1"
@@ -577,15 +576,15 @@ ${feedbackForm.issueDetails}
     const bgColor =
       selected === (isYes || isIssue)
         ? isYes
-          ? "#4CAF50"
-          : "#FF6B6B"
-        : "#2a2a2a";
+          ? darkTheme.success
+          : darkTheme.danger
+        : darkTheme.raised;
     const borderColor =
       selected === (isYes || isIssue)
         ? isYes
           ? "#388E3C"
           : "#D32F2F"
-        : "#444";
+        : darkTheme.borderStrong;
 
     return (
       <Pressable
@@ -604,7 +603,7 @@ ${feedbackForm.issueDetails}
         }}
       >
         <Text
-          color={selected === (isYes || isIssue) ? "white" : "#a0a0a0"}
+          color={selected === (isYes || isIssue) ? "white" : darkTheme.textSecondary}
           fontWeight="600"
           fontSize="$sm"
         >
@@ -624,7 +623,7 @@ ${feedbackForm.issueDetails}
             alignItems="center"
           >
             <Spinner size="large" color={ACCENT} />
-            <Text color="#a0a0a0" mt="$4" fontSize="$sm">
+            <Text color={darkTheme.textSecondary} mt="$4" fontSize="$sm">
               Loading ride details...
             </Text>
           </Box>
@@ -660,10 +659,10 @@ ${feedbackForm.issueDetails}
                     mb="$4"
                   >
                     <VStack flex={1}>
-                      <Heading size="xl" color="white" fontWeight="700">
+                      <Heading size="xl" color={darkTheme.textPrimary} fontWeight="700">
                         Rate Your Ride ✨
                       </Heading>
-                      <Text color="#a0a0a0" fontSize="$sm" mt="$1">
+                      <Text color={darkTheme.textSecondary} fontSize="$sm" mt="$1">
                         Share your experience to help our community
                       </Text>
                     </VStack>
@@ -671,10 +670,10 @@ ${feedbackForm.issueDetails}
                       onPress={onClose}
                       p="$2"
                       borderRadius="$full"
-                      bg="#2a2a2a"
-                      $pressed={{ bg: "#333" }}
+                      bg={darkTheme.raised}
+                      $pressed={{ bg: darkTheme.border }}
                     >
-                      <Icon as={X} size="xl" color="#a0a0a0" />
+                      <Ionicons name="close" size={24} color={darkTheme.textSecondary} />
                     </Pressable>
                   </HStack>
 
@@ -686,7 +685,7 @@ ${feedbackForm.issueDetails}
                       p="$4"
                       mb="$6"
                       borderWidth={1}
-                      borderColor="#333"
+                      borderColor={darkTheme.border}
                     >
                       <HStack alignItems="center" mb="$3">
                         <Box
@@ -705,18 +704,18 @@ ${feedbackForm.issueDetails}
                             {getRideStatus().toUpperCase()}
                           </Text>
                         </Box>
-                        <Text color="#666" fontSize="$xs" ml="$2">
+                        <Text color={darkTheme.textMuted} fontSize="$xs" ml="$2">
                           ID: {formatRideId(rideInfo.id)}
                         </Text>
                       </HStack>
 
                       <HStack alignItems="center" mb="$3">
-                        <Icon as={MapPin} size="md" color={ACCENT} mr="$3" />
+                        <Ionicons name="location-outline" size={20} color={ACCENT} style={{ marginRight: 12 }} />
                         <VStack flex={1}>
-                          <Text color="white" fontSize="$lg" fontWeight="700">
+                          <Text color={darkTheme.textPrimary} fontSize="$lg" fontWeight="700">
                             {rideInfo.from} → {rideInfo.to}
                           </Text>
-                          <Text color="#888" fontSize="$sm">
+                          <Text color={darkTheme.textFaint} fontSize="$sm">
                             {rideInfo.date} at {rideInfo.time}
                           </Text>
                         </VStack>
@@ -724,14 +723,14 @@ ${feedbackForm.issueDetails}
 
                       <HStack space="md" mt="$3">
                         <HStack alignItems="center" flex={1}>
-                          <Icon as={Users} size="sm" color="#666" mr="$2" />
-                          <Text color="#a0a0a0" fontSize="$xs">
+                          <Ionicons name="people-outline" size={16} color={darkTheme.textMuted} style={{ marginRight: 8 }} />
+                          <Text color={darkTheme.textSecondary} fontSize="$xs">
                             {rideInfo.memberIds?.length || 0} riders
                           </Text>
                         </HStack>
                         <HStack alignItems="center" flex={1}>
-                          <Icon as={Calendar} size="sm" color="#666" mr="$2" />
-                          <Text color="#a0a0a0" fontSize="$xs">
+                          <Ionicons name="calendar-outline" size={16} color={darkTheme.textMuted} style={{ marginRight: 8 }} />
+                          <Text color={darkTheme.textSecondary} fontSize="$xs">
                             {rideInfo.seats} seats
                           </Text>
                         </HStack>
@@ -743,7 +742,7 @@ ${feedbackForm.issueDetails}
                           mt="$4"
                           pt="$4"
                           borderTopWidth={1}
-                          borderTopColor="#333"
+                          borderTopColor={darkTheme.border}
                         >
                           <Avatar size="sm" mr="$3">
                             <Avatar.Image
@@ -756,10 +755,10 @@ ${feedbackForm.issueDetails}
                             />
                           </Avatar>
                           <VStack flex={1}>
-                            <Text color="#a0a0a0" fontSize="$xs">
+                            <Text color={darkTheme.textSecondary} fontSize="$xs">
                               Ride Host
                             </Text>
-                            <Text color="white" fontSize="$sm" fontWeight="500">
+                            <Text color={darkTheme.textPrimary} fontSize="$sm" fontWeight="500">
                               {hostUserData.name}
                             </Text>
                           </VStack>
@@ -770,7 +769,7 @@ ${feedbackForm.issueDetails}
 
                   {/* Ratings Section */}
                   <VStack space="lg" mb="$6">
-                    <Text color="white" fontSize="$lg" fontWeight="600">
+                    <Text color={darkTheme.textPrimary} fontSize="$lg" fontWeight="600">
                       How was your experience? ⭐
                     </Text>
 
@@ -816,7 +815,7 @@ ${feedbackForm.issueDetails}
 
                   {/* Would Ride Again */}
                   <VStack space="md" mb="$6">
-                    <Text color="white" fontSize="$lg" fontWeight="600">
+                    <Text color={darkTheme.textPrimary} fontSize="$lg" fontWeight="600">
                       Would you ride with this host again? 🤔
                     </Text>
                     <HStack space="sm" mt="$2">
@@ -837,7 +836,7 @@ ${feedbackForm.issueDetails}
 
                   {/* Report Issue */}
                   <VStack space="md" mb="$6">
-                    <Text color="white" fontSize="$lg" fontWeight="600">
+                    <Text color={darkTheme.textPrimary} fontSize="$lg" fontWeight="600">
                       Any issues to report? 🚨
                     </Text>
                     <HStack space="sm" mt="$2">
@@ -858,21 +857,21 @@ ${feedbackForm.issueDetails}
                     {feedbackForm.reportIssue && (
                       <VStack space="sm" mt="$4">
                         <Text
-                          color="white"
+                          color={darkTheme.textPrimary}
                           fontSize="$sm"
                           fontWeight="$semibold"
                         >
                           Please describe the issue:
                         </Text>
                         <Textarea
-                          bg="#2a2a2a"
-                          borderColor="#FF6B6B"
+                          bg={darkTheme.raised}
+                          borderColor={darkTheme.danger}
                           minHeight="$24"
                         >
                           <TextareaInput
                             placeholder="Describe any safety concerns, inappropriate behavior, or other issues you encountered..."
-                            color="white"
-                            placeholderTextColor="#a0a0a0"
+                            color={darkTheme.textPrimary}
+                            placeholderTextColor={darkTheme.textSecondary}
                             value={feedbackForm.issueDetails}
                             onChangeText={(text) =>
                               setFeedbackForm((prev) => ({
@@ -891,22 +890,22 @@ ${feedbackForm.issueDetails}
                   {/* Comments & Suggestions */}
                   <VStack space="lg" mb="$6">
                     <VStack space="sm">
-                      <Text color="white" fontSize="$lg" fontWeight="600">
+                      <Text color={darkTheme.textPrimary} fontSize="$lg" fontWeight="600">
                         Additional Comments 💬
                       </Text>
-                      <Text color="#888" fontSize="$sm">
+                      <Text color={darkTheme.textFaint} fontSize="$sm">
                         Any other thoughts about the ride?
                       </Text>
                       <Textarea
-                        bg="#2a2a2a"
-                        borderColor="#333"
+                        bg={darkTheme.raised}
+                        borderColor={darkTheme.border}
                         minHeight="$32"
                         mt="$2"
                       >
                         <TextareaInput
                           placeholder="Share any positive experiences, things that could be improved, or general feedback..."
-                          color="white"
-                          placeholderTextColor="#a0a0a0"
+                          color={darkTheme.textPrimary}
+                          placeholderTextColor={darkTheme.textSecondary}
                           value={feedbackForm.comments}
                           onChangeText={(text) =>
                             setFeedbackForm((prev) => ({
@@ -921,22 +920,22 @@ ${feedbackForm.issueDetails}
                     </VStack>
 
                     <VStack space="sm">
-                      <Text color="white" fontSize="$lg" fontWeight="600">
+                      <Text color={darkTheme.textPrimary} fontSize="$lg" fontWeight="600">
                         Suggestions for Improvement 💡
                       </Text>
-                      <Text color="#888" fontSize="$sm">
+                      <Text color={darkTheme.textFaint} fontSize="$sm">
                         How can we make the ride-sharing experience better?
                       </Text>
                       <Textarea
-                        bg="#2a2a2a"
-                        borderColor="#333"
+                        bg={darkTheme.raised}
+                        borderColor={darkTheme.border}
                         minHeight="$32"
                         mt="$2"
                       >
                         <TextareaInput
                           placeholder="Your ideas for improving the app, matching process, safety features, etc..."
-                          color="white"
-                          placeholderTextColor="#a0a0a0"
+                          color={darkTheme.textPrimary}
+                          placeholderTextColor={darkTheme.textSecondary}
                           value={feedbackForm.suggestions}
                           onChangeText={(text) =>
                             setFeedbackForm((prev) => ({
@@ -967,12 +966,12 @@ ${feedbackForm.issueDetails}
                     >
                       {submitting ? (
                         <HStack space="sm" alignItems="center">
-                          <Spinner size="small" color="#121212" />
-                          <ButtonText color="#121212">Submitting...</ButtonText>
+                          <Spinner size="small" color={darkTheme.bg} />
+                          <ButtonText color={darkTheme.bg}>Submitting...</ButtonText>
                         </HStack>
                       ) : (
                         <ButtonText
-                          color="#121212"
+                          color={darkTheme.bg}
                           fontSize="$md"
                           fontWeight="$semibold"
                         >
@@ -983,27 +982,27 @@ ${feedbackForm.issueDetails}
 
                     <Button
                       variant="outline"
-                      borderColor="#444"
+                      borderColor={darkTheme.borderStrong}
                       onPress={handleRateLater}
                       disabled={submitting}
                       size="lg"
                       borderRadius="$lg"
                     >
-                      <ButtonText color="#a0a0a0">Remind Me Later</ButtonText>
+                      <ButtonText color={darkTheme.textSecondary}>Remind Me Later</ButtonText>
                     </Button>
                   </VStack>
 
                   {/* Footer Note */}
                   <VStack space="xs" mt="$4">
-                    <Text color="#666" fontSize="$xs" textAlign="center">
+                    <Text color={darkTheme.textMuted} fontSize="$xs" textAlign="center">
                       ⓘ Your feedback is anonymous unless you include personal
                       information.
                     </Text>
-                    <Text color="#666" fontSize="$xs" textAlign="center">
+                    <Text color={darkTheme.textMuted} fontSize="$xs" textAlign="center">
                       ⓘ All submissions are reviewed to improve our community
                       standards.
                     </Text>
-                    <Text color="#666" fontSize="$xs" textAlign="center">
+                    <Text color={darkTheme.textMuted} fontSize="$xs" textAlign="center">
                       ⓘ Reported issues are investigated within 24-48 hours.
                     </Text>
                   </VStack>
@@ -1024,7 +1023,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: "#121212",
+    backgroundColor: darkTheme.bg,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,

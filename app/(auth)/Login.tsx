@@ -1,10 +1,11 @@
+import { darkTheme } from "@/constants/theme";
 // ─────────────────────────────────────────────
 //  Login.tsx  ·  Firebase Auth
 // ─────────────────────────────────────────────
 
 import { ACCENT } from "@/constants/Colors";
 import { auth, db } from "@/services/firebaseConfig";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import {
   GoogleSignin,
   statusCodes,
@@ -48,13 +49,13 @@ import { AppSheet, type AppSheetRef } from "@/components/ui/AppSheet";
 //  DESIGN TOKENS
 // ─────────────────────────────────────────────
 const palette = {
-  bg: "#121212",
-  surface: "#1e1e1e",
-  rim: "#252525",
+  bg: darkTheme.bg,
+  surface: darkTheme.surface,
+  rim: darkTheme.surfaceAlt,
   accent: ACCENT,
-  ink: "#ffffff",
-  muted: "#a1a1a6",
-  ghost: "#545456",
+  ink: darkTheme.textPrimary,
+  muted: darkTheme.textSecondary,
+  ghost: darkTheme.textGhost,
 };
 
 const SPACING = { xs: 8, sm: 16, md: 24, lg: 32, xl: 48 };
@@ -100,7 +101,7 @@ const StyledInput = React.forwardRef<
           style={p.visibilityToggle}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <MaterialCommunityIcons
+          <Ionicons
             name={isPasswordVisible ? "eye-outline" : "eye-off-outline"}
             size={22 * SCALE}
             color={palette.muted}
@@ -418,7 +419,7 @@ export default function Login() {
                 activeOpacity={0.8}
               >
                 {googleLoading ? (
-                  <ActivityIndicator size="small" color="#333" />
+                  <ActivityIndicator size="small" color={darkTheme.border} />
                 ) : (
                   <>
                     <Text style={s.googleIcon}>G</Text>
@@ -553,7 +554,7 @@ export default function Login() {
         <View style={s.sheetContent}>
           <Text style={s.modalTitle}>Report a Bug</Text>
           <Text style={s.modalSubtitle}>
-            Having trouble logging in? Let us know and we'll fix it.
+            Having trouble logging in? Let us know and we&apos;ll fix it.
           </Text>
 
           <Text style={s.modalLabel}>Your email</Text>
@@ -569,7 +570,7 @@ export default function Login() {
             editable={!bugSubmitting}
           />
 
-          <Text style={s.modalLabel}>What's happening?</Text>
+          <Text style={s.modalLabel}>What&apos;s happening?</Text>
           <TextInput
             style={[s.modalInput, s.modalTextarea]}
             placeholder="Describe the issue..."
@@ -629,13 +630,13 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#ffffff",
+    backgroundColor: darkTheme.textPrimary,
     borderRadius: BORDER_RADIUS.md,
     height: 54 * SCALE,
     gap: 10 * SCALE,
   },
   googleIcon: { fontSize: 18 * SCALE, fontWeight: "700", color: "#4285F4" },
-  googleBtnText: { color: "#333333", fontSize: 16 * SCALE, fontWeight: "600" },
+  googleBtnText: { color: darkTheme.border, fontSize: 16 * SCALE, fontWeight: "600" },
   appleBtn: { height: 54 * SCALE, width: "100%" },
   divider: {
     flexDirection: "row",
@@ -643,20 +644,20 @@ const s = StyleSheet.create({
     marginBottom: SPACING.md * SCALE,
     gap: 10 * SCALE,
   },
-  dividerLine: { flex: 1, height: 1, backgroundColor: "#333" },
+  dividerLine: { flex: 1, height: 1, backgroundColor: darkTheme.border },
   dividerText: { color: palette.ghost, fontSize: 13 * SCALE },
   formArea: { width: "100%" },
   errorContainer: {
-    backgroundColor: "#2a0e0e",
+    backgroundColor: darkTheme.errorBg,
     padding: SPACING.sm * SCALE,
     borderRadius: BORDER_RADIUS.sm,
     marginBottom: SPACING.md * SCALE,
     borderWidth: 1,
-    borderColor: "#4a1e1e",
+    borderColor: darkTheme.errorBorder,
   },
-  errorText: { color: "#ff7d7d", textAlign: "center" },
+  errorText: { color: darkTheme.errorText, textAlign: "center" },
   inlineHint: {
-    color: "#ff7d7d",
+    color: darkTheme.errorText,
     fontSize: 13 * SCALE,
     marginTop: -SPACING.sm * SCALE,
     marginBottom: SPACING.sm * SCALE,
@@ -708,7 +709,7 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.6)",
   },
   modalSheet: {
-    backgroundColor: "#1e1e1e",
+    backgroundColor: darkTheme.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: SPACING.md,
@@ -737,14 +738,14 @@ const s = StyleSheet.create({
     marginBottom: 6 * SCALE,
   },
   modalInput: {
-    backgroundColor: "#2a2a2a",
+    backgroundColor: darkTheme.raised,
     borderRadius: BORDER_RADIUS.sm,
     color: palette.ink,
     fontSize: 15 * SCALE,
     paddingHorizontal: 14 * SCALE,
     paddingVertical: 12 * SCALE,
     borderWidth: 1,
-    borderColor: "#333",
+    borderColor: darkTheme.border,
     marginBottom: SPACING.sm * SCALE,
   },
   modalTextarea: {

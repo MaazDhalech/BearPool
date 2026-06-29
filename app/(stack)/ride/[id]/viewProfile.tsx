@@ -1,3 +1,4 @@
+import { darkTheme } from "@/constants/theme";
 import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
@@ -290,23 +291,23 @@ export default function UserProfileScreen() {
 
   if (!isLoaded || loading) {
     return (
-      <Box flex={1} bg="#121212" justifyContent="center" alignItems="center">
-        <Text color="#a0a0a0">Loading profile...</Text>
+      <Box flex={1} bg={darkTheme.bg} justifyContent="center" alignItems="center">
+        <Text color={darkTheme.textSecondary}>Loading profile...</Text>
       </Box>
     );
   }
 
   if (!userProfile) {
     return (
-      <Box flex={1} bg="#121212" justifyContent="center" alignItems="center">
-        <Text color="#a0a0a0">Profile not found</Text>
+      <Box flex={1} bg={darkTheme.bg} justifyContent="center" alignItems="center">
+        <Text color={darkTheme.textSecondary}>Profile not found</Text>
         <Button
           mt="$4"
-          variant="outline"
-          borderColor="#333"
+          variant="solid"
+          bg={darkTheme.raised}
           onPress={() => router.back()}
         >
-          <Text color="white">Go Back</Text>
+          <Text color={darkTheme.textPrimary}>Go Back</Text>
         </Button>
       </Box>
     );
@@ -315,17 +316,17 @@ export default function UserProfileScreen() {
   const initials = (userProfile.first_name?.[0] || "") + (userProfile.last_name?.[0] || "") || userProfile.username?.[0] || "U";
 
   return (
-    <Box flex={1} bg="#121212">
+    <Box flex={1} bg={darkTheme.bg}>
       <NavHeader title="Profile" />
       <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-        <Box flex={1} bg="#121212" px="$4" py="$6">
+        <Box flex={1} bg={darkTheme.bg} px="$4" py="$6">
 
         <VStack space="lg" alignItems="center">
-          <Avatar size="2xl" bg="#1e1e1e" borderRadius="$full" mb="$4">
+          <Avatar size="2xl" bg={darkTheme.surface} borderRadius="$full" mb="$4">
             {userProfile.avatar ? (
               <AvatarImage source={{ uri: userProfile.avatar }} alt="Avatar" />
             ) : (
-              <Avatar.FallbackText color="white">
+              <Avatar.FallbackText color={darkTheme.textPrimary}>
                 {initials}
               </Avatar.FallbackText>
             )}
@@ -333,34 +334,34 @@ export default function UserProfileScreen() {
 
           <HStack space="xl" w="100%" justifyContent="space-evenly">
             <VStack alignItems="center">
-              <Text color="#a0a0a0">Rides Joined</Text>
-              <Text color="white" fontWeight="$bold" fontSize="$xl">
+              <Text color={darkTheme.textSecondary}>Rides Joined</Text>
+              <Text color={darkTheme.textPrimary} fontWeight="$bold" fontSize="$xl">
                 {userProfile.ridesJoined || 0}
               </Text>
             </VStack>
             <VStack alignItems="center">
-              <Text color="#a0a0a0">Rides Hosted</Text>
-              <Text color="white" fontWeight="$bold" fontSize="$xl">
+              <Text color={darkTheme.textSecondary}>Rides Hosted</Text>
+              <Text color={darkTheme.textPrimary} fontWeight="$bold" fontSize="$xl">
                 {userProfile.ridesHosted || 0}
               </Text>
             </VStack>
           </HStack>
 
           <VStack space="sm" w="100%" mt="$6">
-            <Text color="#a0a0a0">Name</Text>
-            <Text color="white" fontSize="$lg" fontWeight="$semibold">
+            <Text color={darkTheme.textSecondary}>Name</Text>
+            <Text color={darkTheme.textPrimary} fontSize="$lg" fontWeight="$semibold">
               {userProfile.first_name && userProfile.last_name 
                 ? `${userProfile.first_name} ${userProfile.last_name}`
                 : userProfile.username || "Unknown User"}
             </Text>
 
-            <Text color="#a0a0a0" mt="$4">Username</Text>
-            <Text color="white" fontSize="$lg" fontWeight="$semibold">
+            <Text color={darkTheme.textSecondary} mt="$4">Username</Text>
+            <Text color={darkTheme.textPrimary} fontSize="$lg" fontWeight="$semibold">
               {userProfile.username || "Not set"}
             </Text>
 
-            <Text color="#a0a0a0" mt="$4">Gender</Text>
-            <Text color="white" fontSize="$lg" fontWeight="$semibold">
+            <Text color={darkTheme.textSecondary} mt="$4">Gender</Text>
+            <Text color={darkTheme.textPrimary} fontSize="$lg" fontWeight="$semibold">
               {userProfile.gender === "M"
                 ? "Male"
                 : userProfile.gender === "F"
@@ -370,8 +371,8 @@ export default function UserProfileScreen() {
                 : "Not specified"}
             </Text>
 
-            <Text color="#a0a0a0" mt="$4">Member Since</Text>
-            <Text color="white" fontSize="$lg" fontWeight="$semibold">
+            <Text color={darkTheme.textSecondary} mt="$4">Member Since</Text>
+            <Text color={darkTheme.textPrimary} fontSize="$lg" fontWeight="$semibold">
               {userProfile.createdAt 
                 ? new Date(userProfile.createdAt.toDate ? userProfile.createdAt.toDate() : userProfile.createdAt).toLocaleDateString()
                 : "Unknown"}
@@ -381,40 +382,40 @@ export default function UserProfileScreen() {
           <VStack space="md" mt="$8" w="100%">
             {isBlocked ? (
               <Button
-                bg="#666"
+                bg={darkTheme.textMuted}
                 onPress={handleUnblockUser}
                 disabled={isBlocking}
               >
-                <Text color="white" fontWeight="$semibold">
+                <Text color={darkTheme.textPrimary} fontWeight="$semibold">
                   {isBlocking ? "Unblocking..." : "Unblock User"}
                 </Text>
               </Button>
             ) : (
               <Button
-                bg="#ff4444"
+                bg={darkTheme.error}
                 onPress={handleBlockUser}
                 disabled={isBlocking}
               >
-                <Text color="white" fontWeight="$semibold">
+                <Text color={darkTheme.textPrimary} fontWeight="$semibold">
                   {isBlocking ? "Checking rides..." : "Block User"}
                 </Text>
               </Button>
             )}
 
             <Button
-              variant="outline"
-              borderColor="#ff6b6b"
+              variant="solid"
+              bg="#3a1f1f"
               onPress={handleReportUser}
             >
-              <Text color="#ff6b6b">Report User</Text>
+              <Text color={darkTheme.danger} fontWeight="$semibold">Report User</Text>
             </Button>
-            
+
             <Button
-              variant="outline"
-              borderColor="#333"
+              variant="solid"
+              bg={darkTheme.raised}
               onPress={() => router.back()}
             >
-              <Text color="white">Go Back</Text>
+              <Text color={darkTheme.textPrimary}>Go Back</Text>
             </Button>
           </VStack>
         </VStack>

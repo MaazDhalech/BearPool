@@ -1,3 +1,4 @@
+import { darkTheme } from "@/constants/theme";
 import { ACCENT } from "@/constants/Colors";
 import { TYPE } from "@/constants/Typography";
 import { SPACE } from "@/constants/Spacing";
@@ -303,7 +304,7 @@ export default function RideDetailsPage() {
 
   if (loading) {
     return (
-      <Box flex={1} justifyContent="center" alignItems="center" bg="#121212">
+      <Box flex={1} justifyContent="center" alignItems="center" bg={darkTheme.bg}>
         <Spinner size="large" color={ACCENT} />
       </Box>
     );
@@ -311,12 +312,12 @@ export default function RideDetailsPage() {
 
   if (!ride) {
     return (
-      <Box flex={1} justifyContent="center" alignItems="center" px="$4" bg="#121212">
-        <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.body, textAlign: "center", marginBottom: SPACE.lg }}>
-          This ride couldn't be found. It may have been deleted.
+      <Box flex={1} justifyContent="center" alignItems="center" px="$4" bg={darkTheme.bg}>
+        <Text style={{ color: darkTheme.textSecondary, fontSize: TYPE.size.body, textAlign: "center", marginBottom: SPACE.lg }}>
+          This ride couldn&apos;t be found. It may have been deleted.
         </Text>
         <Button onPress={() => router.back()} bg={ACCENT}>
-          <Text color="#121212" style={{ fontWeight: TYPE.weight.semibold }}>Go Back</Text>
+          <Text color={darkTheme.bg} style={{ fontWeight: TYPE.weight.semibold }}>Go Back</Text>
         </Button>
       </Box>
     );
@@ -333,7 +334,7 @@ export default function RideDetailsPage() {
     : null;
 
   return (
-    <Box flex={1} bg="#121212">
+    <Box flex={1} bg={darkTheme.bg}>
       <NavHeader
         title={`${ride.from} → ${ride.to}`}
         subtitle={`${ride.date} · ${ride.time}`}
@@ -341,31 +342,31 @@ export default function RideDetailsPage() {
 
       <ScrollView contentContainerStyle={{ padding: SPACE.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         {/* Info card */}
-        <View style={{ backgroundColor: "#1e1e1e", borderRadius: 12, borderWidth: 1, borderColor: "#333", padding: SPACE.lg, marginBottom: SPACE.lg }}>
+        <View style={{ backgroundColor: darkTheme.surface, borderRadius: 12, borderWidth: 1, borderColor: darkTheme.border, padding: SPACE.lg, marginBottom: SPACE.lg }}>
           {/* Seats + gender */}
           <View style={{ flexDirection: "row", gap: SPACE.md, marginBottom: SPACE.md }}>
-            <View style={{ flex: 1, backgroundColor: "#2a2a2a", borderRadius: 8, padding: SPACE.md, alignItems: "center" }}>
-              <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.label, marginBottom: 2 }}>Seats left</Text>
-              <Text style={{ color: "#ffffff", fontSize: TYPE.size.subheading, fontWeight: TYPE.weight.bold }}>{ride.seats}</Text>
+            <View style={{ flex: 1, backgroundColor: darkTheme.raised, borderRadius: 8, padding: SPACE.md, alignItems: "center" }}>
+              <Text style={{ color: darkTheme.textSecondary, fontSize: TYPE.size.label, marginBottom: 2 }}>Seats left</Text>
+              <Text style={{ color: darkTheme.textPrimary, fontSize: TYPE.size.subheading, fontWeight: TYPE.weight.bold }}>{ride.seats}</Text>
             </View>
             {genderPrefLabel && (
-              <View style={{ flex: 1, backgroundColor: "#2a2a2a", borderRadius: 8, padding: SPACE.md, alignItems: "center" }}>
-                <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.label, marginBottom: 2 }}>Riders</Text>
-                <Text style={{ color: "#ffffff", fontSize: TYPE.size.body, fontWeight: TYPE.weight.semibold }}>{genderPrefLabel}</Text>
+              <View style={{ flex: 1, backgroundColor: darkTheme.raised, borderRadius: 8, padding: SPACE.md, alignItems: "center" }}>
+                <Text style={{ color: darkTheme.textSecondary, fontSize: TYPE.size.label, marginBottom: 2 }}>Riders</Text>
+                <Text style={{ color: darkTheme.textPrimary, fontSize: TYPE.size.body, fontWeight: TYPE.weight.semibold }}>{genderPrefLabel}</Text>
               </View>
             )}
           </View>
 
           {/* Notes */}
           {ride.notes ? (
-            <View style={{ borderTopWidth: 1, borderTopColor: "#2a2a2a", paddingTop: SPACE.md, marginBottom: SPACE.sm }}>
-              <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.label, marginBottom: SPACE.xs }}>Notes</Text>
-              <Text style={{ color: "#ffffff", fontSize: TYPE.size.body, lineHeight: TYPE.size.body * TYPE.leading.relaxed }}>{ride.notes}</Text>
+            <View style={{ borderTopWidth: 1, borderTopColor: darkTheme.raised, paddingTop: SPACE.md, marginBottom: SPACE.sm }}>
+              <Text style={{ color: darkTheme.textSecondary, fontSize: TYPE.size.label, marginBottom: SPACE.xs }}>Notes</Text>
+              <Text style={{ color: darkTheme.textPrimary, fontSize: TYPE.size.body, lineHeight: TYPE.size.body * TYPE.leading.relaxed }}>{ride.notes}</Text>
             </View>
           ) : null}
 
           {/* Posted time */}
-          <Text style={{ color: "#555", fontSize: TYPE.size.label, marginTop: ride.notes ? SPACE.sm : 0 }}>
+          <Text style={{ color: darkTheme.textGhost, fontSize: TYPE.size.label, marginTop: ride.notes ? SPACE.sm : 0 }}>
             Posted {getRelativeTime(ride.createdAt)}
           </Text>
         </View>
@@ -373,10 +374,10 @@ export default function RideDetailsPage() {
         {/* Members */}
         {members.length > 0 && (
           <View style={{ marginBottom: SPACE.lg }}>
-            <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.label, fontWeight: TYPE.weight.medium, marginBottom: SPACE.sm, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            <Text style={{ color: darkTheme.textSecondary, fontSize: TYPE.size.label, fontWeight: TYPE.weight.medium, marginBottom: SPACE.sm, textTransform: "uppercase", letterSpacing: 0.5 }}>
               Group · {members.length} {members.length === 1 ? "member" : "members"}
             </Text>
-            <View style={{ backgroundColor: "#1e1e1e", borderRadius: 12, borderWidth: 1, borderColor: "#333", overflow: "hidden" }}>
+            <View style={{ backgroundColor: darkTheme.surface, borderRadius: 12, borderWidth: 1, borderColor: darkTheme.border, overflow: "hidden" }}>
               {members.map((member, i) => (
                 <View
                   key={member.id}
@@ -386,11 +387,11 @@ export default function RideDetailsPage() {
                     flexDirection: "row",
                     alignItems: "center",
                     borderTopWidth: i === 0 ? 0 : 1,
-                    borderTopColor: "#2a2a2a",
+                    borderTopColor: darkTheme.raised,
                   }}
                 >
-                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: member.id === ride.hostId ? ACCENT : "#444", marginRight: SPACE.md }} />
-                  <Text style={{ color: "#ffffff", fontSize: TYPE.size.body, flex: 1 }}>{member.name}</Text>
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: member.id === ride.hostId ? ACCENT : darkTheme.borderStrong, marginRight: SPACE.md }} />
+                  <Text style={{ color: darkTheme.textPrimary, fontSize: TYPE.size.body, flex: 1 }}>{member.name}</Text>
                   {member.id === ride.hostId && (
                     <Text style={{ color: ACCENT, fontSize: TYPE.size.label, fontWeight: TYPE.weight.medium }}>Host</Text>
                   )}
@@ -402,24 +403,24 @@ export default function RideDetailsPage() {
       </ScrollView>
 
       {/* Sticky CTA */}
-      <View style={{ paddingHorizontal: SPACE.lg, paddingBottom: insets.bottom + SPACE.md, paddingTop: SPACE.md, borderTopWidth: 1, borderTopColor: "#2a2a2a", backgroundColor: "#121212" }}>
+      <View style={{ paddingHorizontal: SPACE.lg, paddingBottom: insets.bottom + SPACE.md, paddingTop: SPACE.md, borderTopWidth: 1, borderTopColor: darkTheme.raised, backgroundColor: darkTheme.bg }}>
         {alreadyJoined ? (
           <Button
             size="lg"
             backgroundColor={ACCENT}
             onPress={() => router.push({ pathname: "/(stack)/ride/[id]/chat", params: { id: ride.id } })}
           >
-            <Text color="#121212" style={{ fontWeight: TYPE.weight.bold, fontSize: TYPE.size.body }}>Open Chat</Text>
+            <Text color={darkTheme.bg} style={{ fontWeight: TYPE.weight.bold, fontSize: TYPE.size.body }}>Open Chat</Text>
           </Button>
         ) : !canJoin ? (
-          <Button size="lg" backgroundColor="#2a2a2a" disabled>
-            <Text color="#555" style={{ fontWeight: TYPE.weight.bold, fontSize: TYPE.size.body }}>
+          <Button size="lg" backgroundColor={darkTheme.raised} disabled>
+            <Text color={darkTheme.textGhost} style={{ fontWeight: TYPE.weight.bold, fontSize: TYPE.size.body }}>
               {ride.archived ? "Archived" : "Ride Started"}
             </Text>
           </Button>
         ) : (
           <Button size="lg" backgroundColor={ACCENT} onPress={handleJoinRide}>
-            <Text color="#121212" style={{ fontWeight: TYPE.weight.bold, fontSize: TYPE.size.body }}>Join Ride</Text>
+            <Text color={darkTheme.bg} style={{ fontWeight: TYPE.weight.bold, fontSize: TYPE.size.body }}>Join Ride</Text>
           </Button>
         )}
       </View>

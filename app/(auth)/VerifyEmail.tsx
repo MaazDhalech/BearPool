@@ -1,6 +1,7 @@
+import { darkTheme } from "@/constants/theme";
 import { ACCENT } from "@/constants/Colors";
 import { auth } from "@/services/firebaseConfig";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { reload, sendEmailVerification } from "firebase/auth";
 import React from "react";
@@ -17,13 +18,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 //  DESIGN TOKENS
 // ─────────────────────────────────────────────
 const palette = {
-  bg: "#121212",
-  surface: "#1e1e1e",
-  rim: "#252525",
+  bg: darkTheme.bg,
+  surface: darkTheme.surface,
+  rim: darkTheme.surfaceAlt,
   accent: ACCENT,
-  ink: "#ffffff",
-  muted: "#a1a1a6",
-  ghost: "#545456",
+  ink: darkTheme.textPrimary,
+  muted: darkTheme.textSecondary,
+  ghost: darkTheme.textGhost,
 };
 
 const SPACING = { xs: 8, sm: 16, md: 24, lg: 32, xl: 48 };
@@ -96,7 +97,7 @@ export default function VerifyEmail() {
       <View style={[s.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <View style={s.centerContent}>
           <View style={s.iconWrap}>
-            <MaterialCommunityIcons name="email-check-outline" size={64} color={palette.accent} />
+            <Ionicons name="mail-open-outline" size={64} color={palette.accent} />
           </View>
 
           <View style={s.header}>
@@ -107,7 +108,7 @@ export default function VerifyEmail() {
             </Text>
             <Text style={s.hint}>
               Click the link in the email, then tap the button below.{"\n"}
-              Can't find it? Check your spam folder.
+              Can&apos;t find it? Check your spam folder.
             </Text>
           </View>
 
@@ -132,7 +133,7 @@ export default function VerifyEmail() {
             {checking ? (
               <ActivityIndicator color={palette.bg} size="small" />
             ) : (
-              <Text style={s.ctaLabel}>I've Verified My Email</Text>
+              <Text style={s.ctaLabel}>I&apos;ve Verified My Email</Text>
             )}
           </TouchableOpacity>
 
@@ -210,15 +211,15 @@ const s = StyleSheet.create({
     lineHeight: 22,
   },
   errorContainer: {
-    backgroundColor: "#2a0e0e",
+    backgroundColor: darkTheme.errorBg,
     padding: SPACING.sm * SCALE,
     borderRadius: BORDER_RADIUS.sm,
     marginBottom: SPACING.md * SCALE,
     borderWidth: 1,
-    borderColor: "#4a1e1e",
+    borderColor: darkTheme.errorBorder,
     width: "100%",
   },
-  errorText: { color: "#ff7d7d", textAlign: "center" },
+  errorText: { color: darkTheme.errorText, textAlign: "center" },
   successContainer: {
     backgroundColor: "#0e2a1a",
     padding: SPACING.sm * SCALE,
@@ -228,7 +229,7 @@ const s = StyleSheet.create({
     borderColor: "#1a4a2e",
     width: "100%",
   },
-  successText: { color: "#4caf50", textAlign: "center" },
+  successText: { color: darkTheme.success, textAlign: "center" },
   cta: {
     backgroundColor: palette.accent,
     height: 60 * SCALE,

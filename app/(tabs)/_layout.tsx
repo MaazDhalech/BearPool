@@ -1,3 +1,4 @@
+import { darkTheme } from "@/constants/theme";
 import { ACCENT } from "@/constants/Colors";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { createNativeBottomTabNavigator } from "@bottom-tabs/react-navigation";
@@ -27,7 +28,7 @@ export default function TabLayout() {
   return (
     <Tabs
       tabBarActiveTintColor={ACCENT}
-      tabBarInactiveTintColor="#666666"
+      tabBarInactiveTintColor={darkTheme.textMuted}
       barTintColor="#000000"
     >
       <Tabs.Screen

@@ -1,3 +1,4 @@
+import { darkTheme } from "@/constants/theme";
 // app/_layout.tsx
 import { ACCENT } from "@/constants/Colors";
 import RideFeedbackModal from "@/components/RideFeedbackModal";
@@ -472,15 +473,15 @@ const forceUpdateStyles = StyleSheet.create({
     padding: 32,
   },
   card: {
-    backgroundColor: "#1e1e1e",
+    backgroundColor: darkTheme.surface,
     borderRadius: 16,
     padding: 28,
     alignItems: "center",
   },
-  title: { color: "#ffffff", fontSize: 20, fontWeight: "700", marginBottom: 12 },
-  body: { color: "#a0a0a0", fontSize: 15, textAlign: "center", lineHeight: 22, marginBottom: 24 },
+  title: { color: darkTheme.textPrimary, fontSize: 20, fontWeight: "700", marginBottom: 12 },
+  body: { color: darkTheme.textSecondary, fontSize: 15, textAlign: "center", lineHeight: 22, marginBottom: 24 },
   button: { backgroundColor: ACCENT, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 40 },
-  buttonText: { color: "#ffffff", fontSize: 16, fontWeight: "600" },
+  buttonText: { color: darkTheme.textPrimary, fontSize: 16, fontWeight: "600" },
 });
 
 export default function RootLayout() {

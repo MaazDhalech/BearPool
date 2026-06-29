@@ -1,3 +1,4 @@
+import { darkTheme } from "@/constants/theme";
 import { ACCENT } from "@/constants/Colors";
 import { SPACE } from "@/constants/Spacing";
 import { TYPE } from "@/constants/Typography";
@@ -22,10 +23,10 @@ export function PhonePreview({
           width: 250,
           maxWidth: "100%",
           alignSelf: alignRight ? "flex-end" : "flex-start",
-          backgroundColor: "#1e1e1e",
+          backgroundColor: darkTheme.surface,
           borderRadius: 14,
           borderWidth: 1,
-          borderColor: "#2a2a2a",
+          borderColor: darkTheme.raised,
           overflow: "hidden",
         },
         style,
@@ -41,9 +42,9 @@ export function PhonePreview({
         }}
       >
         <Ionicons name="call" size={18} color={ACCENT} />
-        <Text style={{ color: "#e8e8e8", fontSize: TYPE.size.body, fontWeight: "600" }}>{phone}</Text>
+        <Text style={{ color: darkTheme.textBright, fontSize: TYPE.size.body, fontWeight: "600" }}>{phone}</Text>
       </View>
-      <View style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: "#2a2a2a" }}>
+      <View style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: darkTheme.raised }}>
         <TouchableOpacity
           onPress={() => Linking.openURL(`tel:${digits}`).catch(() => {})}
           activeOpacity={0.7}
@@ -52,7 +53,7 @@ export function PhonePreview({
           <Ionicons name="call-outline" size={17} color={ACCENT} />
           <Text style={{ color: ACCENT, fontSize: TYPE.size.body, fontWeight: "600" }}>Call</Text>
         </TouchableOpacity>
-        <View style={{ width: 1, backgroundColor: "#2a2a2a" }} />
+        <View style={{ width: 1, backgroundColor: darkTheme.raised }} />
         <TouchableOpacity
           onPress={() => Linking.openURL(`sms:${digits}`).catch(() => {})}
           activeOpacity={0.7}
