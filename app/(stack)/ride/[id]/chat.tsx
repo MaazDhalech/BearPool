@@ -7,6 +7,7 @@ import { MessageReactions, type Reaction } from "@/components/MessageReactions";
 import { PhonePreview } from "@/components/PhonePreview";
 import { NavHeader } from "@/components/ui/NavHeader";
 import { Sheet, SheetAction, SHEET_DESTRUCTIVE } from "@/components/ui/Sheet";
+import { ReactionContextMenu, type MenuAction } from "@/components/ui/ContextMenu";
 import { toast } from "@/components/ui/Dialog";
 import { GlassSurface } from "@/components/ui/GlassSurface";
 import { SPACE } from "@/constants/Spacing";
@@ -1143,6 +1144,42 @@ export default function RideChatScreen() {
             borderBottomRightRadius: R,
           };
 
+      // Emojis the current user has already reacted with (for highlighting).
+      const myReactions = REACTION_EMOJIS.filter((e) =>
+        msg.reactions?.find((r) => r.emoji === e)?.userIds.includes(user?.uid || ""),
+      );
+      const messageActions: MenuAction[] = [
+        {
+          key: "reply",
+          title: "Reply",
+          systemIcon: "arrowshape.turn.up.left",
+          onPress: () => handleReply(msg),
+        },
+        isCurrentUser
+          ? {
+              key: "delete",
+              title: "Delete",
+              systemIcon: "trash",
+              destructive: true,
+              onPress: () =>
+                updateDoc(doc(db, "rides", String(rideId), "messages", msg.id), {
+                  deleted: true,
+                }),
+            }
+          : {
+              key: "report",
+              title: "Report",
+              systemIcon: "flag",
+              destructive: true,
+              onPress: () => {
+                if (msg.senderId)
+                  router.push({
+                    pathname: "/(stack)/settings/report-user",
+                    params: { userId: msg.senderId, rideId: rideId as string },
+                  });
+              },
+            },
+      ];
 
       return (
         <SwipeableMessage onReply={() => handleReply(msg)} mirrored={isCurrentUser}>
@@ -1178,10 +1215,14 @@ export default function RideChatScreen() {
             )}
 
             {/* Bubble */}
-            <TouchableOpacity
-              onLongPress={() => handleLongPress(msg)}
-              activeOpacity={1}
-              delayLongPress={200}
+            <ReactionContextMenu
+              reactionEmojis={REACTION_EMOJIS}
+              activeEmojis={myReactions}
+              onReact={(emoji) => toggleReaction(msg.id, emoji)}
+              actions={messageActions}
+              onFallbackPress={() => handleLongPress(msg)}
+              align={isCurrentUser ? "trailing" : "leading"}
+              style={{ alignSelf: isCurrentUser ? "flex-end" : "flex-start" }}
             >
               <View
                 style={
@@ -1253,8 +1294,6 @@ export default function RideChatScreen() {
                   <TouchableOpacity
                     activeOpacity={0.9}
                     onPress={() => setLightboxUri(msg.imageUrl!)}
-                    onLongPress={() => handleLongPress(msg)}
-                    delayLongPress={200}
                   >
                     <Image
                       source={{ uri: msg.imageUrl }}
@@ -1280,7 +1319,7 @@ export default function RideChatScreen() {
                 )}
 
               </View>
-            </TouchableOpacity>
+            </ReactionContextMenu>
 
             {/* Phone card when a number is part of a longer message */}
             {firstPhone && !isOnlyPhone && (
@@ -1339,7 +1378,7 @@ export default function RideChatScreen() {
         </SwipeableMessage>
       );
     },
-    [user?.uid, userMap, handleUserPress, handleLongPress, isSeenByAll, handleReply, toggleReaction],
+    [user?.uid, userMap, handleUserPress, handleLongPress, isSeenByAll, handleReply, toggleReaction, rideId],
   );
 
   const keyExtractor = useCallback(

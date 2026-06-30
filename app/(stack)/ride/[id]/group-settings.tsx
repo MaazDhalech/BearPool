@@ -11,7 +11,6 @@ import {
   Button,
   Heading,
   HStack,
-  Pressable,
   ScrollView,
   Text,
   VStack,
@@ -30,8 +29,8 @@ import {
   serverTimestamp,
   collection,
 } from "firebase/firestore";
-import * as Haptics from "expo-haptics";
 import { Sheet, SheetAction, SHEET_DESTRUCTIVE } from "@/components/ui/Sheet";
+import { ContextMenu, type MenuAction } from "@/components/ui/ContextMenu";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Modal, TextInput, TouchableOpacity, View } from "react-native";
 import { confirm, showMenu, toast } from "@/components/ui/Dialog";
@@ -630,50 +629,73 @@ This ride has been permanently deleted from the system.
               Long press a member for options
             </Text>
 
-            {users.map((u) => (
-              <Pressable
-                key={u.id}
-                onLongPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  setActionSheetUser(u);
-                }}
-                delayLongPress={250}
-              >
-                <HStack
-                  alignItems="center"
-                  space="md"
-                  bg={darkTheme.surface}
-                  p="$3"
-                  borderRadius="$xl"
+            {users.map((u) => {
+              const actions: MenuAction[] = [
+                {
+                  key: "view",
+                  title: "View Profile",
+                  systemIcon: "person",
+                  onPress: () => handleViewProfile(u.id),
+                },
+              ];
+              if (isHost && u.id !== user?.uid) {
+                actions.push({
+                  key: "host",
+                  title: "Make Host",
+                  systemIcon: "crown",
+                  onPress: () => handleAssignHost(u.id),
+                });
+                actions.push({
+                  key: "remove",
+                  title: "Remove",
+                  systemIcon: "person.fill.xmark",
+                  destructive: true,
+                  onPress: () => handleKick(u.id),
+                });
+              }
+              return (
+                <ContextMenu
+                  key={u.id}
+                  menuTitle={u.name}
+                  actions={actions}
+                  onFallbackPress={() => setActionSheetUser(u)}
                 >
-                  <Avatar size="md">
-                    <AvatarImage source={{ uri: u.avatar }} />
-                  </Avatar>
-                  <VStack flex={1}>
-                    <HStack alignItems="center" space="xs">
-                      <Text color={darkTheme.textPrimary} fontWeight="$semibold">
-                        {u.name}
-                      </Text>
-                      {u.id === user?.uid && (
-                        <Text color={darkTheme.textMuted} fontSize="$sm">
-                          (You)
+                  <HStack
+                    alignItems="center"
+                    space="md"
+                    bg={darkTheme.surface}
+                    p="$3"
+                    borderRadius="$xl"
+                  >
+                    <Avatar size="md">
+                      <AvatarImage source={{ uri: u.avatar }} />
+                    </Avatar>
+                    <VStack flex={1}>
+                      <HStack alignItems="center" space="xs">
+                        <Text color={darkTheme.textPrimary} fontWeight="$semibold">
+                          {u.name}
                         </Text>
-                      )}
-                    </HStack>
-                    <Text color={darkTheme.textMuted} fontSize="$sm">
-                      @{u.username}
-                    </Text>
-                  </VStack>
-                  {u.id === ride.hostId && (
-                    <Box bg={darkTheme.success + "22"} px="$2.5" py="$1" borderRadius="$full">
-                      <Text color={darkTheme.success} fontSize="$2xs" fontWeight="$bold">
-                        HOST
+                        {u.id === user?.uid && (
+                          <Text color={darkTheme.textMuted} fontSize="$sm">
+                            (You)
+                          </Text>
+                        )}
+                      </HStack>
+                      <Text color={darkTheme.textMuted} fontSize="$sm">
+                        @{u.username}
                       </Text>
-                    </Box>
-                  )}
-                </HStack>
-              </Pressable>
-            ))}
+                    </VStack>
+                    {u.id === ride.hostId && (
+                      <Box bg={darkTheme.success + "22"} px="$2.5" py="$1" borderRadius="$full">
+                        <Text color={darkTheme.success} fontSize="$2xs" fontWeight="$bold">
+                          HOST
+                        </Text>
+                      </Box>
+                    )}
+                  </HStack>
+                </ContextMenu>
+              );
+            })}
           </VStack>
 
           {/* Actions */}
