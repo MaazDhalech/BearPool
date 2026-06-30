@@ -6,8 +6,8 @@ import { LinkPreview } from "@/components/LinkPreview";
 import { MessageReactions, type Reaction } from "@/components/MessageReactions";
 import { PhonePreview } from "@/components/PhonePreview";
 import { NavHeader } from "@/components/ui/NavHeader";
-import { Sheet, SheetAction, SHEET_DESTRUCTIVE } from "@/components/ui/Sheet";
-import { ReactionContextMenu, type MenuAction } from "@/components/ui/ContextMenu";
+import { MessageMenu, type MessageMenuState, type MessageMenuAction } from "@/components/ui/MessageMenu";
+import { ChatMessageMenu, nativeContextMenuAvailable, type MenuAction } from "@/components/ui/ContextMenu";
 import { toast } from "@/components/ui/Dialog";
 import { GlassSurface } from "@/components/ui/GlassSurface";
 import { SPACE } from "@/constants/Spacing";
@@ -236,10 +236,12 @@ const REPLY_THRESHOLD = 56;
 // side. Past the threshold it fires a haptic and triggers onReply.
 function SwipeableMessage({
   onReply,
+  onLongPress,
   mirrored,
   children,
 }: {
   onReply: () => void;
+  onLongPress?: () => void;
   mirrored: boolean;
   children: React.ReactNode;
 }) {
@@ -248,6 +250,16 @@ function SwipeableMessage({
   const dir = mirrored ? -1 : 1;
 
   const fireHaptic = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+  // Long-press → context menu. Driven through gesture-handler (not a nested
+  // Touchable) so it composes with the swipe Pan; on the New Architecture a
+  // Touchable inside this GestureDetector doesn't reliably receive long-press.
+  const longPress = Gesture.LongPress()
+    .minDuration(300)
+    .maxDistance(20)
+    .onStart(() => {
+      if (onLongPress) runOnJS(onLongPress)();
+    });
 
   const pan = Gesture.Pan()
     .activeOffsetX(mirrored ? -14 : 14)
@@ -307,7 +319,7 @@ function SwipeableMessage({
           Reply
         </Text>
       </ReAnimated.View>
-      <GestureDetector gesture={pan}>
+      <GestureDetector gesture={Gesture.Race(pan, longPress)}>
         <ReAnimated.View style={rowStyle}>{children}</ReAnimated.View>
       </GestureDetector>
     </View>
@@ -329,7 +341,8 @@ export default function RideChatScreen() {
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [memberReadAt, setMemberReadAt] = useState<Record<string, number>>({});
   const [replyTo, setReplyTo] = useState<ReplyMeta | null>(null);
-  const [actionSheetMsg, setActionSheetMsg] = useState<Message | null>(null);
+  const [menu, setMenu] = useState<MessageMenuState | null>(null);
+  const bubbleRefs = useRef<Record<string, View | null>>({});
   const [messageLimit, setMessageLimit] = useState(MESSAGE_PAGE_SIZE);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
@@ -874,12 +887,6 @@ export default function RideChatScreen() {
     [user?.uid, rideId],
   );
 
-  const handleLongPress = useCallback((msg: Message) => {
-    if (msg.deleted) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setActionSheetMsg(msg);
-  }, []);
-
   // Toggle the current user's reaction on a message (read-modify-write so the
   // nested userIds arrays stay consistent under concurrent reactions).
   const toggleReaction = useCallback(
@@ -938,6 +945,218 @@ export default function RideChatScreen() {
       setTimeout(() => inputRef.current?.focus?.(), 60);
     },
     [user?.uid, userMap],
+  );
+
+  // The message bubble visual — reused by the list and by the long-press menu
+  // (which re-draws a lifted copy). `interactive` enables the lightbox tap;
+  // `opts.setRef` lets the caller measure the bubble for menu positioning.
+  const renderMessageBubble = useCallback(
+    (
+      msg: Message,
+      isCurrentUser: boolean,
+      isFirstInGroup: boolean,
+      isLastInGroup: boolean,
+      interactive: boolean,
+      opts?: { onLongPress?: () => void; setRef?: (r: View | null) => void },
+    ) => {
+      const links = findLinks(msg.text);
+      const firstPhone = links.find((l) => l.type === "phone");
+      const firstUrl = links.find((l) => l.type === "url");
+      const trimmedText = msg.text.trim();
+      const isOnlyPhone = !!firstPhone && trimmedText === firstPhone.value;
+      const isOnlyUrl = !!firstUrl && trimmedText === firstUrl.value;
+      const hasImage = !!msg.imageUrl;
+      const bareBubble = isOnlyPhone || isOnlyUrl || hasImage;
+      const linkColor = isCurrentUser ? "#0a3d91" : "#5ab0ff";
+      const imgW = 240;
+      const imgAspect =
+        msg.imageWidth && msg.imageHeight ? msg.imageWidth / msg.imageHeight : 1;
+      const imgH = Math.min(Math.max(imgW / imgAspect, 120), 320);
+
+      const R = 18;
+      const r = 5;
+      const bubbleStyle = isCurrentUser
+        ? {
+            borderTopLeftRadius: R,
+            borderTopRightRadius: isFirstInGroup ? R : r,
+            borderBottomLeftRadius: R,
+            borderBottomRightRadius: isLastInGroup ? R : r,
+          }
+        : {
+            borderTopLeftRadius: isFirstInGroup ? R : r,
+            borderTopRightRadius: R,
+            borderBottomLeftRadius: isLastInGroup ? R : r,
+            borderBottomRightRadius: R,
+          };
+
+      return (
+        <View
+          ref={opts?.setRef}
+          collapsable={false}
+          style={
+            bareBubble
+              ? undefined
+              : [
+                  {
+                    backgroundColor: isCurrentUser ? ACCENT : darkTheme.surfaceAlt,
+                    paddingHorizontal: SPACE.md,
+                    paddingVertical: SPACE.sm,
+                  },
+                  bubbleStyle,
+                ]
+          }
+        >
+          {/* Quoted reply preview */}
+          {msg.replyTo && (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                borderLeftWidth: 3,
+                borderLeftColor: isCurrentUser ? "rgba(18,18,18,0.45)" : ACCENT,
+                backgroundColor: isCurrentUser
+                  ? "rgba(18,18,18,0.12)"
+                  : "rgba(255,255,255,0.06)",
+                borderRadius: 6,
+                paddingHorizontal: 8,
+                paddingVertical: 5,
+                marginBottom: 5,
+              }}
+            >
+              {msg.replyTo.imageUrl ? (
+                <Image
+                  source={{ uri: msg.replyTo.imageUrl }}
+                  style={{ width: 34, height: 34, borderRadius: 5, backgroundColor: darkTheme.raised }}
+                  contentFit="cover"
+                />
+              ) : null}
+              <View style={{ flex: 1 }}>
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    fontSize: TYPE.size.label,
+                    fontWeight: "600",
+                    color: isCurrentUser ? "rgba(18,18,18,0.8)" : ACCENT,
+                    marginBottom: 1,
+                  }}
+                >
+                  {msg.replyTo.senderName}
+                </Text>
+                <Text
+                  numberOfLines={2}
+                  style={{
+                    fontSize: TYPE.size.label,
+                    color: isCurrentUser ? "rgba(18,18,18,0.65)" : "#aaa",
+                  }}
+                >
+                  {msg.replyTo.imageUrl && !msg.replyTo.text?.trim()
+                    ? "📷 Photo"
+                    : msg.replyTo.text}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {hasImage ? (
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={interactive ? () => setLightboxUri(msg.imageUrl!) : undefined}
+              onLongPress={opts?.onLongPress}
+              delayLongPress={200}
+            >
+              <Image
+                source={{ uri: msg.imageUrl }}
+                style={{ width: imgW, height: imgH, borderRadius: 14, backgroundColor: darkTheme.raised }}
+                contentFit="cover"
+                transition={150}
+              />
+            </TouchableOpacity>
+          ) : isOnlyPhone ? (
+            <PhonePreview phone={firstPhone!.value} alignRight={isCurrentUser} />
+          ) : isOnlyUrl ? (
+            <LinkPreview url={firstUrl!.value} onlyLink linkColor="#5ab0ff" />
+          ) : (
+            <LinkedText
+              text={msg.text}
+              linkColor={linkColor}
+              style={{
+                color: isCurrentUser ? darkTheme.bg : darkTheme.textBright,
+                fontSize: TYPE.size.body,
+                lineHeight: TYPE.size.body * 1.45,
+              }}
+            />
+          )}
+        </View>
+      );
+    },
+    [setLightboxUri],
+  );
+
+  const deleteMessage = useCallback(
+    (msg: Message) => {
+      updateDoc(doc(db, "rides", String(rideId), "messages", msg.id), { deleted: true });
+    },
+    [rideId],
+  );
+
+  const reportMessage = useCallback(
+    (msg: Message) => {
+      if (msg.senderId)
+        router.push({
+          pathname: "/(stack)/settings/report-user",
+          params: { userId: msg.senderId, rideId: rideId as string },
+        });
+    },
+    [rideId],
+  );
+
+  const activeReactionsFor = useCallback(
+    (msg: Message) =>
+      REACTION_EMOJIS.filter((e) =>
+        msg.reactions?.find((rx) => rx.emoji === e)?.userIds.includes(user?.uid || ""),
+      ),
+    [user?.uid],
+  );
+
+  // Android fallback: long-press → measure the bubble, then open the custom
+  // overlay menu. iOS uses the native UIMenu (ChatMessageMenu) instead.
+  const handleLongPress = useCallback(
+    (msg: Message, isCurrentUser: boolean) => {
+      if (msg.deleted) return;
+      const node = bubbleRefs.current[msg.id];
+      if (!node) return;
+      node.measureInWindow((x, y, width, height) => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        const actions: MessageMenuAction[] = [
+          { key: "reply", label: "Reply", icon: "arrow-undo-outline", onPress: () => handleReply(msg) },
+          isCurrentUser
+            ? { key: "delete", label: "Delete", icon: "trash-outline", destructive: true, onPress: () => deleteMessage(msg) }
+            : { key: "report", label: "Report", icon: "flag-outline", destructive: true, onPress: () => reportMessage(msg) },
+        ];
+        setMenu({
+          frame: { x, y, width, height },
+          isCurrentUser,
+          reactionEmojis: REACTION_EMOJIS,
+          activeEmojis: activeReactionsFor(msg),
+          onReact: (emoji) => toggleReaction(msg.id, emoji),
+          actions,
+          renderBubble: () => renderMessageBubble(msg, isCurrentUser, true, true, false),
+        });
+      });
+    },
+    [handleReply, deleteMessage, reportMessage, activeReactionsFor, toggleReaction, renderMessageBubble],
+  );
+
+  // iOS native UIMenu actions for a message (reactions handled separately).
+  const nativeMenuActions = useCallback(
+    (msg: Message, isCurrentUser: boolean): MenuAction[] => [
+      { key: "reply", title: "Reply", systemIcon: "arrowshape.turn.up.left", onPress: () => handleReply(msg) },
+      isCurrentUser
+        ? { key: "delete", title: "Delete", systemIcon: "trash", destructive: true, onPress: () => deleteMessage(msg) }
+        : { key: "report", title: "Report", systemIcon: "flag", destructive: true, onPress: () => reportMessage(msg) },
+    ],
+    [handleReply, deleteMessage, reportMessage],
   );
 
   const sendMessage = async (messageText: string) => {
@@ -1119,70 +1338,16 @@ export default function RideChatScreen() {
       const trimmedText = msg.text.trim();
       const isOnlyPhone = !!firstPhone && trimmedText === firstPhone.value;
       const isOnlyUrl = !!firstUrl && trimmedText === firstUrl.value;
-      const hasImage = !!msg.imageUrl;
-      const bareBubble = isOnlyPhone || isOnlyUrl || hasImage;
       const linkColor = isCurrentUser ? "#0a3d91" : "#5ab0ff";
-      const imgW = 240;
-      const imgAspect =
-        msg.imageWidth && msg.imageHeight ? msg.imageWidth / msg.imageHeight : 1;
-      const imgH = Math.min(Math.max(imgW / imgAspect, 120), 320);
-
-      // Border radii - iMessage-style chain rounding
-      const R = 18;
-      const r = 5;
-      const bubbleStyle = isCurrentUser
-        ? {
-            borderTopLeftRadius: R,
-            borderTopRightRadius: isFirstInGroup ? R : r,
-            borderBottomLeftRadius: R,
-            borderBottomRightRadius: isLastInGroup ? R : r,
-          }
-        : {
-            borderTopLeftRadius: isFirstInGroup ? R : r,
-            borderTopRightRadius: R,
-            borderBottomLeftRadius: isLastInGroup ? R : r,
-            borderBottomRightRadius: R,
-          };
-
-      // Emojis the current user has already reacted with (for highlighting).
-      const myReactions = REACTION_EMOJIS.filter((e) =>
-        msg.reactions?.find((r) => r.emoji === e)?.userIds.includes(user?.uid || ""),
-      );
-      const messageActions: MenuAction[] = [
-        {
-          key: "reply",
-          title: "Reply",
-          systemIcon: "arrowshape.turn.up.left",
-          onPress: () => handleReply(msg),
-        },
-        isCurrentUser
-          ? {
-              key: "delete",
-              title: "Delete",
-              systemIcon: "trash",
-              destructive: true,
-              onPress: () =>
-                updateDoc(doc(db, "rides", String(rideId), "messages", msg.id), {
-                  deleted: true,
-                }),
-            }
-          : {
-              key: "report",
-              title: "Report",
-              systemIcon: "flag",
-              destructive: true,
-              onPress: () => {
-                if (msg.senderId)
-                  router.push({
-                    pathname: "/(stack)/settings/report-user",
-                    params: { userId: msg.senderId, rideId: rideId as string },
-                  });
-              },
-            },
-      ];
 
       return (
-        <SwipeableMessage onReply={() => handleReply(msg)} mirrored={isCurrentUser}>
+        <SwipeableMessage
+          onReply={() => handleReply(msg)}
+          onLongPress={
+            nativeContextMenuAvailable ? undefined : () => handleLongPress(msg, isCurrentUser)
+          }
+          mirrored={isCurrentUser}
+        >
         <View
           style={{
             marginBottom: isLastInGroup ? SPACE.md : 2,
@@ -1214,112 +1379,21 @@ export default function RideChatScreen() {
               </TouchableOpacity>
             )}
 
-            {/* Bubble */}
-            <ReactionContextMenu
+            {/* Bubble — iOS: native UIMenu (reactions row + actions). Android:
+                long-press handled by the row gesture (SwipeableMessage). */}
+            <ChatMessageMenu
               reactionEmojis={REACTION_EMOJIS}
-              activeEmojis={myReactions}
+              activeEmojis={activeReactionsFor(msg)}
               onReact={(emoji) => toggleReaction(msg.id, emoji)}
-              actions={messageActions}
-              onFallbackPress={() => handleLongPress(msg)}
-              align={isCurrentUser ? "trailing" : "leading"}
+              actions={nativeMenuActions(msg, isCurrentUser)}
               style={{ alignSelf: isCurrentUser ? "flex-end" : "flex-start" }}
             >
-              <View
-                style={
-                  bareBubble
-                    ? undefined
-                    : [
-                        {
-                          backgroundColor: isCurrentUser ? ACCENT : darkTheme.surfaceAlt,
-                          paddingHorizontal: SPACE.md,
-                          paddingVertical: SPACE.sm,
-                        },
-                        bubbleStyle,
-                      ]
-                }
-              >
-                {/* Quoted reply preview */}
-                {msg.replyTo && (
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 6,
-                      borderLeftWidth: 3,
-                      borderLeftColor: isCurrentUser ? "rgba(18,18,18,0.45)" : ACCENT,
-                      backgroundColor: isCurrentUser
-                        ? "rgba(18,18,18,0.12)"
-                        : "rgba(255,255,255,0.06)",
-                      borderRadius: 6,
-                      paddingHorizontal: 8,
-                      paddingVertical: 5,
-                      marginBottom: 5,
-                    }}
-                  >
-                    {msg.replyTo.imageUrl ? (
-                      <Image
-                        source={{ uri: msg.replyTo.imageUrl }}
-                        style={{ width: 34, height: 34, borderRadius: 5, backgroundColor: darkTheme.raised }}
-                        contentFit="cover"
-                      />
-                    ) : null}
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        numberOfLines={1}
-                        style={{
-                          fontSize: TYPE.size.label,
-                          fontWeight: "600",
-                          color: isCurrentUser ? "rgba(18,18,18,0.8)" : ACCENT,
-                          marginBottom: 1,
-                        }}
-                      >
-                        {msg.replyTo.senderName}
-                      </Text>
-                      <Text
-                        numberOfLines={2}
-                        style={{
-                          fontSize: TYPE.size.label,
-                          color: isCurrentUser ? "rgba(18,18,18,0.65)" : "#aaa",
-                        }}
-                      >
-                        {msg.replyTo.imageUrl && !msg.replyTo.text?.trim()
-                          ? "📷 Photo"
-                          : msg.replyTo.text}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-
-                {hasImage ? (
-                  <TouchableOpacity
-                    activeOpacity={0.9}
-                    onPress={() => setLightboxUri(msg.imageUrl!)}
-                  >
-                    <Image
-                      source={{ uri: msg.imageUrl }}
-                      style={{ width: imgW, height: imgH, borderRadius: 14, backgroundColor: darkTheme.raised }}
-                      contentFit="cover"
-                      transition={150}
-                    />
-                  </TouchableOpacity>
-                ) : isOnlyPhone ? (
-                  <PhonePreview phone={firstPhone!.value} alignRight={isCurrentUser} />
-                ) : isOnlyUrl ? (
-                  <LinkPreview url={firstUrl!.value} onlyLink linkColor="#5ab0ff" />
-                ) : (
-                  <LinkedText
-                    text={msg.text}
-                    linkColor={linkColor}
-                    style={{
-                      color: isCurrentUser ? darkTheme.bg : darkTheme.textBright,
-                      fontSize: TYPE.size.body,
-                      lineHeight: TYPE.size.body * 1.45,
-                    }}
-                  />
-                )}
-
-              </View>
-            </ReactionContextMenu>
+              {renderMessageBubble(msg, isCurrentUser, isFirstInGroup, isLastInGroup, true, {
+                setRef: (rf) => {
+                  bubbleRefs.current[msg.id] = rf;
+                },
+              })}
+            </ChatMessageMenu>
 
             {/* Phone card when a number is part of a longer message */}
             {firstPhone && !isOnlyPhone && (
@@ -1378,7 +1452,7 @@ export default function RideChatScreen() {
         </SwipeableMessage>
       );
     },
-    [user?.uid, userMap, handleUserPress, handleLongPress, isSeenByAll, handleReply, toggleReaction, rideId],
+    [user?.uid, userMap, handleUserPress, handleLongPress, isSeenByAll, handleReply, toggleReaction, renderMessageBubble, activeReactionsFor, nativeMenuActions],
   );
 
   const keyExtractor = useCallback(
@@ -1684,106 +1758,8 @@ export default function RideChatScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* Long-press action sheet: reactions + message actions */}
-      <Sheet visible={!!actionSheetMsg} onClose={() => setActionSheetMsg(null)}>
-        {/* Who reacted with what */}
-        {!!actionSheetMsg?.reactions?.length && (
-          <View style={{ paddingHorizontal: SPACE.lg, paddingBottom: SPACE.sm }}>
-            {actionSheetMsg.reactions.map((r) => (
-              <View
-                key={r.emoji}
-                style={{ flexDirection: "row", alignItems: "center", gap: SPACE.sm, paddingVertical: 4 }}
-              >
-                <Text style={{ fontSize: 18 }}>{r.emoji}</Text>
-                <Text numberOfLines={1} style={{ flex: 1, color: "#bbb", fontSize: TYPE.size.label }}>
-                  {r.userIds
-                    .map((uid) => (uid === user?.uid ? "You" : userMap[uid]?.name || "Someone"))
-                    .join(", ")}
-                </Text>
-              </View>
-            ))}
-            <View style={{ height: 1, backgroundColor: darkTheme.raised, marginTop: SPACE.sm }} />
-          </View>
-        )}
-
-        {/* Emoji reactions */}
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-around",
-            paddingHorizontal: SPACE.md,
-            paddingBottom: SPACE.md,
-          }}
-        >
-          {REACTION_EMOJIS.map((emoji) => {
-            const mine = !!actionSheetMsg?.reactions
-              ?.find((r) => r.emoji === emoji)
-              ?.userIds.includes(user?.uid || "");
-            return (
-              <TouchableOpacity
-                key={emoji}
-                activeOpacity={0.7}
-                onPress={() => {
-                  if (actionSheetMsg) toggleReaction(actionSheetMsg.id, emoji);
-                  setActionSheetMsg(null);
-                }}
-                style={{
-                  width: 46,
-                  height: 46,
-                  borderRadius: 23,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: mine ? "rgba(10,132,255,0.18)" : darkTheme.raised,
-                  borderWidth: mine ? 1 : 0,
-                  borderColor: "#0a84ff",
-                }}
-              >
-                <Text style={{ fontSize: 24 }}>{emoji}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        <View style={{ height: 1, backgroundColor: darkTheme.raised, marginBottom: 4 }} />
-
-        <SheetAction
-          icon="arrow-undo-outline"
-          label="Reply"
-          onPress={() => {
-            const m = actionSheetMsg;
-            setActionSheetMsg(null);
-            if (m) handleReply(m);
-          }}
-        />
-        {actionSheetMsg?.senderId === user?.uid ? (
-          <SheetAction
-            icon="trash-outline"
-            label="Delete"
-            tint={SHEET_DESTRUCTIVE}
-            onPress={() => {
-              const m = actionSheetMsg;
-              setActionSheetMsg(null);
-              if (m)
-                updateDoc(doc(db, "rides", String(rideId), "messages", m.id), { deleted: true });
-            }}
-          />
-        ) : (
-          <SheetAction
-            icon="flag-outline"
-            label="Report"
-            tint={SHEET_DESTRUCTIVE}
-            onPress={() => {
-              const m = actionSheetMsg;
-              setActionSheetMsg(null);
-              if (m?.senderId)
-                router.push({
-                  pathname: "/(stack)/settings/report-user",
-                  params: { userId: m.senderId, rideId: rideId as string },
-                });
-            }}
-          />
-        )}
-      </Sheet>
+      {/* Long-press context menu: lifted bubble + reactions + actions */}
+      <MessageMenu state={menu} onClose={() => setMenu(null)} />
 
       {/* Full-screen image viewer */}
       <ImageLightbox uri={lightboxUri} onClose={() => setLightboxUri(null)} />

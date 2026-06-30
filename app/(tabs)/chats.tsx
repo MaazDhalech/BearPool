@@ -4,6 +4,7 @@ import { TYPE } from "@/constants/Typography";
 import { SPACE } from "@/constants/Spacing";
 import { FadeSlideIn } from "@/components/FadeSlideIn";
 import { NavHeader } from "@/components/ui/NavHeader";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import {
@@ -11,7 +12,6 @@ import {
   AvatarImage,
   Box,
   HStack,
-  Spinner,
   Text,
   VStack,
 } from "@gluestack-ui/themed";
@@ -265,9 +265,7 @@ export default function ChatsScreen() {
         <View style={{ paddingHorizontal: SPACE.lg, paddingTop: SPACE.md, paddingBottom: SPACE.lg }}>
 
           {loading ? (
-            <HStack justifyContent="center" mt="$10">
-              <Spinner size="large" color={ACCENT} />
-            </HStack>
+            <LoadingState label="Loading your chats…" />
           ) : error ? (
             <Text style={{ color: "#ff6666", textAlign: "center", fontSize: TYPE.size.body }}>
               {error}
