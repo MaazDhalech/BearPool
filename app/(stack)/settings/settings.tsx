@@ -4,6 +4,7 @@ import { db, auth } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { NavHeader } from "@/components/ui/NavHeader";
 import { Sheet } from "@/components/ui/Sheet";
+import { confirm, toast } from "@/components/ui/Dialog";
 import { deleteUser, EmailAuthProvider, GoogleAuthProvider, OAuthProvider, reauthenticateWithCredential, signOut as firebaseSignOut } from "firebase/auth";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import * as AppleAuthentication from "expo-apple-authentication";
@@ -41,7 +42,6 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import {
-  Alert,
   KeyboardAvoidingView,
   Modal as RNModal,
   Platform,
@@ -212,7 +212,7 @@ export default function SettingsScreen() {
       setBlockedUsers(blockedUsersData);
     } catch (error) {
       console.error("Error fetching blocked users:", error);
-      Alert.alert("Error", "Failed to load blocked users.");
+      toast("Failed to load blocked users.", { type: "error" });
     } finally {
       setLoadingBlockedUsers(false);
     }
@@ -222,71 +222,57 @@ export default function SettingsScreen() {
   const handleUnblockUser = async (blockedUserId: string, username: string) => {
     if (!userId) return;
 
-    Alert.alert(
-      "Unblock User",
-      `Are you sure you want to unblock ${username}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Unblock",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await updateDoc(doc(db, "users", userId), {
-                blockedUsers: arrayRemove(blockedUserId),
-              });
+    const ok = await confirm({
+      title: "Unblock User",
+      message: `Are you sure you want to unblock ${username}?`,
+      confirmText: "Unblock",
+      destructive: true,
+    });
+    if (!ok) return;
 
-              setBlockedUsers((prev) =>
-                prev.filter((user) => user.id !== blockedUserId)
-              );
-              setProfileData((prev: any) => ({
-                ...prev,
-                blockedUsers:
-                  prev.blockedUsers?.filter((id: string) => id !== blockedUserId) ||
-                  [],
-              }));
+    try {
+      await updateDoc(doc(db, "users", userId), {
+        blockedUsers: arrayRemove(blockedUserId),
+      });
 
-              Alert.alert("Success", `${username} has been unblocked.`);
-            } catch (error) {
-              console.error("Error unblocking user:", error);
-              Alert.alert("Error", "Failed to unblock user. Please try again.");
-            }
-          },
-        },
-      ]
-    );
+      setBlockedUsers((prev) =>
+        prev.filter((user) => user.id !== blockedUserId)
+      );
+      setProfileData((prev: any) => ({
+        ...prev,
+        blockedUsers:
+          prev.blockedUsers?.filter((id: string) => id !== blockedUserId) ||
+          [],
+      }));
+
+      toast(`${username} has been unblocked.`, { type: "success" });
+    } catch (error) {
+      console.error("Error unblocking user:", error);
+      toast("Failed to unblock user. Please try again.", { type: "error" });
+    }
   };
 
   // Delete account handler
   const handleDeleteAccount = async () => {
     if (!userId) return;
 
-    Alert.alert(
-      "Delete Account",
-      "Are you sure you want to delete your account? This action cannot be undone. All your data will be permanently deleted.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            // Second confirmation
-            Alert.alert(
-              "Final Confirmation",
-              "This will permanently delete your account and all associated data. Are you absolutely sure?",
-              [
-                { text: "Cancel", style: "cancel" },
-                {
-                  text: "Yes, Delete My Account",
-                  style: "destructive",
-                  onPress: performAccountDeletion,
-                },
-              ]
-            );
-          },
-        },
-      ]
-    );
+    const first = await confirm({
+      title: "Delete Account",
+      message:
+        "Are you sure you want to delete your account? This action cannot be undone. All your data will be permanently deleted.",
+      confirmText: "Delete",
+      destructive: true,
+    });
+    if (!first) return;
+
+    const second = await confirm({
+      title: "Final Confirmation",
+      message:
+        "This will permanently delete your account and all associated data. Are you absolutely sure?",
+      confirmText: "Yes, Delete My Account",
+      destructive: true,
+    });
+    if (second) performAccountDeletion();
   };
 
 const cleanupUserRides = async (userId: string) => {
@@ -326,7 +312,7 @@ const performAccountDeletion = async () => {
   try {
     const currentUser = auth.currentUser;
     if (!currentUser) {
-      Alert.alert("Error", "Session expired. Please sign in again.");
+      toast("Session expired. Please sign in again.", { type: "error" });
       setDeletingAccount(false);
       return;
     }
@@ -336,12 +322,12 @@ const performAccountDeletion = async () => {
     await deleteUser(currentUser);
 
     router.replace("/(auth)/Login");
-    Alert.alert("Deleted", "Your account is gone forever.");
+    toast("Your account has been deleted.", { type: "info" });
   } catch (error: any) {
     if (error?.code === "auth/requires-recent-login") {
       setShowReauthModal(true);
     } else {
-      Alert.alert("Error", error.message || "Something went wrong");
+      toast(error.message || "Something went wrong", { type: "error" });
     }
   } finally {
     setDeletingAccount(false);
@@ -367,7 +353,7 @@ const handleReauthAndDelete = async () => {
       await performAccountDeletion();
     } catch (error: any) {
       if (error?.code !== "SIGN_IN_CANCELLED") {
-        Alert.alert("Error", error.message || "Google re-authentication failed.");
+        toast(error.message || "Google re-authentication failed.", { type: "error" });
       }
     }
     return;
@@ -395,7 +381,7 @@ const handleReauthAndDelete = async () => {
       await performAccountDeletion();
     } catch (error: any) {
       if (error?.code !== "ERR_REQUEST_CANCELED") {
-        Alert.alert("Error", error.message || "Apple re-authentication failed.");
+        toast(error.message || "Apple re-authentication failed.", { type: "error" });
       }
     }
     return;
@@ -437,22 +423,21 @@ const handleReauthAndDelete = async () => {
   const handleLogout = async () => {
     if (!isLoaded) return;
 
-    Alert.alert("Log Out", "Are you sure you want to log out?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Log Out",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await firebaseSignOut(auth);
-            router.replace("/(auth)/Login");
-          } catch (err) {
-            console.error("Error signing out:", err);
-            Alert.alert("Error", "Failed to sign out. Please try again.");
-          }
-        },
-      },
-    ]);
+    const ok = await confirm({
+      title: "Log Out",
+      message: "Are you sure you want to log out?",
+      confirmText: "Log Out",
+      destructive: true,
+    });
+    if (!ok) return;
+
+    try {
+      await firebaseSignOut(auth);
+      router.replace("/(auth)/Login");
+    } catch (err) {
+      console.error("Error signing out:", err);
+      toast("Failed to sign out. Please try again.", { type: "error" });
+    }
   };
 
   const handlePrivacySettings = () => {
@@ -482,14 +467,16 @@ const handleReauthAndDelete = async () => {
 
         if (status === "denied") {
           // Can't request again; send user to system settings
-          Alert.alert(
-            "Notifications Blocked",
-            "You've previously denied notifications. Please enable them in your device Settings.",
-            [
-              { text: "Cancel", style: "cancel" },
-              { text: "Open Settings", onPress: () => Linking.openSettings() },
-            ]
-          );
+          if (
+            await confirm({
+              title: "Notifications Blocked",
+              message:
+                "You've previously denied notifications. Please enable them in your device Settings.",
+              confirmText: "Open Settings",
+            })
+          ) {
+            Linking.openSettings();
+          }
           return;
         }
 
@@ -540,7 +527,7 @@ const handleReauthAndDelete = async () => {
       }
     } catch (error) {
       console.error("Failed to update notification preference", error);
-      Alert.alert("Error", "Failed to update notification settings.");
+      toast("Failed to update notification settings.", { type: "error" });
     } finally {
       setSavingNotif(false);
     }

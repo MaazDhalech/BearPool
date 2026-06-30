@@ -7,6 +7,7 @@ import { SpringPressable } from "@/components/SpringPressable";
 import { NavHeader } from "@/components/ui/NavHeader";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { FilterPill } from "@/components/ui/FilterPill";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import {
@@ -217,6 +218,7 @@ export default function HomeScreen() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [rides, setRides] = useState<Ride[]>([]);
+  const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<Record<string, User>>({});
   const [refreshing, setRefreshing] = useState(false);
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
@@ -362,6 +364,7 @@ export default function HomeScreen() {
           const filteredRideData = filterRidesWithBlockedUsers(rideData);
 
           setRides(filteredRideData);
+          setLoading(false);
           await fetchUsersForRides(filteredRideData);
         } catch (err) {
           console.error("Error processing real-time update:", err);
@@ -414,9 +417,11 @@ export default function HomeScreen() {
       const filteredRideData = filterRidesWithBlockedUsers(rideData);
 
       setRides(filteredRideData);
+      setLoading(false);
       await fetchUsersForRides(filteredRideData);
     } catch (err) {
       console.error("Error fetching rides manually:", err);
+      setLoading(false);
     }
   };
 
@@ -799,6 +804,7 @@ export default function HomeScreen() {
 
         {/* Ride cards */}
         <VStack space="md" pb="$16">
+          {loading && <LoadingState label="Loading rides…" />}
           {filteredRides.map((ride) => {
             if (typeof ride !== "object" || ride === null) return null;
 
@@ -1032,7 +1038,7 @@ export default function HomeScreen() {
             );
           })}
 
-          {filteredRides.length === 0 && (
+          {!loading && filteredRides.length === 0 && (
             <FadeSlideIn delay={100}>
               <VStack alignItems="center" mt="$8" px="$6" space="md">
                 <Image

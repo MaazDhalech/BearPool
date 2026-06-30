@@ -1,5 +1,5 @@
 import { darkTheme } from "@/constants/theme";
-import { ACCENT } from "@/constants/Colors";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import {
@@ -8,7 +8,6 @@ import {
     Box,
     Button,
     HStack,
-    Heading,
     ScrollView,
     Text,
     VStack
@@ -27,7 +26,7 @@ import {
     where
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { Alert, TouchableOpacity } from "react-native";
+import { confirm, showMenu, toast } from "@/components/ui/Dialog";
 
 // Default avatar image
 const DEFAULT_AVATAR =
@@ -53,7 +52,7 @@ export default function UserProfileScreen() {
         const userSnap = await getDoc(userDocRef);
 
         if (!userSnap.exists()) {
-          Alert.alert("Error", "User profile not found.");
+          toast("User profile not found.", { type: "error" });
           router.back();
           return;
         }
@@ -78,7 +77,7 @@ export default function UserProfileScreen() {
 
       } catch (error) {
         console.error("Error fetching user profile:", error);
-        Alert.alert("Error", "Failed to load user profile.");
+        toast("Failed to load user profile.", { type: "error" });
       } finally {
         setLoading(false);
       }
@@ -152,50 +151,30 @@ export default function UserProfileScreen() {
         // Show alert with ride information using formatted locations
         const ridesList = sharedRides.map(ride => formatRideLocation(ride)).join("\n");
         
-        Alert.alert(
-          "Shared Rides Found",
-          `You and ${userProfile?.first_name || userProfile?.username || 'this user'} are both members of ${sharedRides.length} ride(s):\n\n${ridesList}\n\nWould you like to leave these rides before blocking this user?`,
-          [
-            {
-              text: "Cancel",
-              style: "cancel",
-              onPress: () => setIsBlocking(false)
-            },
-            {
-              text: "Block Only",
-              style: "destructive",
-              onPress: () => proceedWithBlock(false, [])
-            },
-            {
-              text: "Leave Rides & Block",
-              style: "destructive",
-              onPress: () => proceedWithBlock(true, sharedRides)
-            }
-          ]
-        );
+        showMenu({
+          title: "Shared Rides Found",
+          message: `You and ${userProfile?.first_name || userProfile?.username || 'this user'} are both members of ${sharedRides.length} ride(s):\n\n${ridesList}\n\nWould you like to leave these rides before blocking this user?`,
+          onCancel: () => setIsBlocking(false),
+          options: [
+            { label: "Block Only", destructive: true, onPress: () => proceedWithBlock(false, []) },
+            { label: "Leave Rides & Block", destructive: true, onPress: () => proceedWithBlock(true, sharedRides) },
+          ],
+        });
       } else {
         // No shared rides, proceed with normal block confirmation
-        Alert.alert(
-          "Block User",
-          `Are you sure you want to block ${userProfile?.first_name || userProfile?.username || 'this user'}? You won't see their posts or be able to interact with them.`,
-          [
-            {
-              text: "Cancel",
-              style: "cancel",
-              onPress: () => setIsBlocking(false)
-            },
-            {
-              text: "Block",
-              style: "destructive",
-              onPress: () => proceedWithBlock(false, [])
-            }
-          ]
-        );
+        const ok = await confirm({
+          title: "Block User",
+          message: `Are you sure you want to block ${userProfile?.first_name || userProfile?.username || 'this user'}? You won't see their posts or be able to interact with them.`,
+          confirmText: "Block",
+          destructive: true,
+        });
+        if (ok) proceedWithBlock(false, []);
+        else setIsBlocking(false);
       }
     } catch (error) {
       console.error("Error checking shared rides:", error);
       setIsBlocking(false);
-      Alert.alert("Error", "Failed to check shared rides. Please try again.");
+      toast("Failed to check shared rides. Please try again.", { type: "error" });
     }
   };
 
@@ -205,7 +184,7 @@ export default function UserProfileScreen() {
       if (shouldLeaveRides && sharedRides.length > 0) {
         const success = await leaveSharedRides(sharedRides);
         if (!success) {
-          Alert.alert("Error", "Failed to leave some rides. Please try again.");
+          toast("Failed to leave some rides. Please try again.", { type: "error" });
           setIsBlocking(false);
           return;
         }
@@ -223,12 +202,11 @@ export default function UserProfileScreen() {
         ? `You have left ${sharedRides.length} shared ride(s) and blocked this user.`
         : "User has been blocked.";
         
-      Alert.alert("Success", successMessage, [
-        { text: "OK", onPress: () => router.back() }
-      ]);
+      toast(successMessage, { type: "success" });
+      router.back();
     } catch (error) {
       console.error("Error blocking user:", error);
-      Alert.alert("Error", "Failed to block user. Please try again.");
+      toast("Failed to block user. Please try again.", { type: "error" });
     } finally {
       setIsBlocking(false);
     }
@@ -237,41 +215,35 @@ export default function UserProfileScreen() {
   const handleUnblockUser = async () => {
     if (!currentUserId || !userId || isBlocking) return;
 
-    Alert.alert(
-      "Unblock User",
-      `Are you sure you want to unblock ${userProfile?.first_name || userProfile?.username || 'this user'}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Unblock",
-          onPress: async () => {
-            setIsBlocking(true);
-            try {
-              // Get current blocked users list
-              const currentUserDocRef = doc(db, "users", currentUserId);
-              const currentUserSnap = await getDoc(currentUserDocRef);
-              
-              if (currentUserSnap.exists()) {
-                const currentBlockedUsers = currentUserSnap.data().blockedUsers || [];
-                const updatedBlockedUsers = currentBlockedUsers.filter((id: string) => id !== userId);
-                
-                await updateDoc(currentUserDocRef, {
-                  blockedUsers: updatedBlockedUsers
-                });
-                
-                setIsBlocked(false);
-                Alert.alert("Success", "User has been unblocked.");
-              }
-            } catch (error) {
-              console.error("Error unblocking user:", error);
-              Alert.alert("Error", "Failed to unblock user. Please try again.");
-            } finally {
-              setIsBlocking(false);
-            }
-          }
-        }
-      ]
-    );
+    const ok = await confirm({
+      title: "Unblock User",
+      message: `Are you sure you want to unblock ${userProfile?.first_name || userProfile?.username || 'this user'}?`,
+      confirmText: "Unblock",
+    });
+    if (!ok) return;
+
+    setIsBlocking(true);
+    try {
+      const currentUserDocRef = doc(db, "users", currentUserId);
+      const currentUserSnap = await getDoc(currentUserDocRef);
+
+      if (currentUserSnap.exists()) {
+        const currentBlockedUsers = currentUserSnap.data().blockedUsers || [];
+        const updatedBlockedUsers = currentBlockedUsers.filter((id: string) => id !== userId);
+
+        await updateDoc(currentUserDocRef, {
+          blockedUsers: updatedBlockedUsers
+        });
+
+        setIsBlocked(false);
+        toast("User has been unblocked.", { type: "success" });
+      }
+    } catch (error) {
+      console.error("Error unblocking user:", error);
+      toast("Failed to unblock user. Please try again.", { type: "error" });
+    } finally {
+      setIsBlocking(false);
+    }
   };
 
   const handleReportUser = () => {
@@ -292,7 +264,7 @@ export default function UserProfileScreen() {
   if (!isLoaded || loading) {
     return (
       <Box flex={1} bg={darkTheme.bg} justifyContent="center" alignItems="center">
-        <Text color={darkTheme.textSecondary}>Loading profile...</Text>
+        <LoadingState label="Loading profile…" />
       </Box>
     );
   }

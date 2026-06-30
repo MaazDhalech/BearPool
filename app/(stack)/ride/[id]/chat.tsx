@@ -7,6 +7,8 @@ import { MessageReactions, type Reaction } from "@/components/MessageReactions";
 import { PhonePreview } from "@/components/PhonePreview";
 import { NavHeader } from "@/components/ui/NavHeader";
 import { Sheet, SheetAction, SHEET_DESTRUCTIVE } from "@/components/ui/Sheet";
+import { toast } from "@/components/ui/Dialog";
+import { GlassSurface } from "@/components/ui/GlassSurface";
 import { SPACE } from "@/constants/Spacing";
 import { TYPE } from "@/constants/Typography";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
@@ -46,16 +48,14 @@ import {
 import * as filter from "leo-profanity";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   Animated,
   FlatList,
-  Keyboard,
-  KeyboardAvoidingView,
   ActivityIndicator,
   Platform,
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import {
   Gesture,
   GestureDetector,
@@ -326,7 +326,6 @@ export default function RideChatScreen() {
   const [timeUntilArchive, setTimeUntilArchive] = useState<string | null>(null);
   const [shouldShowArchiveCountdown, setShouldShowArchiveCountdown] = useState(false);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [memberReadAt, setMemberReadAt] = useState<Record<string, number>>({});
   const [replyTo, setReplyTo] = useState<ReplyMeta | null>(null);
   const [actionSheetMsg, setActionSheetMsg] = useState<Message | null>(null);
@@ -349,27 +348,12 @@ export default function RideChatScreen() {
 
   const insets = useSafeAreaInsets();
   const safeBottom = insets.bottom > 0 ? insets.bottom : 8;
-  const inputPadBottom = keyboardHeight > 0 ? 3 : safeBottom;
 
   const animatedValue = useRef(new Animated.Value(0)).current;
   const sendScale = useSharedValue(1);
   const sendScaleStyle = useAnimatedStyle(() => ({
     transform: [{ scale: sendScale.value }],
   }));
-
-  // ── Keyboard height tracking ──────────────────────────
-  useEffect(() => {
-    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const onShow = (e: any) => setKeyboardHeight(e.endCoordinates.height);
-    const onHide = () => setKeyboardHeight(0);
-    const subShow = Keyboard.addListener(showEvent, onShow);
-    const subHide = Keyboard.addListener(hideEvent, onHide);
-    return () => {
-      subShow.remove();
-      subHide.remove();
-    };
-  }, []);
 
   // ── Scroll ──────────────────────────────────────────
   const scrollToBottom = useCallback((animated = true) => {
@@ -971,7 +955,7 @@ export default function RideChatScreen() {
       setReplyTo(null);
     } catch (err) {
       console.error("Failed to send message:", err);
-      Alert.alert("Error", "Failed to send message. Please try again.");
+      toast("Failed to send message. Please try again.", { type: "error" });
     }
   };
 
@@ -981,11 +965,9 @@ export default function RideChatScreen() {
 
     const { filtered, containsProfanity } = filterContent(trimmed);
     if (containsProfanity) {
-      Alert.alert(
-        "Message Not Sent",
-        "Your message contains inappropriate language and cannot be sent.",
-        [{ text: "OK" }],
-      );
+      toast("Your message contains inappropriate language and cannot be sent.", {
+        type: "error",
+      });
       return;
     }
 
@@ -1000,7 +982,7 @@ export default function RideChatScreen() {
 
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert("Photo Access Needed", "Allow photo library access to share images.");
+      toast("Allow photo library access to share images.", { type: "error" });
       return;
     }
 
@@ -1052,7 +1034,7 @@ export default function RideChatScreen() {
       scrollToBottom(true);
     } catch (err) {
       console.error("Failed to upload image:", err);
-      Alert.alert("Upload Failed", "Could not send the photo. Please try again.");
+      toast("Could not send the photo. Please try again.", { type: "error" });
     } finally {
       setUploadingImage(false);
     }
@@ -1419,10 +1401,7 @@ export default function RideChatScreen() {
       )}
 
       {/* ── Keyboard-managed section ── */}
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         {/* Messages */}
         <FlatList
           ref={flatListRef}
@@ -1518,17 +1497,17 @@ export default function RideChatScreen() {
           }
         />
 
-        {/* Input bar */}
+        {/* Glass composer — in flow, so the list sits above it (nothing renders under) */}
         <View
-          style={{
-            paddingHorizontal: SPACE.md,
-            paddingTop: SPACE.sm,
-            paddingBottom: inputPadBottom,
-            backgroundColor: darkTheme.bg,
-            borderTopWidth: 1,
-            borderTopColor: darkTheme.raised,
-          }}
+          style={{ paddingHorizontal: SPACE.sm, paddingTop: SPACE.xs, paddingBottom: safeBottom }}
         >
+          <GlassSurface
+            effect="regular"
+            colorScheme="dark"
+            fallbackColor={darkTheme.surface}
+            style={{ borderRadius: 26, overflow: "hidden" }}
+          >
+            <View style={{ paddingHorizontal: SPACE.sm, paddingTop: SPACE.sm, paddingBottom: SPACE.sm }}>
           {/* Reply preview */}
           {replyTo && (
             <View
@@ -1595,7 +1574,7 @@ export default function RideChatScreen() {
               {uploadingImage ? (
                 <ActivityIndicator size="small" color={ACCENT} />
               ) : (
-                <Ionicons name="image-outline" size={24} color={darkTheme.textFaint} />
+                <Ionicons name="image-outline" size={24} color={darkTheme.textBright} />
               )}
             </TouchableOpacity>
             <Input
@@ -1603,7 +1582,7 @@ export default function RideChatScreen() {
               size="md"
               borderWidth={0}
               borderRadius="$2xl"
-              backgroundColor={isArchived ? "#1a1a1a" : darkTheme.raised}
+              backgroundColor={isArchived ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.1)"}
             >
               <InputField
                 ref={inputRef}
@@ -1661,6 +1640,8 @@ export default function RideChatScreen() {
               </ReAnimated.View>
             </Pressable>
           </View>
+            </View>
+          </GlassSurface>
         </View>
       </KeyboardAvoidingView>
 

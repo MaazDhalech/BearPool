@@ -9,7 +9,7 @@ import {
   type ViewStyle,
 } from "react-native";
 
-type Variant = "primary" | "secondary" | "ghost";
+type Variant = "primary" | "secondary" | "ghost" | "danger";
 
 type Props = {
   label: string;
@@ -27,6 +27,7 @@ type Props = {
  *  - primary:   accent fill (dark label)
  *  - secondary: subtle raised-surface fill (primary-text label)
  *  - ghost:     transparent, borderless (muted label)
+ *  - danger:    tinted-red fill (danger label) for destructive actions
  */
 export function ActionButton({
   label,
@@ -46,12 +47,16 @@ export function ActionButton({
       ? t.accent
       : variant === "secondary"
       ? t.raised
+      : variant === "danger"
+      ? t.danger + "1f"
       : "transparent";
   const labelColor =
     variant === "primary"
       ? t.onAccent
       : variant === "secondary"
       ? t.textPrimary
+      : variant === "danger"
+      ? t.danger
       : t.textSecondary;
 
   return (

@@ -28,7 +28,8 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { useEffect, useRef, useState } from "react";
-import { Alert, View } from "react-native";
+import { View } from "react-native";
+import { toast } from "@/components/ui/Dialog";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NavHeader } from "@/components/ui/NavHeader";
 
@@ -229,13 +230,13 @@ export default function RideDetailsPage() {
     if (!userId || !ride?.id) return;
 
     if (ride.archived) {
-      Alert.alert("Ride Unavailable", "This ride has been archived.");
+      toast("This ride has been archived.", { type: "error" });
       return;
     }
 
     const rdt = parseRideDateTime(ride.date, ride.time);
     if (rdt && new Date() >= rdt) {
-      Alert.alert("Ride Started", "This ride has already started and cannot be joined.");
+      toast("This ride has already started and cannot be joined.", { type: "error" });
       return;
     }
 
@@ -244,10 +245,9 @@ export default function RideDetailsPage() {
 
     if (requiresSpecificGender) {
       if (!userGender) {
-        Alert.alert(
-          "Set Your Gender",
-          "Update your gender in your profile to join gender-restricted rides."
-        );
+        toast("Update your gender in your profile to join gender-restricted rides.", {
+          type: "info",
+        });
         return;
       }
 
@@ -259,10 +259,7 @@ export default function RideDetailsPage() {
             ? "women"
             : "non-binary riders";
 
-        Alert.alert(
-          "Restricted Ride",
-          `This ride is reserved for ${restrictedLabel}.`
-        );
+        toast(`This ride is reserved for ${restrictedLabel}.`, { type: "info" });
         return;
       }
     }
@@ -298,7 +295,7 @@ export default function RideDetailsPage() {
       }
     } catch (err) {
       console.error("Error joining ride:", err);
-      Alert.alert("Join Failed", "Could not join this ride. Please try again.");
+      toast("Could not join this ride. Please try again.", { type: "error" });
     }
   };
 

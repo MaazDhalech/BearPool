@@ -12,7 +12,6 @@ import { deleteDoc, doc, getDoc, updateDoc } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -24,6 +23,7 @@ import {
   View,
 } from "react-native";
 import { NavHeader } from "@/components/ui/NavHeader";
+import { confirm, toast } from "@/components/ui/Dialog";
 
 import * as filter from "leo-profanity";
 
@@ -103,10 +103,9 @@ export default function EditRideScreen() {
   // === Content validation using leo-profanity ===
   const validateContent = (text: string, fieldName: string): boolean => {
     if (filter.check(text)) {
-      Alert.alert(
-        "Inappropriate Content",
-        `Please remove inappropriate language from the ${fieldName} field.`,
-      );
+      toast(`Please remove inappropriate language from the ${fieldName} field.`, {
+        type: "error",
+      });
       return false;
     }
     return true;
@@ -200,10 +199,7 @@ export default function EditRideScreen() {
 
     // Block profanity in real-time
     if (filter.check(text)) {
-      Alert.alert(
-        "Inappropriate Content",
-        "Please avoid using inappropriate language.",
-      );
+      toast("Please avoid using inappropriate language.", { type: "error" });
       return;
     }
 
@@ -218,14 +214,14 @@ export default function EditRideScreen() {
       try {
         const rideDoc = await getDoc(doc(db, "rides", id as string));
         if (!rideDoc.exists()) {
-          Alert.alert("Error", "Ride not found");
+          toast("Ride not found", { type: "error" });
           router.back();
           return;
         }
 
         const rideData = rideDoc.data();
         if (rideData.hostId !== userId) {
-          Alert.alert("Error", "You can only edit your own rides");
+          toast("You can only edit your own rides", { type: "error" });
           router.back();
           return;
         }
@@ -275,7 +271,7 @@ export default function EditRideScreen() {
         }
       } catch (error) {
         console.error("Error loading ride data:", error);
-        Alert.alert("Error", "Failed to load ride data");
+        toast("Failed to load ride data", { type: "error" });
         router.back();
       } finally {
         setInitialLoading(false);
@@ -308,7 +304,7 @@ export default function EditRideScreen() {
   // === Save changes ===
   const handleSaveChanges = async () => {
     if (!from || !to || !seats) {
-      Alert.alert("Error", "Please fill out all required fields");
+      toast("Please fill out all required fields", { type: "error" });
       return;
     }
 
@@ -319,15 +315,12 @@ export default function EditRideScreen() {
     // Validate that date is in the future
     const now = new Date();
     if (date <= now) {
-      Alert.alert(
-        "Invalid Date",
-        "Please select a date and time in the future.",
-      );
+      toast("Please select a date and time in the future.", { type: "error" });
       return;
     }
 
     if (!id) {
-      Alert.alert("Error", "No ride ID provided");
+      toast("No ride ID provided", { type: "error" });
       return;
     }
 
@@ -348,44 +341,38 @@ export default function EditRideScreen() {
         genderPref,
       });
 
-      Alert.alert("Success", "Ride updated successfully!", [
-        { text: "OK", onPress: () => router.back() },
-      ]);
+      toast("Ride updated successfully!", { type: "success" });
+      router.back();
     } catch (error) {
       console.error("Error updating ride:", error);
-      Alert.alert("Error", "Failed to update ride. Please try again.");
+      toast("Failed to update ride. Please try again.", { type: "error" });
     } finally {
       setLoading(false);
     }
   };
 
   // === Delete ride ===
-  const handleDeleteRide = () => {
-    Alert.alert(
-      "Delete Ride",
-      "Are you sure you want to delete this ride? This action cannot be undone.",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => setShowDeleteModal(true),
-        },
-      ],
-    );
+  const handleDeleteRide = async () => {
+    if (
+      await confirm({
+        title: "Delete Ride",
+        message: "Are you sure you want to delete this ride? This action cannot be undone.",
+        confirmText: "Delete",
+        destructive: true,
+      })
+    ) {
+      setShowDeleteModal(true);
+    }
   };
 
   const handleSubmitDeletion = async () => {
     if (!deletionReason) {
-      Alert.alert("Error", "Please select a reason for deleting the ride.");
+      toast("Please select a reason for deleting the ride.", { type: "error" });
       return;
     }
 
     if (deletionReason === "Other" && !customReason.trim()) {
-      Alert.alert("Error", "Please provide a reason for deletion.");
+      toast("Please provide a reason for deletion.", { type: "error" });
       return;
     }
 
@@ -409,20 +396,12 @@ export default function EditRideScreen() {
       // Delete the ride document
       await deleteDoc(rideRef);
 
-      Alert.alert("Success", "Ride deleted successfully!", [
-        {
-          text: "OK",
-          onPress: () => {
-            // Pop the (now-deleted) ride screens off the stack, then land on chats
-            router.dismissTo("/(tabs)/chats");
-          },
-        },
-      ]);
+      toast("Ride deleted successfully!", { type: "success" });
+      // Pop the (now-deleted) ride screens off the stack, then land on chats
+      router.dismissTo("/(tabs)/chats");
     } catch (error) {
       console.error("Error deleting ride:", error);
-      Alert.alert("Error", "Failed to delete ride. Please try again.", [
-        { text: "OK", style: "default" },
-      ]);
+      toast("Failed to delete ride. Please try again.", { type: "error" });
     } finally {
       setDeleting(false);
       setShowDeleteModal(false);

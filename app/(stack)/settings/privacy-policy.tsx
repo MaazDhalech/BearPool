@@ -13,9 +13,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { NavHeader } from "@/components/ui/NavHeader";
 import { useTheme } from "@/hooks/useTheme";
+import { toast } from "@/components/ui/Dialog";
 import { useEffect, useState } from "react";
 import {
-    Alert,
     KeyboardAvoidingView,
     Linking,
     Platform,
@@ -66,7 +66,7 @@ export default function PrivacyPolicyScreen() {
   const handleViewOriginal = () => {
     const originalUrl = "https://gist.github.com/MaazDhalech/5574b48ea3ce14025b56bd0778318235";
     Linking.openURL(originalUrl).catch(() => {
-      Alert.alert("Error", "Unable to open the link.");
+      toast("Unable to open the link.", { type: "error" });
     });
   };
 

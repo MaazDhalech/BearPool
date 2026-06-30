@@ -3,6 +3,7 @@ import { ACCENT } from "@/constants/Colors";
 import { TYPE } from "@/constants/Typography";
 import { SPACE } from "@/constants/Spacing";
 import { ActionButton } from "@/components/ui/ActionButton";
+import { toast } from "@/components/ui/Dialog";
 import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import {
@@ -21,7 +22,6 @@ import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -153,11 +153,7 @@ export default function EditProfileScreen() {
         .map(([field, v]) => `${field}: ${v.error}`)
         .join("\n");
 
-      Alert.alert(
-        "Content Issues Found",
-        `Please fix the following:\n\n${errorMessages}`,
-        [{ text: "Edit", style: "cancel" }],
-      );
+      toast(`Please fix the following:\n${errorMessages}`, { type: "error" });
       return;
     }
 
@@ -185,14 +181,11 @@ export default function EditProfileScreen() {
       await setDoc(doc(db, "users", userId), updatedData);
       setFormErrors({});
 
-      Alert.alert("Success", "Profile updated successfully!", [
-        { text: "OK", onPress: () => router.back() },
-      ]);
+      toast("Profile updated successfully!", { type: "success" });
+      router.back();
     } catch (error) {
       console.error("Error saving profile:", error);
-      Alert.alert("Error", "Failed to update profile. Please try again.", [
-        { text: "OK" },
-      ]);
+      toast("Failed to update profile. Please try again.", { type: "error" });
     }
   };
 
@@ -201,9 +194,9 @@ export default function EditProfileScreen() {
     if (!userId || avatarUploading) return;
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert(
-        "Camera Roll Access Needed",
-        "We need access to your camera roll so you can choose a photo for your profile picture. Your photos are only used for your avatar and never shared without your permission.",
+      toast(
+        "We need camera roll access to choose a profile photo. Your photos are only used for your avatar.",
+        { type: "error" },
       );
       return;
     }
@@ -224,19 +217,15 @@ export default function EditProfileScreen() {
     );
 
     if (!compressed.base64) {
-      Alert.alert(
-        "Image Processing Failed",
-        "We couldn't process your image. This might happen if the file is corrupted or in an unsupported format. Please try selecting a different image or take a new photo.",
-      );
+      toast("Couldn't process that image. Please try a different photo.", { type: "error" });
       return;
     }
 
     const base64 = `data:image/jpeg;base64,${compressed.base64}`;
     if (base64.length > 900000) {
-      Alert.alert(
-        "Image Too Large",
-        "The selected image is too large to upload (max 900KB). Please choose a smaller image or try taking a new photo with your camera app set to a lower resolution.",
-      );
+      toast("That image is too large (max 900KB). Please choose a smaller photo.", {
+        type: "error",
+      });
       return;
     }
 
@@ -249,7 +238,7 @@ export default function EditProfileScreen() {
       }));
     } catch (err) {
       console.error("Failed to upload avatar:", err);
-      Alert.alert("Upload Failed", "Could not update your photo. Please try again.");
+      toast("Could not update your photo. Please try again.", { type: "error" });
     } finally {
       setAvatarUploading(false);
     }

@@ -3,6 +3,7 @@ import { ACCENT } from "@/constants/Colors";
 import { TYPE } from "@/constants/Typography";
 import { SPACE } from "@/constants/Spacing";
 import { NotificationOptInModal } from "@/components/NotificationOptInModal";
+import { toast } from "@/components/ui/Dialog";
 import { useNotificationOptInPrompt } from "@/hooks/useNotificationOptInPrompt";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { db } from "@/services/firebaseConfig";
@@ -33,7 +34,6 @@ import {
 } from "firebase/firestore";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -142,10 +142,9 @@ export default function PostScreen() {
   // === Content validation using leo-profanity ===
   const validateContent = (text: string, fieldName: string): boolean => {
     if (filter.check(text)) {
-      Alert.alert(
-        "Inappropriate Content",
-        `Please remove inappropriate language from the ${fieldName} field.`,
-      );
+      toast(`Please remove inappropriate language from the ${fieldName} field.`, {
+        type: "error",
+      });
       return false;
     }
     return true;
@@ -277,7 +276,7 @@ export default function PostScreen() {
   // === Submit ride ===
   const handleSubmit = async () => {
     if (!from || !to || !seats) {
-      Alert.alert("Error", "Please fill out all required fields");
+      toast("Please fill out all required fields", { type: "error" });
       return;
     }
 
@@ -288,10 +287,7 @@ export default function PostScreen() {
     // Validate that date is in the future
     const now = new Date();
     if (date <= now) {
-      Alert.alert(
-        "Invalid Date",
-        "Please select a date and time in the future.",
-      );
+      toast("Please select a date and time in the future.", { type: "error" });
       return;
     }
 
@@ -345,7 +341,7 @@ export default function PostScreen() {
       triggerNotificationPrompt();
     } catch (error) {
       console.error("Post error:", error);
-      Alert.alert("Error", "Failed to post ride. Please try again.");
+      toast("Failed to post ride. Please try again.", { type: "error" });
     } finally {
       setLoading(false);
     }
@@ -371,10 +367,7 @@ export default function PostScreen() {
     if (maxLength && text.length > maxLength) return;
 
     if (filter.check(text)) {
-      Alert.alert(
-        "Inappropriate Content",
-        "Please avoid using inappropriate language.",
-      );
+      toast("Please avoid using inappropriate language.", { type: "error" });
       return;
     }
 

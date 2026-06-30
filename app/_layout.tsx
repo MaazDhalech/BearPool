@@ -2,6 +2,7 @@ import { darkTheme } from "@/constants/theme";
 // app/_layout.tsx
 import { ACCENT } from "@/constants/Colors";
 import RideFeedbackModal from "@/components/RideFeedbackModal";
+import { DialogHost } from "@/components/ui/Dialog";
 import "@/global.css";
 import { config } from "@/gluestack-ui.config";
 import { db } from "@/services/firebaseConfig";
@@ -10,6 +11,7 @@ import { GluestackUIProvider } from "@gluestack-ui/themed";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
 import { useFonts } from "expo-font";
@@ -396,6 +398,7 @@ function RootLayoutContent() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <KeyboardProvider>
       <ExpoStatusBar style="light" translucent backgroundColor="transparent" />
       <View
         style={{
@@ -460,6 +463,10 @@ function RootLayoutContent() {
         onRateLater={handleRateLater}
         onFeedbackSubmit={handleFeedbackSubmit}
       />
+
+      {/* App-wide confirm dialogs, action menus, and toasts */}
+      <DialogHost />
+      </KeyboardProvider>
     </GestureHandlerRootView>
   );
 }

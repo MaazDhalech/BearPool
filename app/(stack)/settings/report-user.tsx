@@ -27,11 +27,11 @@ import {
 } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
 } from "react-native";
+import { toast } from "@/components/ui/Dialog";
 
 const REPORT_REASONS = [
   "Harassment or hate",
@@ -67,10 +67,7 @@ export default function ReportUserScreen() {
   useEffect(() => {
     const fetchData = async () => {
       if (!reporterId || !targetUserId) {
-        Alert.alert(
-          "Missing information",
-          "Unable to load report form. Please try again."
-        );
+        toast("Unable to load report form. Please try again.", { type: "error" });
         router.back();
         return;
       }
@@ -106,7 +103,7 @@ export default function ReportUserScreen() {
         }
       } catch (error) {
         console.error("Error loading report screen:", error);
-        Alert.alert("Error", "Failed to load report form. Please try again.");
+        toast("Failed to load report form. Please try again.", { type: "error" });
         router.back();
         return;
       } finally {
@@ -124,21 +121,20 @@ export default function ReportUserScreen() {
 
   const handleSubmit = async () => {
     if (!reporterId || !targetUserId) {
-      Alert.alert("Error", "Missing information for this report.");
+      toast("Missing information for this report.", { type: "error" });
       return;
     }
 
     if (!canSubmit) {
-      Alert.alert("Error", "Please choose a reason and provide details.");
+      toast("Please choose a reason and provide details.", { type: "error" });
       return;
     }
 
     const web3formsApiKey = Constants.expoConfig?.extra?.web3formsApiKey;
     if (!web3formsApiKey) {
-      Alert.alert(
-        "Error",
-        "Support service is not configured. Please contact the administrator."
-      );
+      toast("Support service is not configured. Please contact the administrator.", {
+        type: "error",
+      });
       return;
     }
 
@@ -193,17 +189,13 @@ export default function ReportUserScreen() {
         console.error("Failed to log report to Firestore:", dbError);
       }
 
-      Alert.alert(
-        "Report submitted",
-        "Thanks for keeping BearPool safe. Our team will review this report shortly.",
-        [{ text: "OK", onPress: () => router.back() }]
-      );
+      toast("Thanks for keeping BearPool safe. Our team will review this report shortly.", {
+        type: "success",
+      });
+      router.back();
     } catch (error) {
       console.error("Error submitting report:", error);
-      Alert.alert(
-        "Error",
-        "Failed to submit your report. Please try again later."
-      );
+      toast("Failed to submit your report. Please try again later.", { type: "error" });
     } finally {
       setSubmitting(false);
     }

@@ -5,6 +5,7 @@ import { SPACE } from "@/constants/Spacing";
 import { NavHeader } from "@/components/ui/NavHeader";
 import { ActionButton } from "@/components/ui/ActionButton";
 import { GlassSurface } from "@/components/ui/GlassSurface";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import {
@@ -88,7 +89,7 @@ export default function ProfileScreen() {
   if (!isLoaded || loading) {
     return (
       <Box flex={1} bg={darkTheme.bg} justifyContent="center" alignItems="center">
-        <Text color={darkTheme.textSecondary}>Loading profile...</Text>
+        <LoadingState label="Loading profile…" />
       </Box>
     );
   }

@@ -11,6 +11,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import Animated, { SlideInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 /**
@@ -31,11 +32,12 @@ export function Sheet({
 }) {
   const insets = useSafeAreaInsets();
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableWithoutFeedback onPress={onClose}>
         <View style={styles.backdrop}>
           <TouchableWithoutFeedback onPress={() => {}}>
-            <View
+            <Animated.View
+              entering={SlideInDown.duration(240)}
               style={[
                 styles.sheet,
                 { paddingBottom: Math.max(insets.bottom, SPACE.md) + SPACE.sm },
@@ -54,7 +56,7 @@ export function Sheet({
                 </>
               ) : null}
               {children}
-            </View>
+            </Animated.View>
           </TouchableWithoutFeedback>
         </View>
       </TouchableWithoutFeedback>

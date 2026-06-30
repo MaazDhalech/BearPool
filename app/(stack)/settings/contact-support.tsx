@@ -23,11 +23,11 @@ import { addDoc, collection, doc, getDoc, serverTimestamp } from "firebase/fires
 import { NavHeader } from "@/components/ui/NavHeader";
 import { useEffect, useState } from "react";
 import {
-    Alert,
     KeyboardAvoidingView,
     Platform,
     TouchableOpacity,
 } from "react-native";
+import { toast } from "@/components/ui/Dialog";
 
 const MAX_MESSAGE_LENGTH = 1000;
 
@@ -84,7 +84,7 @@ export default function ContactSupportScreen() {
       !supportForm.subject ||
       !supportForm.message
     ) {
-      Alert.alert("Error", "Please fill in all fields.");
+      toast("Please fill in all fields.", { type: "error" });
       return;
     }
 
@@ -93,10 +93,9 @@ export default function ContactSupportScreen() {
       const web3formsApiKey = Constants.expoConfig?.extra?.web3formsApiKey;
 
       if (!web3formsApiKey) {
-        Alert.alert(
-          "Error",
-          "Support service is not configured. Please contact the administrator."
-        );
+        toast("Support service is not configured. Please contact the administrator.", {
+          type: "error",
+        });
         return;
       }
 
@@ -134,27 +133,18 @@ export default function ContactSupportScreen() {
           }
         }
 
-        Alert.alert(
-          "Success!",
-          "Your support request has been submitted successfully. We'll get back to you soon!",
-          [
-            {
-              text: "OK",
-              onPress: () => {
-                router.back();
-              },
-            },
-          ]
-        );
+        toast("Your support request has been submitted. We'll get back to you soon!", {
+          type: "success",
+        });
+        router.back();
       } else {
         throw new Error(result.message || "Failed to submit support request");
       }
     } catch (error) {
       console.error("Error submitting support request:", error);
-      Alert.alert(
-        "Error",
-        "Failed to submit your support request. Please try again later."
-      );
+      toast("Failed to submit your support request. Please try again later.", {
+        type: "error",
+      });
     } finally {
       setSubmitingSupport(false);
     }

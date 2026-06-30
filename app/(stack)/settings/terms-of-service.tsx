@@ -12,9 +12,9 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { NavHeader } from "@/components/ui/NavHeader";
+import { toast } from "@/components/ui/Dialog";
 import { useEffect, useState } from "react";
 import {
-    Alert,
     KeyboardAvoidingView,
     Linking,
     Platform,
@@ -64,7 +64,7 @@ export default function TermsOfServiceScreen() {
   const handleViewOriginal = () => {
     const originalUrl = "https://gist.github.com/babikerb/00ad066b2a3ebcd66ace4dfff75b17e2";
     Linking.openURL(originalUrl).catch(() => {
-      Alert.alert("Error", "Unable to open the link.");
+      toast("Unable to open the link.", { type: "error" });
     });
   };
 

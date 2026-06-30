@@ -5,6 +5,7 @@ import { darkTheme } from "@/constants/theme";
 
 import { ACCENT } from "@/constants/Colors";
 import { auth, db } from "@/services/firebaseConfig";
+import { confirm, prompt, toast } from "@/components/ui/Dialog";
 import { Ionicons } from "@expo/vector-icons";
 import {
   GoogleSignin,
@@ -26,7 +27,6 @@ import { addDoc, collection, doc, getDoc, serverTimestamp } from "firebase/fires
 import React from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Keyboard,
   KeyboardAvoidingView,
@@ -186,7 +186,7 @@ export default function Login() {
   // ── Bug report submit ──
   const onSubmitBugReport = async () => {
     if (!bugEmail.trim() || !bugDescription.trim()) {
-      Alert.alert("Missing Info", "Please enter your email and describe the issue.");
+      toast("Please enter your email and describe the issue.", { type: "error" });
       return;
     }
     setBugSubmitting(true);
@@ -209,12 +209,13 @@ export default function Login() {
         source: "login-screen",
         createdAt: serverTimestamp(),
       });
-      Alert.alert("Report Sent", "Thanks, we'll look into it shortly.", [
-        { text: "OK", onPress: () => { bugSheetRef.current?.dismiss(); setBugEmail(""); setBugDescription(""); } },
-      ]);
+      toast("Thanks, we'll look into it shortly.", { type: "success" });
+      bugSheetRef.current?.dismiss();
+      setBugEmail("");
+      setBugDescription("");
     } catch (err) {
       console.error("Bug report failed:", err);
-      Alert.alert("Error", "Could not send your report. Please try again.");
+      toast("Could not send your report. Please try again.", { type: "error" });
     } finally {
       setBugSubmitting(false);
     }
@@ -234,14 +235,16 @@ export default function Login() {
         code === "auth/wrong-password" ||
         code === "auth/user-not-found"
       ) {
-        Alert.alert(
-          "Sign In Failed",
-          "Incorrect email or password. If you're an existing user, you may need to reset your password.",
-          [
-            { text: "Cancel", style: "cancel" },
-            { text: "Reset Password", onPress: () => router.push("/(auth)/Reset") },
-          ],
-        );
+        if (
+          await confirm({
+            title: "Sign In Failed",
+            message:
+              "Incorrect email or password. If you're an existing user, you may need to reset your password.",
+            confirmText: "Reset Password",
+          })
+        ) {
+          router.push("/(auth)/Reset");
+        }
       } else if (code === "auth/too-many-requests") {
         setError("Too many attempts. Please wait or reset your password.");
       } else {
@@ -288,37 +291,33 @@ export default function Login() {
       } else if (err.code === "auth/account-exists-with-different-credential") {
         // User already has an email/password account - offer to link Google to it
         const pendingCredential = GoogleAuthProvider.credentialFromError(err);
-        Alert.alert(
-          "Account Already Exists",
-          "You already have an account with this email. Enter your password to link Google Sign-In to your account.",
-          [
-            { text: "Cancel", style: "cancel" },
-            {
-              text: "Link Account",
-              onPress: () => {
-                Alert.prompt(
-                  "Enter Password",
-                  "Your current BearPool password:",
-                  async (password) => {
-                    if (!password) return;
-                    try {
-                      const emailUser = await GoogleSignin.getCurrentUser();
-                      const email = emailUser?.user?.email ?? "";
-                      const userCred = await signInWithEmailAndPassword(auth, email, password);
-                      if (pendingCredential) {
-                        await linkWithCredential(userCred.user, pendingCredential);
-                      }
-                      router.replace("/");
-                    } catch (linkErr: any) {
-                      setError(linkErr?.message || "Failed to link accounts.");
-                    }
-                  },
-                  "secure-text"
-                );
-              },
-            },
-          ]
-        );
+        if (
+          await confirm({
+            title: "Account Already Exists",
+            message:
+              "You already have an account with this email. Enter your password to link Google Sign-In to your account.",
+            confirmText: "Link Account",
+          })
+        ) {
+          const password = await prompt({
+            title: "Enter Password",
+            message: "Your current BearPool password:",
+            secure: true,
+          });
+          if (password) {
+            try {
+              const emailUser = await GoogleSignin.getCurrentUser();
+              const email = emailUser?.user?.email ?? "";
+              const userCred = await signInWithEmailAndPassword(auth, email, password);
+              if (pendingCredential) {
+                await linkWithCredential(userCred.user, pendingCredential);
+              }
+              router.replace("/");
+            } catch (linkErr: any) {
+              setError(linkErr?.message || "Failed to link accounts.");
+            }
+          }
+        }
       } else {
         setError("Google sign-in failed. Please try again.");
       }
