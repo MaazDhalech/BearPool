@@ -1,25 +1,26 @@
-import { ACCENT } from "@/constants/Colors";
-import { TYPE } from "@/constants/Typography";
-import { SPACE } from "@/constants/Spacing";
 import { FadeSlideIn } from "@/components/FadeSlideIn";
 import { SpringPressable } from "@/components/SpringPressable";
-import { db } from "@/services/firebaseConfig";
+import { ACCENT } from "@/constants/Colors";
+import { SPACE } from "@/constants/Spacing";
+import { TYPE } from "@/constants/Typography";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
+import { db } from "@/services/firebaseConfig";
+import { MatchPreferences, matchScore } from "@/utils/matchScore";
+import { Ionicons } from "@expo/vector-icons";
 import {
   Avatar,
   AvatarImage,
   Box,
-  Button,
   HStack,
-  Heading,
   Input,
   InputField,
   Pressable,
   ScrollView,
   Text,
   VStack,
-  useToast,
+  useToast
 } from "@gluestack-ui/themed";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
   Timestamp,
@@ -36,8 +37,6 @@ import {
   updateDoc,
   writeBatch,
 } from "firebase/firestore";
-import { LinearGradient } from "expo-linear-gradient";
-import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef, useState } from "react";
 import { AppState, AppStateStatus, Image, RefreshControl, TouchableOpacity, View } from "react-native";
 
@@ -217,7 +216,8 @@ export default function HomeScreen() {
   const [rides, setRides] = useState<Ride[]>([]);
   const [users, setUsers] = useState<Record<string, User>>({});
   const [refreshing, setRefreshing] = useState(false);
-  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest" | "match">("newest");
+  const [matchPrefs, setMatchPrefs] = useState<MatchPreferences>({});
   const [userGender, setUserGender] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
@@ -235,6 +235,10 @@ export default function HomeScreen() {
         const data = userDoc.data();
         setUserGender(data.gender || null);
         setIsAdmin(data.isAdmin === true);
+        setMatchPrefs({
+          preferredDepartureTime: data.preferredDepartureTime ?? null,
+          usualDestination: data.usualDestination ?? null,
+        });
       }
     } catch (err) {
       console.error("Error fetching user gender:", err);
@@ -724,6 +728,9 @@ export default function HomeScreen() {
       return true;
     })
     .sort((a, b) => {
+      if (sortOrder === "match") {
+        return matchScore(b, matchPrefs) - matchScore(a, matchPrefs); // highest score first
+      }
       const dateA = parseRideDateTime(a.date, a.time);
       const dateB = parseRideDateTime(b.date, b.time);
 
@@ -737,7 +744,9 @@ export default function HomeScreen() {
     });
 
   const toggleSortOrder = () =>
-    setSortOrder((prev) => (prev === "newest" ? "oldest" : "newest"));
+    setSortOrder((prev) =>
+      prev === "newest" ? "oldest" : prev === "oldest" ? "match" : "newest"
+    );
 
   return (
     <View style={{ flex: 1, backgroundColor: "#121212" }}>
@@ -791,7 +800,7 @@ export default function HomeScreen() {
             }}
           >
             <Text style={{ color: ACCENT, fontSize: TYPE.size.label, fontWeight: TYPE.weight.semibold }}>
-              {sortOrder === "newest" ? "Soonest" : "Latest"}
+              {sortOrder === "newest" ? "Soonest" : sortOrder === "oldest" ? "Latest" : "Best match"}
             </Text>
             <Ionicons
               name={sortOrder === "newest" ? "arrow-up" : "arrow-down"}
