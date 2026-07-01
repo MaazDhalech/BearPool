@@ -6,7 +6,7 @@ import { FadeSlideIn } from "@/components/FadeSlideIn";
 import { SpringPressable } from "@/components/SpringPressable";
 import { NavHeader } from "@/components/ui/NavHeader";
 import { SearchInput } from "@/components/ui/SearchInput";
-import { FilterPill } from "@/components/ui/FilterPill";
+import { FilterDropdown } from "@/components/ui/ContextMenu";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
@@ -749,9 +749,6 @@ export default function HomeScreen() {
       return sortOrder === "newest" ? diff : -diff;
     });
 
-  const toggleSortOrder = () =>
-    setSortOrder((prev) => (prev === "newest" ? "oldest" : "newest"));
-
   return (
     <View style={{ flex: 1, backgroundColor: darkTheme.bg }}>
       <LinearGradient
@@ -774,31 +771,36 @@ export default function HomeScreen() {
           />
         }
       >
-        {/* Search + Sort */}
-        <HStack alignItems="center" space="sm" mb="$3">
+        {/* Search */}
+        <HStack mb="$3">
           <SearchInput
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder="Search by location..."
           />
-          <FilterPill
-            label={sortOrder === "newest" ? "Soonest" : "Latest"}
-            icon={sortOrder === "newest" ? "arrow-up" : "arrow-down"}
-            onPress={toggleSortOrder}
-            accessibilityLabel={`Sort by ${sortOrder === "newest" ? "soonest" : "latest"}, tap to change`}
-          />
         </HStack>
 
-        {/* Gender filter toggle */}
-        <HStack alignItems="center" justifyContent="space-between" mb="$4" px="$1">
-          <Text style={{ color: darkTheme.textSecondary, fontSize: TYPE.size.caption }}>
-            Gender-restricted rides
-          </Text>
-          <FilterPill
-            label={showRestrictedRides ? "Hide" : "Show"}
-            active={showRestrictedRides}
-            onPress={() => setShowRestrictedRides((prev) => !prev)}
-            accessibilityLabel={`${showRestrictedRides ? "Hide" : "Show"} gender-restricted rides`}
+        {/* Filter dropdowns */}
+        <HStack space="sm" mb="$4" alignItems="center">
+          <FilterDropdown
+            icon="swap-vertical"
+            title="Sort rides by departure"
+            selectedKey={sortOrder}
+            options={[
+              { key: "newest", label: "Soonest first", chipLabel: "Soonest" },
+              { key: "oldest", label: "Latest first", chipLabel: "Latest" },
+            ]}
+            onSelect={(k) => setSortOrder(k as "newest" | "oldest")}
+          />
+          <FilterDropdown
+            icon="people-outline"
+            title="Gender-restricted rides"
+            selectedKey={showRestrictedRides ? "all" : "hide"}
+            options={[
+              { key: "all", label: "Show all rides", chipLabel: "All rides" },
+              { key: "hide", label: "Hide gender-restricted", chipLabel: "Restricted hidden" },
+            ]}
+            onSelect={(k) => setShowRestrictedRides(k === "all")}
           />
         </HStack>
 

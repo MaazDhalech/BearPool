@@ -1,6 +1,11 @@
+import { darkTheme } from "@/constants/theme";
+import { SPACE } from "@/constants/Spacing";
+import { TYPE } from "@/constants/Typography";
+import { showMenu } from "@/components/ui/Dialog";
+import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React from "react";
-import { Platform, Pressable, StyleProp, ViewStyle } from "react-native";
+import { Platform, Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from "react-native";
 
 /**
  * Native iOS context menus (UIMenu) with a graceful fallback.
@@ -19,11 +24,15 @@ import { Platform, Pressable, StyleProp, ViewStyle } from "react-native";
  */
 
 let ContextMenuView: any = null;
+let ContextMenuButton: any = null;
 if (Platform.OS === "ios") {
   try {
-    ContextMenuView = require("react-native-ios-context-menu").ContextMenuView;
+    const lib = require("react-native-ios-context-menu");
+    ContextMenuView = lib.ContextMenuView;
+    ContextMenuButton = lib.ContextMenuButton;
   } catch {
     ContextMenuView = null;
+    ContextMenuButton = null;
   }
 }
 
@@ -165,3 +174,83 @@ export function ChatMessageMenu({
     </ContextMenuView>
   );
 }
+
+// ── Filter dropdown ─────────────────────────────────────────────────────────
+// A labelled chip that opens a native iOS dropdown (ContextMenuButton, tap to
+// open) to pick one option; the current value shows a checkmark. On Android it
+// falls back to the in-app action sheet (showMenu).
+// `label` shows in the dropdown menu; `chipLabel` (optional) is the shorter text
+// shown on the collapsed chip so a long option doesn't overflow the row.
+export type DropdownOption = { key: string; label: string; chipLabel?: string };
+
+export function FilterDropdown({
+  icon,
+  options,
+  selectedKey,
+  onSelect,
+  title,
+}: {
+  icon?: keyof typeof Ionicons.glyphMap;
+  options: DropdownOption[];
+  selectedKey: string;
+  onSelect: (key: string) => void;
+  title?: string;
+}) {
+  const selected = options.find((o) => o.key === selectedKey);
+
+  const chip = (
+    <View style={dropdownStyles.chip}>
+      {icon ? <Ionicons name={icon} size={15} color={darkTheme.accent} /> : null}
+      <Text style={dropdownStyles.chipText} numberOfLines={1}>
+        {selected?.chipLabel ?? selected?.label ?? ""}
+      </Text>
+      <Ionicons name="chevron-down" size={14} color={darkTheme.textMuted} />
+    </View>
+  );
+
+  if (Platform.OS === "ios" && ContextMenuButton) {
+    return (
+      <ContextMenuButton
+        menuConfig={{
+          menuTitle: title ?? "",
+          menuItems: options.map((o) => ({
+            actionKey: o.key,
+            actionTitle: o.label,
+            menuState: o.key === selectedKey ? "on" : "off",
+          })),
+        }}
+        onPressMenuItem={({ nativeEvent }: any) => onSelect(nativeEvent.actionKey)}
+      >
+        {chip}
+      </ContextMenuButton>
+    );
+  }
+
+  return (
+    <Pressable
+      onPress={() =>
+        showMenu({
+          title,
+          options: options.map((o) => ({ label: o.label, onPress: () => onSelect(o.key) })),
+        })
+      }
+    >
+      {chip}
+    </Pressable>
+  );
+}
+
+const dropdownStyles = StyleSheet.create({
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: darkTheme.surface,
+    borderWidth: 1,
+    borderColor: darkTheme.border,
+    borderRadius: 999,
+    paddingHorizontal: SPACE.md,
+    paddingVertical: SPACE.sm,
+  },
+  chipText: { color: darkTheme.textBright, fontSize: TYPE.size.label, fontWeight: "600" },
+});

@@ -188,7 +188,7 @@ export default function TOSOverlay({ visible, onClose, onAccept }: Props) {
           <Box px="$4">
             {loading ? (
               <Box py="$8" alignItems="center">
-                <ActivityIndicator size="large" color={darkTheme.textPrimary} />
+                <ActivityIndicator size="large" color={ACCENT} />
                 <Text color={darkTheme.textSecondary} mt="$4">
                   Loading terms of service...
                 </Text>
