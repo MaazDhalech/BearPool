@@ -17,7 +17,6 @@ import {
   ButtonText,
   HStack,
   ScrollView,
-  Spinner,
   Text,
   VStack,
 } from "@gluestack-ui/themed";
@@ -42,6 +41,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Modal as RNModal,
   Platform,
@@ -623,7 +623,7 @@ const handleReauthAndDelete = async () => {
             {deletingAccount && (
               <Box mt="$4" p="$4" bg={darkTheme.raised} borderRadius="$md">
                 <HStack space="sm" justifyContent="center" alignItems="center">
-                  <Spinner size="small" color={ACCENT} />
+                  <ActivityIndicator size="small" color={ACCENT} />
                   <Text color={darkTheme.danger} textAlign="center">
                     Deleting account... Please wait.
                   </Text>

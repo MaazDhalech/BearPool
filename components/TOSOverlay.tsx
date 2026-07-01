@@ -8,14 +8,13 @@ import {
   HStack,
   Modal,
   ScrollView,
-  Spinner,
   Text,
   VStack,
 } from "@gluestack-ui/themed";
 import { Ionicons } from "@expo/vector-icons";
 import { Link } from "expo-router";
 import { useEffect, useState } from "react";
-import { Linking, TouchableOpacity } from "react-native";
+import { ActivityIndicator, Linking, TouchableOpacity } from "react-native";
 
 const GIST_URL =
   "https://gist.githubusercontent.com/babikerb/00ad066b2a3ebcd66ace4dfff75b17e2/raw";
@@ -189,7 +188,7 @@ export default function TOSOverlay({ visible, onClose, onAccept }: Props) {
           <Box px="$4">
             {loading ? (
               <Box py="$8" alignItems="center">
-                <Spinner size="large" color={darkTheme.textPrimary} />
+                <ActivityIndicator size="large" color={darkTheme.textPrimary} />
                 <Text color={darkTheme.textSecondary} mt="$4">
                   Loading terms of service...
                 </Text>

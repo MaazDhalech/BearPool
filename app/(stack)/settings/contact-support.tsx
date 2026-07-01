@@ -11,7 +11,6 @@ import {
     Input,
     InputField,
     ScrollView,
-    Spinner,
     Text,
     Textarea,
     TextareaInput,
@@ -23,6 +22,7 @@ import { addDoc, collection, doc, getDoc, serverTimestamp } from "firebase/fires
 import { NavHeader } from "@/components/ui/NavHeader";
 import { useEffect, useState } from "react";
 import {
+    ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
     TouchableOpacity,
@@ -282,7 +282,7 @@ export default function ContactSupportScreen() {
               >
                 {submitingSupport ? (
                   <HStack space="sm" alignItems="center">
-                    <Spinner size="small" color={darkTheme.bg} />
+                    <ActivityIndicator size="small" color={darkTheme.bg} />
                     <ButtonText color={darkTheme.bg}>Submitting...</ButtonText>
                   </HStack>
                 ) : (

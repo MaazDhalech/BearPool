@@ -5,7 +5,6 @@ import {
     HStack,
     Heading,
     ScrollView,
-    Spinner,
     Text,
     VStack,
 } from "@gluestack-ui/themed";
@@ -16,6 +15,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { toast } from "@/components/ui/Dialog";
 import { useEffect, useState } from "react";
 import {
+    ActivityIndicator,
     KeyboardAvoidingView,
     Linking,
     Platform,
@@ -176,7 +176,7 @@ export default function PrivacyPolicyScreen() {
           <Box px="$4">
             {loading ? (
               <Box py="$8" alignItems="center">
-                <Spinner size="large" color={ACCENT} />
+                <ActivityIndicator size="large" color={ACCENT} />
                 <Text color={t.textSecondary} mt="$4">
                   Loading privacy policy...
                 </Text>

@@ -129,11 +129,17 @@ export function ChatMessageMenu({
         menuTitle: "",
         menuItems: [
           {
+            // `menuTitle` is required — the native RNIMenuItem parser drops any
+            // submenu/inline group without it (even when empty).
+            menuTitle: "",
             menuOptions: ["displayInline"],
+            // Horizontal palette row (UIMenu.preferredElementSize = .small, iOS 16+).
+            menuPreferredElementSize: "small",
+            // No `menuState` here — the checkmark accessory widens each item and
+            // forces the palette to wrap (4+2 instead of a single row of 6).
             menuItems: reactionEmojis.map((e) => ({
               actionKey: `${REACT_PREFIX}${e}`,
               actionTitle: e,
-              menuState: activeEmojis.includes(e) ? "on" : "off",
             })),
           },
           ...actions.map((a) => ({

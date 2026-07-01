@@ -124,7 +124,8 @@ type Message = {
   imageHeight?: number;
 };
 
-const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "👎"];
+// 4 reactions so the native iOS menu's palette row stays on a single line.
+const REACTION_EMOJIS = ["👍", "❤️", "😂", "👎"];
 const MESSAGE_PAGE_SIZE = 50;
 
 type ProcessedMessage = Message & {

@@ -2,6 +2,7 @@ import { darkTheme } from "@/constants/theme";
 import TOSOverlay from "@/components/TOSOverlay";
 import { ACCENT } from "@/constants/Colors";
 import { auth, db } from "@/services/firebaseConfig";
+import { initialsAvatarUrl } from "@/utils/avatar";
 import { Ionicons } from "@expo/vector-icons";
 import { Link, Stack, useRouter } from "expo-router";
 import {
@@ -139,9 +140,6 @@ const p = StyleSheet.create({
 //  SCREEN
 // ─────────────────────────────────────────────
 
-const BLANK_AVATAR =
-  "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
-
 type Gender = "M" | "F" | "NB";
 type GenderOption = Gender | "PNTS";
 
@@ -229,7 +227,7 @@ export default function Signup() {
         genderOption === null || genderOption === "PNTS" ? null : genderOption;
 
       await setDoc(doc(db, "users", user.uid), {
-        avatar: BLANK_AVATAR,
+        avatar: initialsAvatarUrl(trimmedFirstName, trimmedLastName),
         username: cleanText(trimmedUsername),
         email: trimmedEmail.toLowerCase(),
         first_name: cleanText(trimmedFirstName),

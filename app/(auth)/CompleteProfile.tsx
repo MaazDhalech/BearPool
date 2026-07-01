@@ -3,6 +3,7 @@ import TOSOverlay from "@/components/TOSOverlay";
 import { ACCENT } from "@/constants/Colors";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { db } from "@/services/firebaseConfig";
+import { initialsAvatarUrl } from "@/utils/avatar";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useRouter } from "expo-router";
 import { doc, setDoc } from "firebase/firestore";
@@ -109,9 +110,6 @@ const p = StyleSheet.create({
 //  CONSTANTS
 // ─────────────────────────────────────────────
 
-const BLANK_AVATAR =
-  "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
-
 type Gender = "M" | "F" | "NB";
 type GenderOption = Gender | "PNTS";
 
@@ -181,7 +179,7 @@ export default function CompleteProfile() {
         genderOption === null || genderOption === "PNTS" ? null : genderOption;
 
       await setDoc(doc(db, "users", userId), {
-        avatar: currentUser.photoURL || BLANK_AVATAR,
+        avatar: currentUser.photoURL || initialsAvatarUrl(trimmedFirstName, trimmedLastName),
         username: cleanText(trimmedUsername),
         email: currentUser.email?.toLowerCase() ?? "",
         first_name: cleanText(trimmedFirstName),

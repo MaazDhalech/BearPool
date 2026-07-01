@@ -567,13 +567,22 @@ This ride has been permanently deleted from the system.
 
   const handleViewProfile = (targetId: string) => {
     if (targetId === user?.uid) {
-      router.push("/(tabs)/profile");
+      // dismiss the ride stack back to the profile tab — pushing a tab route
+      // onto this stack glitches the transition.
+      router.dismissTo("/(tabs)/profile");
     } else {
       router.push({
         pathname: "/(stack)/ride/[id]/viewProfile",
         params: { id: String(rideId), userId: targetId },
       });
     }
+  };
+
+  const handleReportUser = (targetId: string) => {
+    router.push({
+      pathname: "/(stack)/settings/report-user",
+      params: { userId: targetId, rideId: String(rideId) },
+    });
   };
 
   if (!ride) return null;
@@ -653,6 +662,15 @@ This ride has been permanently deleted from the system.
                   onPress: () => handleKick(u.id),
                 });
               }
+              if (u.id !== user?.uid) {
+                actions.push({
+                  key: "report",
+                  title: "Report",
+                  systemIcon: "flag",
+                  destructive: true,
+                  onPress: () => handleReportUser(u.id),
+                });
+              }
               return (
                 <ContextMenu
                   key={u.id}
@@ -665,7 +683,9 @@ This ride has been permanently deleted from the system.
                     space="md"
                     bg={darkTheme.surface}
                     p="$3"
-                    borderRadius="$xl"
+                    borderRadius="$2xl"
+                    borderWidth={1}
+                    borderColor={darkTheme.border}
                   >
                     <Avatar size="md">
                       <AvatarImage source={{ uri: u.avatar }} />
@@ -686,11 +706,19 @@ This ride has been permanently deleted from the system.
                       </Text>
                     </VStack>
                     {u.id === ride.hostId && (
-                      <Box bg={darkTheme.success + "22"} px="$2.5" py="$1" borderRadius="$full">
-                        <Text color={darkTheme.success} fontSize="$2xs" fontWeight="$bold">
+                      <HStack
+                        alignItems="center"
+                        space="xs"
+                        bg={darkTheme.accent + "22"}
+                        px="$2.5"
+                        py="$1"
+                        borderRadius="$full"
+                      >
+                        <Ionicons name="star" size={11} color={darkTheme.accent} />
+                        <Text color={darkTheme.accent} fontSize="$2xs" fontWeight="$bold">
                           HOST
                         </Text>
-                      </Box>
+                      </HStack>
                     )}
                   </HStack>
                 </ContextMenu>
@@ -1062,6 +1090,18 @@ This ride has been permanently deleted from the system.
               }}
             />
           </>
+        )}
+        {actionSheetUser?.id !== user?.uid && (
+          <SheetAction
+            icon="flag-outline"
+            label="Report"
+            tint={SHEET_DESTRUCTIVE}
+            onPress={() => {
+              const x = actionSheetUser;
+              setActionSheetUser(null);
+              if (x) handleReportUser(x.id);
+            }}
+          />
         )}
       </Sheet>
     </Box>

@@ -12,7 +12,6 @@ import {
     Heading,
     Pressable,
     ScrollView,
-    Spinner,
     Text,
     Textarea,
     TextareaInput,
@@ -31,6 +30,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import {
+    ActivityIndicator,
     Alert,
     KeyboardAvoidingView,
     Modal,
@@ -622,7 +622,7 @@ ${feedbackForm.issueDetails}
             justifyContent="center"
             alignItems="center"
           >
-            <Spinner size="large" color={ACCENT} />
+            <ActivityIndicator size="large" color={ACCENT} />
             <Text color={darkTheme.textSecondary} mt="$4" fontSize="$sm">
               Loading ride details...
             </Text>
@@ -966,7 +966,7 @@ ${feedbackForm.issueDetails}
                     >
                       {submitting ? (
                         <HStack space="sm" alignItems="center">
-                          <Spinner size="small" color={darkTheme.bg} />
+                          <ActivityIndicator size="small" color={darkTheme.bg} />
                           <ButtonText color={darkTheme.bg}>Submitting...</ButtonText>
                         </HStack>
                       ) : (
