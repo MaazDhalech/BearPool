@@ -30,6 +30,45 @@ const isRecent = (ts: admin.firestore.Timestamp | undefined | null) => {
   return Date.now() - ts.toMillis() < ACTIVE_THRESHOLD_MS;
 };
 
+const shouldSuppressChatNotification = (
+  readState: admin.firestore.DocumentData,
+  messageTimestamp: admin.firestore.Timestamp
+) => {
+  const activeChat = readState.activeChat === true;
+  const activeAt = readState.activeAt as admin.firestore.Timestamp | undefined;
+  const lastReadAt = readState.lastReadAt as admin.firestore.Timestamp | undefined;
+  const suppressForActive = activeChat && isRecent(activeAt);
+  const suppressForRead =
+    !!lastReadAt && lastReadAt.toMillis() >= messageTimestamp.toMillis();
+  return {
+    suppress: suppressForActive || suppressForRead,
+    suppressForActive,
+    suppressForRead,
+  };
+};
+
+const resolveMessageTimestamp = (
+  message: admin.firestore.DocumentData,
+  createTime: admin.firestore.Timestamp | undefined,
+  eventTime: string | undefined
+): admin.firestore.Timestamp => {
+  if (message.timestamp instanceof admin.firestore.Timestamp) {
+    return message.timestamp;
+  }
+  if (createTime instanceof admin.firestore.Timestamp) {
+    return createTime;
+  }
+  if (createTime && typeof (createTime as { toMillis?: () => number }).toMillis === "function") {
+    return admin.firestore.Timestamp.fromMillis(
+      (createTime as { toMillis: () => number }).toMillis()
+    );
+  }
+  if (typeof eventTime === "string") {
+    return admin.firestore.Timestamp.fromDate(new Date(eventTime));
+  }
+  return admin.firestore.Timestamp.now();
+};
+
 const formatBody = (text: string) =>
   text.length <= TRUNCATE_BODY_AT ? text : `${text.slice(0, TRUNCATE_BODY_AT)}…`;
 
@@ -169,23 +208,11 @@ export const onRideMessageCreated = onDocumentCreated(
     }
 
     // Resolve message timestamp
-    let messageTimestamp: admin.firestore.Timestamp;
-    if (message.timestamp instanceof admin.firestore.Timestamp) {
-      messageTimestamp = message.timestamp;
-    } else if (event.data?.createTime instanceof admin.firestore.Timestamp) {
-      messageTimestamp = event.data.createTime;
-    } else if (
-      event.data?.createTime &&
-      typeof (event.data.createTime as any).toMillis === "function"
-    ) {
-      messageTimestamp = admin.firestore.Timestamp.fromMillis(
-        (event.data.createTime as any).toMillis()
-      );
-    } else if (typeof event.time === "string") {
-      messageTimestamp = admin.firestore.Timestamp.fromDate(new Date(event.time));
-    } else {
-      messageTimestamp = admin.firestore.Timestamp.now();
-    }
+    const messageTimestamp = resolveMessageTimestamp(
+      message,
+      event.data?.createTime,
+      event.time
+    );
 
     const rideSnap = await db.collection("rides").doc(rideId).get();
     const rideData = rideSnap.data();
@@ -239,16 +266,12 @@ export const onRideMessageCreated = onDocumentCreated(
       }
 
       const { memberId, readStateSnap, userSnap } = result.value;
-      const readState = readStateSnap.data() || {};
-      const activeChat = readState.activeChat === true;
-      const activeAt: admin.firestore.Timestamp | undefined = readState.activeAt;
-      const lastReadAt: admin.firestore.Timestamp | undefined = readState.lastReadAt;
+      const { suppress, suppressForActive, suppressForRead } = shouldSuppressChatNotification(
+        readStateSnap.data() || {},
+        messageTimestamp
+      );
 
-      const suppressForActive = activeChat && isRecent(activeAt);
-      const suppressForRead =
-        !!lastReadAt && lastReadAt.toMillis() >= messageTimestamp.toMillis();
-
-      if (suppressForActive || suppressForRead) {
+      if (suppress) {
         logger.info("Suppressing notification", {
           rideId,
           memberId,
@@ -288,6 +311,141 @@ export const onRideMessageCreated = onDocumentCreated(
     await Promise.all(batches.map(sendPushBatch));
     logger.info(
       `✅ Sent ${messages.length} push(es) for message ${messageId} across ${batches.length} batch(es)`
+    );
+  }
+);
+
+export const onDmMessageCreated = onDocumentCreated(
+  "conversations/{conversationId}/messages/{messageId}",
+  async (event) => {
+    const message = event.data?.data();
+    const { conversationId, messageId } = event.params;
+
+    if (!message || !conversationId) {
+      logger.warn("Skipping: missing message or conversationId", { conversationId, messageId });
+      return;
+    }
+
+    if (!message.senderId || !String(message.text || "").trim()) {
+      logger.info("Skipping DM message without sender or text", { conversationId, messageId });
+      return;
+    }
+
+    const messageTimestamp = resolveMessageTimestamp(
+      message,
+      event.data?.createTime,
+      event.time
+    );
+
+    const convSnap = await db.collection("conversations").doc(conversationId).get();
+    const participants: string[] = Array.isArray(convSnap.data()?.participants)
+      ? convSnap.data()!.participants
+      : [];
+
+    const recipients = participants.filter((id) => id && id !== message.senderId);
+    if (recipients.length === 0) {
+      logger.info("No DM recipients", { conversationId });
+      return;
+    }
+
+    const senderSnap = await db.collection("users").doc(message.senderId).get();
+    const senderData = senderSnap.data() || {};
+    const firstName = typeof senderData.first_name === "string" ? senderData.first_name : "";
+    const lastName = typeof senderData.last_name === "string" ? senderData.last_name : "";
+    const fullName = `${firstName} ${lastName}`.trim();
+    const senderName =
+      fullName ||
+      (typeof senderData.username === "string" && senderData.username.length > 0
+        ? senderData.username
+        : "New message");
+
+    const payload: ExpoPushPayload = {
+      sound: "default",
+      title: senderName,
+      body: formatBody(String(message.text || "")),
+      data: { type: "dm_message", conversationId },
+    };
+
+    const recipientResults = await Promise.allSettled(
+      recipients.map(async (recipientId) => {
+        const [readStateSnap, userSnap] = await Promise.all([
+          db
+            .collection("conversations")
+            .doc(conversationId)
+            .collection("readState")
+            .doc(recipientId)
+            .get(),
+          db.collection("users").doc(recipientId).get(),
+        ]);
+        return { recipientId, readStateSnap, userSnap };
+      })
+    );
+
+    const messages: PushMessage[] = [];
+    for (const result of recipientResults) {
+      if (result.status === "rejected") {
+        logger.error("Failed to fetch DM recipient data", { error: String(result.reason) });
+        continue;
+      }
+
+      const { recipientId, readStateSnap, userSnap } = result.value;
+      const userData = userSnap.data();
+      const blockedUsers: string[] = Array.isArray(userData?.blockedUsers)
+        ? userData.blockedUsers
+        : [];
+
+      if (blockedUsers.includes(message.senderId)) {
+        logger.info("Suppressing DM notification for blocked sender", {
+          conversationId,
+          recipientId,
+        });
+        continue;
+      }
+
+      const { suppress, suppressForActive, suppressForRead } = shouldSuppressChatNotification(
+        readStateSnap.data() || {},
+        messageTimestamp
+      );
+
+      if (suppress) {
+        logger.info("Suppressing DM notification", {
+          conversationId,
+          recipientId,
+          suppressForActive,
+          suppressForRead,
+        });
+        continue;
+      }
+
+      if (userData?.notifPrefs?.enabled === false) {
+        logger.info("Notifications disabled for user", { recipientId });
+        continue;
+      }
+
+      const tokens = resolveTokens(userData);
+      if (tokens.length === 0) {
+        logger.info("No tokens for user", { recipientId });
+        continue;
+      }
+
+      for (const token of tokens) {
+        messages.push({ userId: recipientId, token, payload });
+      }
+    }
+
+    if (messages.length === 0) {
+      logger.info("No DM push messages to send", { conversationId });
+      return;
+    }
+
+    const batches: PushMessage[][] = [];
+    for (let i = 0; i < messages.length; i += EXPO_BATCH_SIZE) {
+      batches.push(messages.slice(i, i + EXPO_BATCH_SIZE));
+    }
+
+    await Promise.all(batches.map(sendPushBatch));
+    logger.info(
+      `✅ Sent ${messages.length} DM push(es) for message ${messageId} across ${batches.length} batch(es)`
     );
   }
 );
