@@ -252,6 +252,19 @@ export default function DirectMessageScreen() {
     loadNames();
   }, [convId, userId]);
 
+  // ── Bootstrap conversation doc (required before strict Firestore rules) ──
+  useEffect(() => {
+    if (!convId || !userId) return;
+    const participants = convId.split("_");
+    if (participants.length !== 2) return;
+
+    setDoc(
+      doc(db, "conversations", convId),
+      { participants },
+      { merge: true },
+    ).catch((err) => console.error("Failed to bootstrap conversation", err));
+  }, [convId, userId]);
+
   // ── Read state presence ───────────────────────────────
   useFocusEffect(
     useCallback(() => {

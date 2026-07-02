@@ -375,7 +375,9 @@ function RootLayoutContent() {
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as any;
-      if (data?.type === "chat_message" && data?.rideId) {
+      if (data?.type === "dm_message" && data?.conversationId) {
+        router.push(`/(stack)/dm/${String(data.conversationId)}`);
+      } else if (data?.type === "chat_message" && data?.rideId) {
         router.push({
           pathname: "/(stack)/ride/[id]/chat",
           params: { id: String(data.rideId) },
