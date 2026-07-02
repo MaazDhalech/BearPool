@@ -9,3 +9,10 @@
 export function getConversationId(uidA: string, uidB: string): string {
   return [uidA, uidB].sort().join("_");
 }
+
+/** Returns the other participant UID from a 1:1 conversation ID. */
+export function getOtherUid(conversationId: string, userId: string): string | null {
+  const parts = conversationId.split("_");
+  if (parts.length !== 2) return null;
+  return parts.find((uid) => uid !== userId) ?? null;
+}
