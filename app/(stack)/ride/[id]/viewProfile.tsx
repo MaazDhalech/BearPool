@@ -1,6 +1,7 @@
 import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
+import { getConversationId } from "@/utils/conversations";
 import {
     Avatar,
     AvatarImage,
@@ -384,6 +385,21 @@ export default function UserProfileScreen() {
           </VStack>
 
           <VStack space="md" mt="$8" w="100%">
+            {currentUserId && currentUserId !== String(userId) && !isBlocked && (
+              <Button
+                bg={ACCENT}
+                onPress={() =>
+                  router.push(
+                    `/(stack)/dm/${getConversationId(currentUserId, String(userId))}`
+                  )
+                }
+              >
+                <Text color="#121212" fontWeight="$semibold">
+                  Message
+                </Text>
+              </Button>
+            )}
+
             {isBlocked ? (
               <Button
                 bg="#666"
