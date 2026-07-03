@@ -1,3 +1,4 @@
+import { darkTheme } from "@/constants/theme";
 import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
@@ -7,11 +8,9 @@ import {
     ButtonText,
     HStack,
     Heading,
-    Icon,
     Input,
     InputField,
     ScrollView,
-    Spinner,
     Text,
     Textarea,
     TextareaInput,
@@ -20,14 +19,15 @@ import {
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import { addDoc, collection, doc, getDoc, serverTimestamp } from "firebase/firestore";
-import { ChevronLeft } from "lucide-react-native";
+import { NavHeader } from "@/components/ui/NavHeader";
 import { useEffect, useState } from "react";
 import {
-    Alert,
+    ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
     TouchableOpacity,
 } from "react-native";
+import { toast } from "@/components/ui/Dialog";
 
 const MAX_MESSAGE_LENGTH = 1000;
 
@@ -84,7 +84,7 @@ export default function ContactSupportScreen() {
       !supportForm.subject ||
       !supportForm.message
     ) {
-      Alert.alert("Error", "Please fill in all fields.");
+      toast("Please fill in all fields.", { type: "error" });
       return;
     }
 
@@ -93,10 +93,9 @@ export default function ContactSupportScreen() {
       const web3formsApiKey = Constants.expoConfig?.extra?.web3formsApiKey;
 
       if (!web3formsApiKey) {
-        Alert.alert(
-          "Error",
-          "Support service is not configured. Please contact the administrator."
-        );
+        toast("Support service is not configured. Please contact the administrator.", {
+          type: "error",
+        });
         return;
       }
 
@@ -134,27 +133,18 @@ export default function ContactSupportScreen() {
           }
         }
 
-        Alert.alert(
-          "Success!",
-          "Your support request has been submitted successfully. We'll get back to you soon!",
-          [
-            {
-              text: "OK",
-              onPress: () => {
-                router.back();
-              },
-            },
-          ]
-        );
+        toast("Your support request has been submitted. We'll get back to you soon!", {
+          type: "success",
+        });
+        router.back();
       } else {
         throw new Error(result.message || "Failed to submit support request");
       }
     } catch (error) {
       console.error("Error submitting support request:", error);
-      Alert.alert(
-        "Error",
-        "Failed to submit your support request. Please try again later."
-      );
+      toast("Failed to submit your support request. Please try again later.", {
+        type: "error",
+      });
     } finally {
       setSubmitingSupport(false);
     }
@@ -162,8 +152,8 @@ export default function ContactSupportScreen() {
 
   if (loading) {
     return (
-      <Box flex={1} bg="#121212" justifyContent="center" alignItems="center">
-        <Text color="#a0a0a0">Loading...</Text>
+      <Box flex={1} bg={darkTheme.bg} justifyContent="center" alignItems="center">
+        <Text color={darkTheme.textSecondary}>Loading...</Text>
       </Box>
     );
   }
@@ -174,7 +164,8 @@ export default function ContactSupportScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
     >
-      <Box flex={1} bg="#121212">
+      <Box flex={1} bg={darkTheme.bg}>
+        <NavHeader title="Contact Support" />
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -184,19 +175,10 @@ export default function ContactSupportScreen() {
           }}
         >
           <Box px="$4" py="$6">
-            {/* Header */}
-            <HStack alignItems="center" mb="$6" mt="$8">
-              <TouchableOpacity onPress={handleGoBack}>
-                <Icon as={ChevronLeft} size="xl" color="white" />
-              </TouchableOpacity>
-              <Heading size="xl" color="white" ml="$3">
-                Contact Support
-              </Heading>
-            </HStack>
 
             {/* Description */}
-            <Text color="#a0a0a0" fontSize="$sm" mb="$6" lineHeight="$md">
-              We're here to help! Please fill out the form below and we'll get
+            <Text color={darkTheme.textSecondary} fontSize="$sm" mb="$6" lineHeight="$md">
+              We&apos;re here to help! Please fill out the form below and we&apos;ll get
               back to you as soon as possible. Our support team typically
               responds within 24 hours.
             </Text>
@@ -204,14 +186,14 @@ export default function ContactSupportScreen() {
             {/* Support Form */}
             <VStack space="lg">
               <VStack space="sm">
-                <Text color="white" fontSize="$sm" fontWeight="$semibold">
+                <Text color={darkTheme.textPrimary} fontSize="$sm" fontWeight="$semibold">
                   Name
                 </Text>
-                <Input bg="#2a2a2a" borderColor="#333">
+                <Input bg={darkTheme.raised} borderColor={darkTheme.border}>
                   <InputField
                     placeholder="Your full name"
-                    color="white"
-                    placeholderTextColor="#a0a0a0"
+                    color={darkTheme.textPrimary}
+                    placeholderTextColor={darkTheme.textSecondary}
                     value={supportForm.name}
                     onChangeText={(text) =>
                       setSupportForm((prev) => ({ ...prev, name: text }))
@@ -221,14 +203,14 @@ export default function ContactSupportScreen() {
               </VStack>
 
               <VStack space="sm">
-                <Text color="white" fontSize="$sm" fontWeight="$semibold">
+                <Text color={darkTheme.textPrimary} fontSize="$sm" fontWeight="$semibold">
                   Email
                 </Text>
-                <Input bg="#2a2a2a" borderColor="#333">
+                <Input bg={darkTheme.raised} borderColor={darkTheme.border}>
                   <InputField
                     placeholder="your.email@example.com"
-                    color="white"
-                    placeholderTextColor="#a0a0a0"
+                    color={darkTheme.textPrimary}
+                    placeholderTextColor={darkTheme.textSecondary}
                     value={supportForm.email}
                     onChangeText={(text) =>
                       setSupportForm((prev) => ({ ...prev, email: text }))
@@ -240,14 +222,14 @@ export default function ContactSupportScreen() {
               </VStack>
 
               <VStack space="sm">
-                <Text color="white" fontSize="$sm" fontWeight="$semibold">
+                <Text color={darkTheme.textPrimary} fontSize="$sm" fontWeight="$semibold">
                   Subject
                 </Text>
-                <Input bg="#2a2a2a" borderColor="#333">
+                <Input bg={darkTheme.raised} borderColor={darkTheme.border}>
                   <InputField
                     placeholder="Brief description of your issue"
-                    color="white"
-                    placeholderTextColor="#a0a0a0"
+                    color={darkTheme.textPrimary}
+                    placeholderTextColor={darkTheme.textSecondary}
                     value={supportForm.subject}
                     onChangeText={(text) =>
                       setSupportForm((prev) => ({
@@ -261,13 +243,13 @@ export default function ContactSupportScreen() {
 
               <VStack space="sm">
                 <HStack justifyContent="space-between" alignItems="center">
-                  <Text color="white" fontSize="$sm" fontWeight="$semibold">
+                  <Text color={darkTheme.textPrimary} fontSize="$sm" fontWeight="$semibold">
                     Message
                   </Text>
                   {supportForm.message.length > MAX_MESSAGE_LENGTH * 0.8 && (
                     <Text
                       style={{
-                        color: supportForm.message.length >= MAX_MESSAGE_LENGTH ? "#ff5555" : "#a0a0a0",
+                        color: supportForm.message.length >= MAX_MESSAGE_LENGTH ? darkTheme.danger : darkTheme.textSecondary,
                         fontSize: 11,
                       }}
                     >
@@ -275,11 +257,11 @@ export default function ContactSupportScreen() {
                     </Text>
                   )}
                 </HStack>
-                <Textarea bg="#2a2a2a" borderColor="#333" minHeight="$32">
+                <Textarea bg={darkTheme.raised} borderColor={darkTheme.border} minHeight="$32">
                   <TextareaInput
                     placeholder="Please describe your issue or question in detail. Include any relevant information that might help us assist you better."
-                    color="white"
-                    placeholderTextColor="#a0a0a0"
+                    color={darkTheme.textPrimary}
+                    placeholderTextColor={darkTheme.textSecondary}
                     value={supportForm.message}
                     onChangeText={(text) => {
                       if (text.length <= MAX_MESSAGE_LENGTH)
@@ -300,11 +282,11 @@ export default function ContactSupportScreen() {
               >
                 {submitingSupport ? (
                   <HStack space="sm" alignItems="center">
-                    <Spinner size="small" color="#121212" />
-                    <ButtonText color="#121212">Submitting...</ButtonText>
+                    <ActivityIndicator size="small" color={darkTheme.bg} />
+                    <ButtonText color={darkTheme.bg}>Submitting...</ButtonText>
                   </HStack>
                 ) : (
-                  <ButtonText color="#121212" fontSize="$md" fontWeight="$semibold">
+                  <ButtonText color={darkTheme.bg} fontSize="$md" fontWeight="$semibold">
                     Submit Support Request
                   </ButtonText>
                 )}

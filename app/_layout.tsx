@@ -1,6 +1,8 @@
+import { darkTheme } from "@/constants/theme";
 // app/_layout.tsx
 import { ACCENT } from "@/constants/Colors";
 import RideFeedbackModal from "@/components/RideFeedbackModal";
+import { DialogHost } from "@/components/ui/Dialog";
 import "@/global.css";
 import { config } from "@/gluestack-ui.config";
 import { db } from "@/services/firebaseConfig";
@@ -9,6 +11,7 @@ import { GluestackUIProvider } from "@gluestack-ui/themed";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
 import { useFonts } from "expo-font";
@@ -366,7 +369,7 @@ function RootLayoutContent() {
           setShowForceUpdate(true);
         }
       } catch (e) {
-        // Silently fail — don't block the app if Firestore is unreachable
+        // Silently fail - don't block the app if Firestore is unreachable
       }
     };
     checkVersion();
@@ -388,13 +391,14 @@ function RootLayoutContent() {
   if (!loaded || !isAuthLoaded || isLoading) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#000" }}>
-        <ActivityIndicator size="large" color="#fff" />
+        <ActivityIndicator size="large" color={ACCENT} />
       </View>
     );
   }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <KeyboardProvider>
       <ExpoStatusBar style="light" translucent backgroundColor="transparent" />
       <View
         style={{
@@ -410,7 +414,25 @@ function RootLayoutContent() {
             contentStyle: { backgroundColor: "#000000" },
           }}
         >
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          {/* Tabs are a root destination - never swipeable back into auth */}
+          <Stack.Screen
+            name="(tabs)"
+            options={{ headerShown: false, gestureEnabled: false }}
+          />
+          {/* Edit Profile - native modal sheet, no swipe-dismiss (exit via Cancel/Save) */}
+          <Stack.Screen
+            name="edit-profile"
+            options={{ presentation: "modal", gestureEnabled: false }}
+          />
+          {/* Detail / form screens presented as modal sheets */}
+          <Stack.Screen name="(stack)/ride/[id]/edit" options={{ presentation: "modal" }} />
+          <Stack.Screen name="(stack)/ride/[id]/group-settings" options={{ presentation: "modal" }} />
+          <Stack.Screen name="(stack)/ride/[id]/viewProfile" options={{ presentation: "modal" }} />
+          <Stack.Screen name="(stack)/settings/settings" options={{ presentation: "modal" }} />
+          <Stack.Screen name="(stack)/settings/report-user" options={{ presentation: "modal" }} />
+          <Stack.Screen name="(stack)/settings/contact-support" options={{ presentation: "modal" }} />
+          <Stack.Screen name="(stack)/settings/privacy-policy" options={{ presentation: "modal" }} />
+          <Stack.Screen name="(stack)/settings/terms-of-service" options={{ presentation: "modal" }} />
           <Stack.Screen name="+not-found" />
         </Stack>
       </View>
@@ -441,6 +463,10 @@ function RootLayoutContent() {
         onRateLater={handleRateLater}
         onFeedbackSubmit={handleFeedbackSubmit}
       />
+
+      {/* App-wide confirm dialogs, action menus, and toasts */}
+      <DialogHost />
+      </KeyboardProvider>
     </GestureHandlerRootView>
   );
 }
@@ -454,15 +480,15 @@ const forceUpdateStyles = StyleSheet.create({
     padding: 32,
   },
   card: {
-    backgroundColor: "#1e1e1e",
+    backgroundColor: darkTheme.surface,
     borderRadius: 16,
     padding: 28,
     alignItems: "center",
   },
-  title: { color: "#ffffff", fontSize: 20, fontWeight: "700", marginBottom: 12 },
-  body: { color: "#a0a0a0", fontSize: 15, textAlign: "center", lineHeight: 22, marginBottom: 24 },
+  title: { color: darkTheme.textPrimary, fontSize: 20, fontWeight: "700", marginBottom: 12 },
+  body: { color: darkTheme.textSecondary, fontSize: 15, textAlign: "center", lineHeight: 22, marginBottom: 24 },
   button: { backgroundColor: ACCENT, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 40 },
-  buttonText: { color: "#ffffff", fontSize: 16, fontWeight: "600" },
+  buttonText: { color: darkTheme.textPrimary, fontSize: 16, fontWeight: "600" },
 });
 
 export default function RootLayout() {

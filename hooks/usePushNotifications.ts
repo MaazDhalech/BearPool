@@ -52,7 +52,7 @@ export const usePushNotifications = (options: Options = {}): PushNotificationSta
 
     const projectId = Constants.expoConfig?.extra?.eas?.projectId;
     if (!projectId) {
-      console.warn("Expo projectId is missing — push token may not register properly.");
+      console.warn("Expo projectId is missing - push token may not register properly.");
     }
 
     const token = await Notifications.getExpoPushTokenAsync({

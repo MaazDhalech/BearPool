@@ -1,16 +1,15 @@
-import { HapticTab } from "@/components/HapticTab";
-import { IconSymbol } from "@/components/ui/IconSymbol";
-import TabBarBackground from "@/components/ui/TabBarBackground";
-import { useColorScheme } from "@/hooks/useColorScheme";
+import { darkTheme } from "@/constants/theme";
 import { ACCENT } from "@/constants/Colors";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
-import { Ionicons } from "@expo/vector-icons";
-import { Tabs, useRouter } from "expo-router";
+import { createNativeBottomTabNavigator } from "@bottom-tabs/react-navigation";
+import { useRouter, withLayoutContext } from "expo-router";
 import React, { useEffect } from "react";
-import { Platform } from "react-native";
+
+// Bridge the native bottom-tabs navigator into expo-router's file-based routing.
+const BottomTabNavigator = createNativeBottomTabNavigator().Navigator;
+const Tabs = withLayoutContext(BottomTabNavigator);
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
   const { isSignedIn, isLoaded } = useFirebaseAuth();
   const router = useRouter();
 
@@ -21,78 +20,37 @@ export default function TabLayout() {
     }
   }, [isLoaded, isSignedIn]);
 
-  // Show nothing (for now) while loading auth state
+  // Show nothing while loading auth state
   if (!isLoaded || !isSignedIn) {
     return null;
   }
 
   return (
     <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: ACCENT,
-        tabBarInactiveTintColor: '#666666',
-        headerShown: false,
-        tabBarButton: HapticTab,
-        tabBarBackground: TabBarBackground,
-        tabBarStyle: {
-          backgroundColor: '#000000',
-          borderTopColor: '#000000',
-          ...Platform.select({
-            ios: {
-              position: "absolute",
-            },
-            default: {},
-          }),
-        },
-      }}
+      tabBarActiveTintColor={ACCENT}
+      tabBarInactiveTintColor={darkTheme.textMuted}
+      barTintColor="#000000"
     >
       <Tabs.Screen
         name="index"
-        options={{
-          title: "Home",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="house.fill" color={color} />
-          ),
-        }}
+        options={{ title: "Home", tabBarIcon: () => ({ sfSymbol: "house.fill" }) }}
       />
       <Tabs.Screen
         name="chats"
         options={{
           title: "Chats",
-          tabBarIcon: ({ color }) => 
-            Platform.OS === 'ios' ? (
-              <IconSymbol
-                size={28}
-                name="bubble.left.and.bubble.right.fill"
-                color={color}
-              />
-            ) : (
-              <Ionicons name="chatbubbles" size={28} color={color} />
-            )
+          tabBarIcon: () => ({ sfSymbol: "bubble.left.and.bubble.right.fill" }),
         }}
       />
       <Tabs.Screen
         name="post"
-        options={{
-          title: "Post",
-          tabBarIcon: ({ color }) => 
-            Platform.OS === 'ios' ? (
-              <IconSymbol size={28} name="plus.circle.fill" color={color} />
-            ) : (
-              <Ionicons name="add-circle" size={28} color={color} />
-            )
-        }}
+        options={{ title: "Post", tabBarIcon: () => ({ sfSymbol: "plus.circle.fill" }) }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color }) => 
-            Platform.OS === 'ios' ? (
-              <IconSymbol size={28} name="person.crop.circle" color={color} />
-            ) : (
-              <Ionicons name="person-circle" size={28} color={color} />
-            )
+          tabBarIcon: () => ({ sfSymbol: "person.crop.circle.fill" }),
         }}
       />
     </Tabs>

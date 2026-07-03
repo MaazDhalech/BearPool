@@ -1,5 +1,8 @@
+import { darkTheme } from "@/constants/theme";
 import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
+import { ActionButton } from "@/components/ui/ActionButton";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Avatar,
@@ -8,8 +11,6 @@ import {
   Button,
   Heading,
   HStack,
-  Icon,
-  Pressable,
   ScrollView,
   Text,
   VStack,
@@ -28,10 +29,12 @@ import {
   serverTimestamp,
   collection,
 } from "firebase/firestore";
-import { Menu as MenuIcon } from "lucide-react-native";
+import { Sheet, SheetAction, SHEET_DESTRUCTIVE } from "@/components/ui/Sheet";
+import { ContextMenu, type MenuAction } from "@/components/ui/ContextMenu";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Modal, TextInput, TouchableOpacity, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ActivityIndicator, Modal, TextInput, TouchableOpacity, View } from "react-native";
+import { confirm, showMenu, toast } from "@/components/ui/Dialog";
+import { NavHeader } from "@/components/ui/NavHeader";
 
 const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
@@ -47,11 +50,11 @@ export default function GroupSettings() {
   const { id: rideId } = useLocalSearchParams();
   const { user } = useFirebaseAuth();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
 
   const [ride, setRide] = useState<any>(null);
   const [users, setUsers] = useState<User[]>([]);
-  const [openMenuUserId, setOpenMenuUserId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [actionSheetUser, setActionSheetUser] = useState<User | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletionReason, setDeletionReason] = useState("");
   const [customReason, setCustomReason] = useState("");
@@ -90,7 +93,10 @@ export default function GroupSettings() {
 
       const rideRef = doc(db, "rides", String(rideId));
       const rideSnap = await getDoc(rideRef);
-      if (!rideSnap.exists()) return;
+      if (!rideSnap.exists()) {
+        setLoading(false);
+        return;
+      }
 
       const rideData = rideSnap.data();
       setRide(rideData);
@@ -122,6 +128,7 @@ export default function GroupSettings() {
       }
 
       setUsers(usersData);
+      setLoading(false);
     };
 
     fetchRideAndUsers();
@@ -190,12 +197,12 @@ export default function GroupSettings() {
     if (!userToKick || !rideId) return;
 
     if (!kickReason) {
-      Alert.alert("Error", "Please select a reason for removing this member.");
+      toast("Please select a reason for removing this member.", { type: "error" });
       return;
     }
 
     if (kickReason === "Other" && !customKickReason.trim()) {
-      Alert.alert("Error", "Please provide a reason for removal.");
+      toast("Please provide a reason for removal.", { type: "error" });
       return;
     }
 
@@ -238,65 +245,58 @@ export default function GroupSettings() {
       setKickReason("");
       setCustomKickReason("");
 
-      Alert.alert("Member removed", `${userToKick.name} has been removed from the ride.`);
+      toast(`${userToKick.name} has been removed from the ride.`, { type: "success" });
     } catch (error) {
       console.error("Error removing member:", error);
-      Alert.alert("Error", "Failed to remove member");
+      toast("Failed to remove member", { type: "error" });
     } finally {
       setKickSubmitting(false);
     }
   };
 
-  const handleAssignHost = (newHostId: string) => {
+  const handleAssignHost = async (newHostId: string) => {
     const newHost = users.find((u) => u.id === newHostId);
     if (!newHost) return;
 
-    Alert.alert(
-      "Assign New Host",
-      `Are you sure you want to make ${newHost.name} the new host? You will no longer be the host of this ride.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Assign",
-          style: "default",
-          onPress: async () => {
-            try {
-              const rideRef = doc(db, "rides", String(rideId));
-              await updateDoc(rideRef, {
-                hostId: newHostId,
-              });
+    const ok = await confirm({
+      title: "Assign New Host",
+      message: `Are you sure you want to make ${newHost.name} the new host? You will no longer be the host of this ride.`,
+      confirmText: "Assign",
+    });
+    if (!ok) return;
 
-              // Write system message — triggers push notifications via Cloud Function
-              const messagesRef = collection(
-                db,
-                "rides",
-                String(rideId),
-                "messages",
-              );
-              await addDoc(messagesRef, {
-                text: `${newHost.username} has been made the host`,
-                senderId: null,
-                senderName: "System",
-                timestamp: serverTimestamp(),
-                system: true,
-                archivedNotice: false,
-              });
+    try {
+      const rideRef = doc(db, "rides", String(rideId));
+      await updateDoc(rideRef, {
+        hostId: newHostId,
+      });
 
-              // Update local state
-              setRide((prev: any) => ({ ...prev, hostId: newHostId }));
+      // Write system message - triggers push notifications via Cloud Function
+      const messagesRef = collection(
+        db,
+        "rides",
+        String(rideId),
+        "messages",
+      );
+      await addDoc(messagesRef, {
+        text: `${newHost.username} has been made the host`,
+        senderId: null,
+        senderName: "System",
+        timestamp: serverTimestamp(),
+        system: true,
+        archivedNotice: false,
+      });
 
-              Alert.alert(
-                "Host updated",
-                `${newHost.name} is now the host. You can leave the ride whenever you'd like.`,
-              );
-            } catch (error) {
-              console.error("Error assigning new host:", error);
-              Alert.alert("Error", "Failed to assign new host");
-            }
-          },
-        },
-      ],
-    );
+      // Update local state
+      setRide((prev: any) => ({ ...prev, hostId: newHostId }));
+
+      toast(`${newHost.name} is now the host. You can leave the ride whenever you'd like.`, {
+        type: "success",
+      });
+    } catch (error) {
+      console.error("Error assigning new host:", error);
+      toast("Failed to assign new host", { type: "error" });
+    }
   };
 
   const sendRideDeletionEmail = async (reason: string) => {
@@ -421,9 +421,7 @@ This ride has been permanently deleted from the system.
 
     // Only allow host to delete the ride
     if (!isHost) {
-      Alert.alert("Permission Denied", "Only the host can delete this ride.", [
-        { text: "OK", style: "default" },
-      ]);
+      toast("Only the host can delete this ride.", { type: "error" });
       return;
     }
 
@@ -458,24 +456,14 @@ This ride has been permanently deleted from the system.
       // are also automatically deleted by Firestore
       await deleteDoc(rideRef);
 
-      Alert.alert(
-        "Ride deleted",
+      toast(
         emailSent ? "Your ride has been removed." : "Your ride has been removed. The admin report could not be sent.",
-        [
-          {
-            text: "OK",
-            onPress: () => {
-              // Navigate back to chats or home screen
-              router.replace("/(tabs)/chats");
-            },
-          },
-        ],
+        { type: "success" },
       );
+      router.dismissTo("/(tabs)/chats");
     } catch (error) {
       console.error("Error deleting ride:", error);
-      Alert.alert("Error", "Failed to delete ride. Please try again.", [
-        { text: "OK", style: "default" },
-      ]);
+      toast("Failed to delete ride. Please try again.", { type: "error" });
     } finally {
       setSubmitting(false);
       setShowDeleteModal(false);
@@ -486,12 +474,12 @@ This ride has been permanently deleted from the system.
 
   const handleSubmitDeletion = () => {
     if (!deletionReason) {
-      Alert.alert("Error", "Please select a reason for deleting the ride.");
+      toast("Please select a reason for deleting the ride.", { type: "error" });
       return;
     }
 
     if (deletionReason === "Other" && !customReason.trim()) {
-      Alert.alert("Error", "Please provide a reason for deletion.");
+      toast("Please provide a reason for deletion.", { type: "error" });
       return;
     }
 
@@ -508,98 +496,93 @@ This ride has been permanently deleted from the system.
 
     // If host is trying to leave and there are other members, show assign host options
     if (isHost && otherMembers.length > 0) {
-      Alert.alert(
-        "Assign New Host",
-        "You must assign a new host before leaving the ride.",
-        [
-          { text: "Cancel", style: "cancel" },
+      showMenu({
+        title: "Assign New Host",
+        message: "You must assign a new host before leaving the ride.",
+        options: [
           {
-            text: "Choose New Host",
-            style: "default",
+            label: "Choose New Host",
             onPress: () => {
-              // Show options to select new host
-              const buttons = otherMembers.map((member) => ({
-                text: member.name,
-                onPress: () => handleAssignHost(member.id),
-              }));
-              buttons.push({ text: "Cancel", onPress: () => {} });
-
-              Alert.alert(
-                "Select New Host",
-                "Choose who will be the new host:",
-                buttons,
-              );
+              showMenu({
+                title: "Select New Host",
+                message: "Choose who will be the new host:",
+                options: otherMembers.map((member) => ({
+                  label: member.name || "Member",
+                  onPress: () => handleAssignHost(member.id),
+                })),
+              });
             },
           },
-          // Add option to delete ride instead
-          {
-            text: "Delete Ride",
-            style: "destructive",
-            onPress: () => handleDeleteRide(false), // Show feedback for deletion
-          },
+          // Delete ride instead
+          { label: "Delete Ride", destructive: true, onPress: () => handleDeleteRide(false) },
         ],
-      );
+      });
       return;
     }
 
     // If host is trying to leave and no other members, or if regular member is leaving
-    Alert.alert(
-      "Leave Group",
-      isHost && otherMembers.length === 0
-        ? "You're the last member. Leaving will delete this ride."
-        : "Are you sure you want to leave this ride?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: isHost && otherMembers.length === 0 ? "Delete Ride" : "Leave",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              // If host is the only member, delete the ride instead of just leaving
-              if (isHost && otherMembers.length === 0) {
-                handleDeleteRide(true); // Skip feedback when deleting through leave
-                return;
-              }
+    const ok = await confirm({
+      title: "Leave Group",
+      message:
+        isHost && otherMembers.length === 0
+          ? "You're the last member. Leaving will delete this ride."
+          : "Are you sure you want to leave this ride?",
+      confirmText: isHost && otherMembers.length === 0 ? "Delete Ride" : "Leave",
+      destructive: true,
+    });
+    if (!ok) return;
 
-              // Regular member leaving or host leaving after assigning new host
-              const rideRef = doc(db, "rides", String(rideId));
+    try {
+      // If host is the only member, delete the ride instead of just leaving
+      if (isHost && otherMembers.length === 0) {
+        handleDeleteRide(true); // Skip feedback when deleting through leave
+        return;
+      }
 
-              // First get current ride data
-              const rideSnap = await getDoc(rideRef);
-              if (!rideSnap.exists()) throw new Error("Ride not found");
+      // Regular member leaving or host leaving after assigning new host
+      const rideRef = doc(db, "rides", String(rideId));
 
-              const currentSeats = rideSnap.data().seats || 0;
-              console.log("Current seats before update:", currentSeats);
+      // First get current ride data
+      const rideSnap = await getDoc(rideRef);
+      if (!rideSnap.exists()) throw new Error("Ride not found");
 
-              await updateDoc(rideRef, {
-                memberIds: arrayRemove(user.uid),
-                seats: increment(1),
-              });
+      const currentSeats = rideSnap.data().seats || 0;
+      console.log("Current seats before update:", currentSeats);
 
-              // Verify update
-              const updatedSnap = await getDoc(rideRef);
-              console.log("Seats after update:", updatedSnap.data()?.seats);
+      await updateDoc(rideRef, {
+        memberIds: arrayRemove(user.uid),
+        seats: increment(1),
+      });
 
-              router.replace("/(tabs)/chats");
-            } catch (error) {
-              console.error("Error leaving group:", error);
-              Alert.alert("Error", "Failed to leave group");
-            }
-          },
-        },
-      ],
-    );
+      // Verify update
+      const updatedSnap = await getDoc(rideRef);
+      console.log("Seats after update:", updatedSnap.data()?.seats);
+
+      router.dismissTo("/(tabs)/chats");
+    } catch (error) {
+      console.error("Error leaving group:", error);
+      toast("Failed to leave group", { type: "error" });
+    }
   };
 
   const handleViewProfile = (targetId: string) => {
     if (targetId === user?.uid) {
-      router.push("/(tabs)/profile");
+      // dismiss the ride stack back to the profile tab — pushing a tab route
+      // onto this stack glitches the transition.
+      router.dismissTo("/(tabs)/profile");
     } else {
       router.push({
         pathname: "/(stack)/ride/[id]/viewProfile",
         params: { id: String(rideId), userId: targetId },
       });
     }
+  };
+
+  const handleReportUser = (targetId: string) => {
+    router.push({
+      pathname: "/(stack)/settings/report-user",
+      params: { userId: targetId, rideId: String(rideId) },
+    });
   };
 
   if (!ride) return null;
@@ -610,164 +593,166 @@ This ride has been permanently deleted from the system.
   const hostCanLeave = !isHost || otherMembers.length === 0;
 
   return (
-    <Box flex={1} bg="#121212" pt={insets.top}>
-      {/* Header with Back Button and Title */}
-      <HStack
-        alignItems="center"
-        px="$4"
-        py="$3"
-        borderBottomWidth="$1"
-        borderBottomColor="#333"
-      >
-        <Pressable
-          onPress={() => router.back()}
-          p="$2"
-          borderRadius="$full"
-          mr="$3"
-        >
-          <Ionicons name="arrow-back" size={24} color="white" />
-        </Pressable>
-        <Heading size="lg" color="white" flex={1}>
-          Group Settings
-        </Heading>
-      </HStack>
+    <Box flex={1} bg={darkTheme.bg}>
+      <NavHeader title="Group Settings" />
 
-      <ScrollView px="$4" py="$4">
-        <VStack space="lg">
-          {users.map((u) => (
+      <ScrollView px="$4" py="$4" showsVerticalScrollIndicator={false}>
+        {loading ? (
+          <LoadingState label="Loading members…" />
+        ) : (
+        <VStack space="xl">
+          {/* Ride summary */}
+          {ride && (
             <HStack
-              key={u.id}
               alignItems="center"
-              justifyContent="space-between"
-              bg="#1e1e1e"
+              space="md"
+              bg={darkTheme.surface}
               p="$4"
-              borderRadius="$lg"
+              borderRadius="$2xl"
             >
-              <HStack space="sm" alignItems="center">
-                <Avatar size="md">
-                  <AvatarImage source={{ uri: u.avatar }} />
-                </Avatar>
-                <VStack>
-                  <HStack alignItems="center" space="xs">
-                    <Text color="white" fontWeight="$medium">
-                      {u.name}
-                    </Text>
-                    {u.id === ride.hostId && (
-                      <Text color="#4CAF50" fontSize="$xs" fontWeight="$bold">
-                        (Host)
-                      </Text>
-                    )}
-                  </HStack>
-                  <Text color="#aaaaaa" fontSize="$sm">
-                    @{u.username}
+              <Ionicons name="car-outline" size={22} color={darkTheme.accent} />
+              <VStack flex={1}>
+                <Text color={darkTheme.textPrimary} fontWeight="$bold" numberOfLines={1}>
+                  {ride.from} → {ride.to}
+                </Text>
+                {(ride.date || ride.time) && (
+                  <Text color={darkTheme.textMuted} fontSize="$sm">
+                    {[ride.date, ride.time].filter(Boolean).join(" · ")}
                   </Text>
-                </VStack>
-              </HStack>
-              <Box position="relative">
-                <Pressable
-                  onPress={() =>
-                    setOpenMenuUserId((prev) => (prev === u.id ? null : u.id))
-                  }
-                  p="$2"
-                  borderRadius="$full"
-                >
-                  <Icon as={MenuIcon} size="lg" color="#a0a0a0" />
-                </Pressable>
-                {openMenuUserId === u.id && (
-                  <Box
-                    position="absolute"
-                    top="$8"
-                    right={0}
-                    bg="#2a2a2a"
-                    borderWidth={1}
-                    borderColor="#333"
-                    borderRadius="$md"
-                    px="$3"
-                    py="$2"
-                    zIndex={10}
-                    minWidth={150}
-                  >
-                    <Pressable
-                      onPress={() => {
-                        setOpenMenuUserId(null);
-                        handleViewProfile(u.id);
-                      }}
-                      p="$2"
-                      borderRadius="$sm"
-                      $pressed={{ bg: "#3a3a3a" }}
-                    >
-                      <Text color="white">View Profile</Text>
-                    </Pressable>
-                    {isHost && u.id !== user?.uid && (
-                      <>
-                        <Pressable
-                          onPress={() => {
-                            setOpenMenuUserId(null);
-                            handleAssignHost(u.id);
-                          }}
-                          p="$2"
-                          borderRadius="$sm"
-                          $pressed={{ bg: "#3a3a3a" }}
-                        >
-                          <Text color="#4CAF50">Make Host</Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => {
-                            setOpenMenuUserId(null);
-                            handleKick(u.id);
-                          }}
-                          p="$2"
-                          borderRadius="$sm"
-                          $pressed={{ bg: "#3a3a3a" }}
-                        >
-                          <Text color="#ff5555">Remove</Text>
-                        </Pressable>
-                      </>
-                    )}
-                  </Box>
                 )}
-              </Box>
+              </VStack>
             </HStack>
-          ))}
-
-          {/* Delete Ride Button - Only visible to host */}
-          {isHost && (
-            <Button
-              mt="$2"
-              size="md"
-              variant="outline"
-              borderColor="#ff5555"
-              backgroundColor="transparent"
-              onPress={() => handleDeleteRide(false)}
-            >
-              <Text color="#ff5555">Delete Ride</Text>
-            </Button>
           )}
 
-          <Button
-            mt="$6"
-            size="md"
-            variant="outline"
-            borderColor={hostCanLeave ? "#ff5555" : "#666666"}
-            backgroundColor={hostCanLeave ? "transparent" : "#333333"}
-            opacity={hostCanLeave ? 1 : 0.6}
-            onPress={
-              hostCanLeave
-                ? handleLeaveGroup
-                : () => {
-                    Alert.alert(
-                      "Cannot Leave",
-                      "You must assign a new host before leaving the ride.",
-                      [{ text: "OK", style: "default" }],
-                    );
-                  }
-            }
-          >
-            <Text color={hostCanLeave ? "#ff5555" : "#666666"}>
-              Leave Group
+          {/* Members */}
+          <VStack space="sm">
+            <HStack alignItems="center" justifyContent="space-between" px="$1">
+              <Heading color={darkTheme.textPrimary} size="sm">
+                Members
+              </Heading>
+              <Text color={darkTheme.textMuted} fontSize="$sm">
+                {users.length}
+              </Text>
+            </HStack>
+            <Text color={darkTheme.textFaint} fontSize="$xs" px="$1" mb="$1">
+              Long press a member for options
             </Text>
-          </Button>
+
+            {users.map((u) => {
+              const actions: MenuAction[] = [
+                {
+                  key: "view",
+                  title: "View Profile",
+                  systemIcon: "person",
+                  onPress: () => handleViewProfile(u.id),
+                },
+              ];
+              if (isHost && u.id !== user?.uid) {
+                actions.push({
+                  key: "host",
+                  title: "Make Host",
+                  systemIcon: "crown",
+                  onPress: () => handleAssignHost(u.id),
+                });
+                actions.push({
+                  key: "remove",
+                  title: "Remove",
+                  systemIcon: "person.fill.xmark",
+                  destructive: true,
+                  onPress: () => handleKick(u.id),
+                });
+              }
+              if (u.id !== user?.uid) {
+                actions.push({
+                  key: "report",
+                  title: "Report",
+                  systemIcon: "flag",
+                  destructive: true,
+                  onPress: () => handleReportUser(u.id),
+                });
+              }
+              return (
+                <ContextMenu
+                  key={u.id}
+                  menuTitle={u.name}
+                  actions={actions}
+                  onFallbackPress={() => setActionSheetUser(u)}
+                >
+                  <HStack
+                    alignItems="center"
+                    space="md"
+                    bg={darkTheme.surface}
+                    p="$3"
+                    borderRadius="$2xl"
+                    borderWidth={1}
+                    borderColor={darkTheme.border}
+                  >
+                    <Avatar size="md">
+                      <AvatarImage source={{ uri: u.avatar }} />
+                    </Avatar>
+                    <VStack flex={1}>
+                      <HStack alignItems="center" space="xs">
+                        <Text color={darkTheme.textPrimary} fontWeight="$semibold">
+                          {u.name}
+                        </Text>
+                        {u.id === user?.uid && (
+                          <Text color={darkTheme.textMuted} fontSize="$sm">
+                            (You)
+                          </Text>
+                        )}
+                      </HStack>
+                      <Text color={darkTheme.textMuted} fontSize="$sm">
+                        @{u.username}
+                      </Text>
+                    </VStack>
+                    {u.id === ride.hostId && (
+                      <HStack
+                        alignItems="center"
+                        space="xs"
+                        bg={darkTheme.accent + "22"}
+                        px="$2.5"
+                        py="$1"
+                        borderRadius="$full"
+                      >
+                        <Ionicons name="star" size={11} color={darkTheme.accent} />
+                        <Text color={darkTheme.accent} fontSize="$2xs" fontWeight="$bold">
+                          HOST
+                        </Text>
+                      </HStack>
+                    )}
+                  </HStack>
+                </ContextMenu>
+              );
+            })}
+          </VStack>
+
+          {/* Actions */}
+          <VStack space="sm">
+            {isHost && (
+              <ActionButton
+                variant="danger"
+                icon="trash-outline"
+                label="Delete Ride"
+                onPress={() => handleDeleteRide(false)}
+              />
+            )}
+            <ActionButton
+              variant="danger"
+              icon="exit-outline"
+              label="Leave Group"
+              onPress={
+                hostCanLeave
+                  ? handleLeaveGroup
+                  : () =>
+                      toast("You must assign a new host before leaving the ride.", {
+                        type: "error",
+                      })
+              }
+              style={hostCanLeave ? undefined : { opacity: 0.55 }}
+            />
+          </VStack>
         </VStack>
+        )}
       </ScrollView>
 
       {/* Kick Member Modal */}
@@ -787,28 +772,28 @@ This ride has been permanently deleted from the system.
         >
           <View
             style={{
-              backgroundColor: "#1e1e1e",
+              backgroundColor: darkTheme.surface,
               borderRadius: 16,
               padding: 24,
               maxHeight: "80%",
             }}
           >
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Heading color="white" size="lg" mb={2}>
+              <Heading color={darkTheme.textPrimary} size="lg" mb={2}>
                 Remove Member
               </Heading>
               {userToKick && (
-                <Text color="white" mb={4} fontSize="$lg">
+                <Text color={darkTheme.textPrimary} mb={4} fontSize="$lg">
                   {userToKick.name} (@{userToKick.username})
                 </Text>
               )}
 
-              <Text color="#a0a0a0" mb={6}>
+              <Text color={darkTheme.textSecondary} mb={6}>
                 Select a reason for removing this member. This helps us keep BearPool safe.
               </Text>
 
               <VStack space="md" mb={6}>
-                <Text color="white" fontWeight="bold" fontSize={16}>
+                <Text color={darkTheme.textPrimary} fontWeight="bold" fontSize={16}>
                   Select a reason:
                 </Text>
 
@@ -821,7 +806,7 @@ This ride has been permanently deleted from the system.
                       alignItems: "center",
                       padding: 12,
                       backgroundColor:
-                        kickReason === reason ? "#2a2a2a" : "#252525",
+                        kickReason === reason ? darkTheme.raised : darkTheme.surfaceAlt,
                       borderRadius: 8,
                       marginBottom: 8,
                     }}
@@ -832,13 +817,13 @@ This ride has been permanently deleted from the system.
                         height: 20,
                         borderRadius: 10,
                         borderWidth: 2,
-                        borderColor: kickReason === reason ? "#ff5555" : "#666",
+                        borderColor: kickReason === reason ? darkTheme.danger : darkTheme.textMuted,
                         backgroundColor:
-                          kickReason === reason ? "#ff5555" : "transparent",
+                          kickReason === reason ? darkTheme.danger : "transparent",
                         marginRight: 12,
                       }}
                     />
-                    <Text color="white" flex={1}>
+                    <Text color={darkTheme.textPrimary} flex={1}>
                       {reason}
                     </Text>
                   </TouchableOpacity>
@@ -847,22 +832,22 @@ This ride has been permanently deleted from the system.
 
               {kickReason === "Other" && (
                 <VStack space="sm" mb={6}>
-                  <Text color="white" fontWeight="bold">
+                  <Text color={darkTheme.textPrimary} fontWeight="bold">
                     Please specify:
                   </Text>
                   <TextInput
                     style={{
-                      backgroundColor: "#252525",
-                      borderColor: "#333",
+                      backgroundColor: darkTheme.surfaceAlt,
+                      borderColor: darkTheme.border,
                       borderWidth: 1,
                       borderRadius: 8,
-                      color: "white",
+                      color: darkTheme.textPrimary,
                       padding: 12,
                       minHeight: 100,
                       textAlignVertical: "top",
                       fontSize: 16,
                     }}
-                    placeholderTextColor="#666"
+                    placeholderTextColor={darkTheme.textMuted}
                     multiline
                     onChangeText={setCustomKickReason}
                     value={customKickReason}
@@ -875,16 +860,16 @@ This ride has been permanently deleted from the system.
                 <Button
                   onPress={proceedWithKick}
                   disabled={kickSubmitting || !kickReason}
-                  bg="#ff5555"
+                  bg={darkTheme.danger}
                   opacity={kickSubmitting || !kickReason ? 0.6 : 1}
                 >
                   {kickSubmitting ? (
                     <HStack space="sm" alignItems="center">
-                      <ActivityIndicator size="small" color="white" />
-                      <Text color="white">Removing...</Text>
+                      <ActivityIndicator size="small" color={darkTheme.textPrimary} />
+                      <Text color={darkTheme.textPrimary}>Removing...</Text>
                     </HStack>
                   ) : (
-                    <Text color="white" fontWeight="bold">
+                    <Text color={darkTheme.textPrimary} fontWeight="bold">
                       Remove Member
                     </Text>
                   )}
@@ -900,11 +885,10 @@ This ride has been permanently deleted from the system.
                     }
                   }}
                   disabled={kickSubmitting}
-                  variant="outline"
-                  borderColor="#666"
-                  bg="transparent"
+                  variant="solid"
+                  bg={darkTheme.raised}
                 >
-                  <Text color="#a0a0a0">Cancel</Text>
+                  <Text color={darkTheme.textSecondary}>Cancel</Text>
                 </Button>
               </VStack>
             </ScrollView>
@@ -929,32 +913,32 @@ This ride has been permanently deleted from the system.
         >
           <View
             style={{
-              backgroundColor: "#1e1e1e",
+              backgroundColor: darkTheme.surface,
               borderRadius: 16,
               padding: 24,
               maxHeight: "80%",
             }}
           >
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Heading color="white" size="lg" mb={2}>
+              <Heading color={darkTheme.textPrimary} size="lg" mb={2}>
                 Delete Ride
               </Heading>
               {ride.from && ride.to ? (
-                <Text color="white" mb={4} fontSize="$lg">
+                <Text color={darkTheme.textPrimary} mb={4} fontSize="$lg">
                   {ride.from} → {ride.to}
                 </Text>
               ) : (
-                <Text color="white" mb={4} fontSize="$lg">
+                <Text color={darkTheme.textPrimary} mb={4} fontSize="$lg">
                   Untitled Ride
                 </Text>
               )}
 
-              <Text color="#a0a0a0" mb={6}>
-                Tell us why you're deleting this ride. A report will be sent to our team.
+              <Text color={darkTheme.textSecondary} mb={6}>
+                Tell us why you&apos;re deleting this ride. A report will be sent to our team.
               </Text>
 
               <VStack space="md" mb={6}>
-                <Text color="white" fontWeight="bold" fontSize={16}>
+                <Text color={darkTheme.textPrimary} fontWeight="bold" fontSize={16}>
                   Select a reason for deletion:
                 </Text>
 
@@ -967,7 +951,7 @@ This ride has been permanently deleted from the system.
                       alignItems: "center",
                       padding: 12,
                       backgroundColor:
-                        deletionReason === reason ? "#2a2a2a" : "#252525",
+                        deletionReason === reason ? darkTheme.raised : darkTheme.surfaceAlt,
                       borderRadius: 8,
                       marginBottom: 8,
                     }}
@@ -979,13 +963,13 @@ This ride has been permanently deleted from the system.
                         borderRadius: 10,
                         borderWidth: 2,
                         borderColor:
-                          deletionReason === reason ? "#ff5555" : "#666",
+                          deletionReason === reason ? darkTheme.danger : darkTheme.textMuted,
                         backgroundColor:
-                          deletionReason === reason ? "#ff5555" : "transparent",
+                          deletionReason === reason ? darkTheme.danger : "transparent",
                         marginRight: 12,
                       }}
                     />
-                    <Text color="white" flex={1}>
+                    <Text color={darkTheme.textPrimary} flex={1}>
                       {reason}
                     </Text>
                   </TouchableOpacity>
@@ -993,22 +977,22 @@ This ride has been permanently deleted from the system.
               </VStack>
               {deletionReason === "Other" && (
                 <VStack space="sm" mb={6}>
-                  <Text color="white" fontWeight="bold">
+                  <Text color={darkTheme.textPrimary} fontWeight="bold">
                     Please specify:
                   </Text>
                   <TextInput
                     style={{
-                      backgroundColor: "#252525",
-                      borderColor: "#333",
+                      backgroundColor: darkTheme.surfaceAlt,
+                      borderColor: darkTheme.border,
                       borderWidth: 1,
                       borderRadius: 8,
-                      color: "white",
+                      color: darkTheme.textPrimary,
                       padding: 12,
                       minHeight: 100,
                       textAlignVertical: "top",
                       fontSize: 16,
                     }}
-                    placeholderTextColor="#666"
+                    placeholderTextColor={darkTheme.textMuted}
                     multiline
                     onChangeText={setCustomReason}
                     value={customReason}
@@ -1021,16 +1005,16 @@ This ride has been permanently deleted from the system.
                 <Button
                   onPress={handleSubmitDeletion}
                   disabled={submitting || !deletionReason}
-                  bg="#ff5555"
+                  bg={darkTheme.danger}
                   opacity={submitting || !deletionReason ? 0.6 : 1}
                 >
                   {submitting ? (
                     <HStack space="sm" alignItems="center">
-                      <ActivityIndicator size="small" color="white" />
-                      <Text color="white">Deleting...</Text>
+                      <ActivityIndicator size="small" color={darkTheme.textPrimary} />
+                      <Text color={darkTheme.textPrimary}>Deleting...</Text>
                     </HStack>
                   ) : (
-                    <Text color="white" fontWeight="bold">
+                    <Text color={darkTheme.textPrimary} fontWeight="bold">
                       Delete Ride & Send Report
                     </Text>
                   )}
@@ -1045,17 +1029,81 @@ This ride has been permanently deleted from the system.
                     }
                   }}
                   disabled={submitting}
-                  variant="outline"
-                  borderColor="#666"
-                  bg="transparent"
+                  variant="solid"
+                  bg={darkTheme.raised}
                 >
-                  <Text color="#a0a0a0">Cancel</Text>
+                  <Text color={darkTheme.textSecondary}>Cancel</Text>
                 </Button>
               </VStack>
             </ScrollView>
           </View>
         </View>
       </Modal>
+
+      {/* User action sheet (long-press a member or tap the menu) */}
+      <Sheet visible={!!actionSheetUser} onClose={() => setActionSheetUser(null)}>
+        {/* Member header */}
+        <HStack space="sm" alignItems="center" px="$5" py="$3">
+          <Avatar size="sm">
+            <AvatarImage source={{ uri: actionSheetUser?.avatar }} />
+          </Avatar>
+          <VStack>
+            <Text color={darkTheme.textPrimary} fontWeight="$semibold">
+              {actionSheetUser?.name}
+            </Text>
+            <Text color={darkTheme.textSecondary} fontSize="$sm">
+              @{actionSheetUser?.username}
+            </Text>
+          </VStack>
+        </HStack>
+        <View style={{ height: 1, backgroundColor: darkTheme.raised, marginBottom: 4 }} />
+
+        <SheetAction
+          icon="person-outline"
+          label="View Profile"
+          onPress={() => {
+            const x = actionSheetUser;
+            setActionSheetUser(null);
+            if (x) handleViewProfile(x.id);
+          }}
+        />
+        {isHost && actionSheetUser?.id !== user?.uid && (
+          <>
+            <SheetAction
+              icon="ribbon-outline"
+              label="Make Host"
+              tint={darkTheme.success}
+              onPress={() => {
+                const x = actionSheetUser;
+                setActionSheetUser(null);
+                if (x) handleAssignHost(x.id);
+              }}
+            />
+            <SheetAction
+              icon="person-remove-outline"
+              label="Remove"
+              tint={SHEET_DESTRUCTIVE}
+              onPress={() => {
+                const x = actionSheetUser;
+                setActionSheetUser(null);
+                if (x) handleKick(x.id);
+              }}
+            />
+          </>
+        )}
+        {actionSheetUser?.id !== user?.uid && (
+          <SheetAction
+            icon="flag-outline"
+            label="Report"
+            tint={SHEET_DESTRUCTIVE}
+            onPress={() => {
+              const x = actionSheetUser;
+              setActionSheetUser(null);
+              if (x) handleReportUser(x.id);
+            }}
+          />
+        )}
+      </Sheet>
     </Box>
   );
 }

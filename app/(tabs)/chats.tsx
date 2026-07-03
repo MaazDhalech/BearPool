@@ -1,7 +1,10 @@
+import { darkTheme } from "@/constants/theme";
 import { ACCENT } from "@/constants/Colors";
 import { TYPE } from "@/constants/Typography";
 import { SPACE } from "@/constants/Spacing";
 import { FadeSlideIn } from "@/components/FadeSlideIn";
+import { NavHeader } from "@/components/ui/NavHeader";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import {
@@ -9,7 +12,6 @@ import {
   AvatarImage,
   Box,
   HStack,
-  Spinner,
   Text,
   VStack,
 } from "@gluestack-ui/themed";
@@ -180,10 +182,10 @@ export default function ChatsScreen() {
       onPress={() => handlePress(grp.id)}
       style={{
         borderRadius: 12,
-        backgroundColor: muted ? "#161616" : "#1e1e1e",
+        backgroundColor: muted ? "#161616" : darkTheme.surface,
         padding: 16,
         borderWidth: 1,
-        borderColor: grp.hasUnread && !muted ? ACCENT + "55" : muted ? "#222" : "#333",
+        borderColor: grp.hasUnread && !muted ? ACCENT + "55" : muted ? darkTheme.borderSubtle : darkTheme.border,
         opacity: muted ? 0.65 : 1,
       }}
     >
@@ -191,44 +193,44 @@ export default function ChatsScreen() {
         <HStack justifyContent="space-between" alignItems="flex-start">
           <VStack style={{ flex: 1, marginRight: SPACE.sm }}>
             <HStack alignItems="center" space="sm">
-              <Text style={{ color: muted ? "#888" : "#ffffff", fontSize: TYPE.size.subheading, fontWeight: TYPE.weight.bold, lineHeight: TYPE.size.subheading * TYPE.leading.tight }}>
+              <Text style={{ color: muted ? darkTheme.textFaint : darkTheme.textPrimary, fontSize: TYPE.size.subheading, fontWeight: TYPE.weight.bold, lineHeight: TYPE.size.subheading * TYPE.leading.tight }}>
                 {grp.to}
               </Text>
               {grp.hasUnread && !muted && (
                 <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: ACCENT }} />
               )}
             </HStack>
-            <Text style={{ color: muted ? "#555" : "#a0a0a0", fontSize: TYPE.size.label, fontWeight: TYPE.weight.medium, marginTop: 2 }}>
+            <Text style={{ color: muted ? darkTheme.textGhost : darkTheme.textSecondary, fontSize: TYPE.size.label, fontWeight: TYPE.weight.medium, marginTop: 2 }}>
               from {grp.from}
             </Text>
           </VStack>
           {muted && (
-            <View style={{ backgroundColor: "#2a2a2a", paddingHorizontal: SPACE.sm, paddingVertical: 2, borderRadius: 4 }}>
-              <Text style={{ color: "#666", fontSize: TYPE.size.micro }}>Archived</Text>
+            <View style={{ backgroundColor: darkTheme.raised, paddingHorizontal: SPACE.sm, paddingVertical: 2, borderRadius: 4 }}>
+              <Text style={{ color: darkTheme.textMuted, fontSize: TYPE.size.micro }}>Archived</Text>
             </View>
           )}
         </HStack>
         {grp.date ? (
-          <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.caption, marginTop: SPACE.xs }}>
+          <Text style={{ color: darkTheme.textSecondary, fontSize: TYPE.size.caption, marginTop: SPACE.xs }}>
             {grp.date} · {grp.time}
           </Text>
         ) : null}
         <HStack space="sm" mt="$2">
           {grp.members.slice(0, 5).map((u: any) => (
-            <Avatar key={u.id} size="sm" bgColor="#121212">
+            <Avatar key={u.id} size="sm" bgColor={darkTheme.bg}>
               <AvatarImage source={{ uri: u.avatar }} alt="" />
             </Avatar>
           ))}
           {grp.members.length > 5 && (
             <Box
-              bg="#2a2a2a"
+              bg={darkTheme.raised}
               borderRadius="$full"
               w="$6"
               h="$6"
               alignItems="center"
               justifyContent="center"
             >
-              <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.micro }}>
+              <Text style={{ color: darkTheme.textSecondary, fontSize: TYPE.size.micro }}>
                 +{grp.members.length - 5}
               </Text>
             </Box>
@@ -239,34 +241,31 @@ export default function ChatsScreen() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#121212" }}>
+    <View style={{ flex: 1, backgroundColor: darkTheme.bg }}>
       <LinearGradient
         colors={["rgba(255, 190, 92, 0.28)", "transparent"]}
         style={{ position: "absolute", top: 0, left: 0, right: 0, height: 280 }}
         pointerEvents="none"
       />
+      <NavHeader title="Chats" showBack={false} />
       <ScrollView
         style={{ backgroundColor: "transparent" }}
         contentContainerStyle={{ paddingBottom: 120, flexGrow: 1 }}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#a0a0a0"
+            tintColor={ACCENT}
+            colors={[ACCENT]}
+            progressBackgroundColor={darkTheme.surface}
           />
         }
       >
-        <View style={{ paddingHorizontal: SPACE.lg, paddingBottom: SPACE.lg }}>
-          <View style={{ marginTop: SPACE["4xl"], marginBottom: SPACE["2xl"] }}>
-            <Text style={{ color: "#ffffff", fontSize: TYPE.size.display, fontWeight: TYPE.weight.bold, lineHeight: TYPE.size.display * TYPE.leading.tight }}>
-              Your{"\n"}Ride Groups
-            </Text>
-          </View>
+        <View style={{ paddingHorizontal: SPACE.lg, paddingTop: SPACE.md, paddingBottom: SPACE.lg }}>
 
           {loading ? (
-            <HStack justifyContent="center" mt="$10">
-              <Spinner size="large" color={ACCENT} />
-            </HStack>
+            <LoadingState label="Loading your chats…" />
           ) : error ? (
             <Text style={{ color: "#ff6666", textAlign: "center", fontSize: TYPE.size.body }}>
               {error}
@@ -275,10 +274,10 @@ export default function ChatsScreen() {
             <FadeSlideIn delay={100}>
               <VStack alignItems="center" mt="$8" px="$6" space="md">
                 <Text style={{ fontSize: 36, marginBottom: SPACE.sm }}>🐻</Text>
-                <Text style={{ color: "#ffffff", fontSize: TYPE.size.heading, fontWeight: TYPE.weight.bold, textAlign: "center" }}>
+                <Text style={{ color: darkTheme.textPrimary, fontSize: TYPE.size.heading, fontWeight: TYPE.weight.bold, textAlign: "center" }}>
                   No ride groups yet
                 </Text>
-                <Text style={{ color: "#a0a0a0", textAlign: "center", fontSize: TYPE.size.body, lineHeight: TYPE.size.body * TYPE.leading.relaxed }}>
+                <Text style={{ color: darkTheme.textSecondary, textAlign: "center", fontSize: TYPE.size.body, lineHeight: TYPE.size.body * TYPE.leading.relaxed }}>
                   Join or post a ride on the feed to start coordinating with your group.
                 </Text>
               </VStack>
@@ -293,7 +292,7 @@ export default function ChatsScreen() {
 
               {archivedGroups.length > 0 && (
                 <VStack space="md" mt={activeGroups.length > 0 ? "$4" : "$0"}>
-                  <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.label, fontWeight: TYPE.weight.medium, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: SPACE.xs }}>
+                  <Text style={{ color: darkTheme.textSecondary, fontSize: TYPE.size.label, fontWeight: TYPE.weight.medium, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: SPACE.xs }}>
                     Past Rides
                   </Text>
                   {archivedGroups.map((grp) => renderGroup(grp, true))}

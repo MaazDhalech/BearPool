@@ -31,12 +31,12 @@ export function SpringPressable({
       disabled={disabled}
       onPressIn={(e) => {
         if (!disabled) {
-          scale.value = withSpring(0.92, { damping: 18, stiffness: 400 });
+          scale.value = withSpring(0.92, { damping: 22, stiffness: 400, overshootClamping: true });
         }
         onPressIn?.(e);
       }}
       onPressOut={(e) => {
-        scale.value = withSpring(1, { damping: 14, stiffness: 300 });
+        scale.value = withSpring(1, { damping: 22, stiffness: 300, overshootClamping: true });
         onPressOut?.(e);
       }}
     >
