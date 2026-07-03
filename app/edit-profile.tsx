@@ -364,7 +364,7 @@ export default function EditProfileScreen() {
                   px="$4"
                   fontSize="$md"
                   value={formData.username}
-                  onChangeText={(t) => handleTextChange("username", t)}
+                  onChangeText={(t) => handleTextChange("username", t.replace(/\s/g, ""))}
                 />
               </Input>
               {formErrors.username ? <Text style={styles.error}>{formErrors.username}</Text> : null}

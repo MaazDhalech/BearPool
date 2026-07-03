@@ -236,7 +236,7 @@ export default function CompleteProfile() {
                 autoCorrect={false}
                 value={username}
                 placeholder="Choose a username"
-                onChangeText={setUsername}
+                onChangeText={(t) => setUsername(t.replace(/\s/g, ""))}
               />
 
               <View style={s.nameRow}>
