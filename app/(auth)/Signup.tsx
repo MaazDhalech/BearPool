@@ -7,6 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Link, Stack, useRouter } from "expo-router";
 import {
   createUserWithEmailAndPassword,
+  deleteUser,
   sendEmailVerification,
 } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
@@ -219,26 +220,42 @@ export default function Signup() {
     try {
       const { user } = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
 
-      // Send verification email
-      await sendEmailVerification(user);
-
-      // Write Firestore profile immediately (pre-verification)
       const genderValue: Gender | null =
         genderOption === null || genderOption === "PNTS" ? null : genderOption;
 
-      await setDoc(doc(db, "users", user.uid), {
-        avatar: initialsAvatarUrl(trimmedFirstName, trimmedLastName),
-        username: cleanText(trimmedUsername),
-        email: trimmedEmail.toLowerCase(),
-        first_name: cleanText(trimmedFirstName),
-        last_name: cleanText(trimmedLastName),
-        gender: genderValue,
-        createdAt: new Date(),
-        ridesJoined: 0,
-        ridesHosted: 0,
-        tosAcceptedAt: new Date(),
-        tosVersion: "2025-11-15",
-      });
+      // Write the Firestore profile FIRST. If it fails, roll back by deleting
+      // the just-created Auth user so we never strand an orphan account (an Auth
+      // user with no profile doc, which breaks the app and shows up as "broken").
+      try {
+        await setDoc(doc(db, "users", user.uid), {
+          avatar: initialsAvatarUrl(trimmedFirstName, trimmedLastName),
+          username: cleanText(trimmedUsername),
+          email: trimmedEmail.toLowerCase(),
+          first_name: cleanText(trimmedFirstName),
+          last_name: cleanText(trimmedLastName),
+          gender: genderValue,
+          createdAt: new Date(),
+          ridesJoined: 0,
+          ridesHosted: 0,
+          tosAcceptedAt: new Date(),
+          tosVersion: "2025-11-15",
+        });
+      } catch (writeErr) {
+        try {
+          await deleteUser(user);
+        } catch {
+          // Best-effort cleanup; nothing more we can do client-side.
+        }
+        throw writeErr;
+      }
+
+      // Profile is safely written. Email verification is best-effort — the
+      // VerifyEmail screen can resend if this fails.
+      try {
+        await sendEmailVerification(user);
+      } catch {
+        // ignore — do not block signup on a transient email-send failure
+      }
 
       // Route to email verification screen
       router.replace({
@@ -321,7 +338,7 @@ export default function Signup() {
                   autoCorrect={false}
                   value={username}
                   placeholder="Choose a username"
-                  onChangeText={setUsername}
+                  onChangeText={(t) => setUsername(t.replace(/\s/g, ""))}
                 />
 
                 <View style={s.nameRow}>

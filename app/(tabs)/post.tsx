@@ -7,6 +7,7 @@ import { toast } from "@/components/ui/Dialog";
 import { useNotificationOptInPrompt } from "@/hooks/useNotificationOptInPrompt";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { db } from "@/services/firebaseConfig";
+import { checkIsAdmin } from "@/utils/admin";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import DateTimePicker, {
   DateTimePickerEvent,
@@ -236,10 +237,11 @@ export default function PostScreen() {
         const userDoc = await getDoc(doc(db, "users", userId));
         if (userDoc.exists()) {
           setUserGender(userDoc.data()?.gender ?? null);
-          setIsAdmin(userDoc.data()?.isAdmin === true);
         } else {
           setUserGender(null);
         }
+        // Admin status comes from the Auth custom claim, not the Firestore field.
+        setIsAdmin(await checkIsAdmin());
       } catch (error) {
         console.error("Failed to fetch user gender:", error);
         setUserGender(null);

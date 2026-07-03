@@ -9,6 +9,7 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { FilterDropdown } from "@/components/ui/ContextMenu";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { db } from "@/services/firebaseConfig";
+import { checkIsAdmin } from "@/utils/admin";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import {
   Avatar,
@@ -239,8 +240,9 @@ export default function HomeScreen() {
       if (userDoc.exists()) {
         const data = userDoc.data();
         setUserGender(data.gender || null);
-        setIsAdmin(data.isAdmin === true);
       }
+      // Admin status comes from the Auth custom claim, not the Firestore field.
+      setIsAdmin(await checkIsAdmin());
     } catch (err) {
       console.error("Error fetching user gender:", err);
     }
