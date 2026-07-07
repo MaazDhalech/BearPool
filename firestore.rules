@@ -60,6 +60,26 @@ service cloud.firestore {
     match /bugReports/{docId}      { allow write: if request.auth != null; }
     match /rideFeedback/{docId}    { allow write: if request.auth != null; }
 
+    // ---------------------------------------------------------------------
+    // USER-TO-USER RATINGS: one doc per (ride, rater, rated) triple.
+    // The doc ID must equal `${rideId}_${raterId}_${ratedUserId}` — this is
+    // enforced below, which means a rater can never create a SECOND rating
+    // for the same person on the same ride (only overwrite their own).
+    // Rules also require: you rate as yourself, not yourself, 1–5 stars,
+    // and you were actually a member of that ride.
+    // ---------------------------------------------------------------------
+    match /userRatings/{ratingId} {
+      allow create, update: if request.auth != null
+        && request.resource.data.raterId == request.auth.uid
+        && request.resource.data.ratedUserId != request.auth.uid
+        && request.resource.data.stars is number
+        && request.resource.data.stars >= 1
+        && request.resource.data.stars <= 5
+        && ratingId == request.resource.data.rideId + "_" + request.auth.uid + "_" + request.resource.data.ratedUserId
+        && isRideMember(request.resource.data.rideId, request.auth.uid);
+      allow delete: if false;
+    }
+
     // App config is read-only to clients (managed via the console / Admin SDK).
     match /config/{docId} {
       allow write: if false;

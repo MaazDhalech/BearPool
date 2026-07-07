@@ -1,20 +1,19 @@
 import { darkTheme } from "@/constants/theme";
 // app/_layout.tsx
-import { ACCENT } from "@/constants/Colors";
+import RateMembersModal from "@/components/RateMembersModal";
 import RideFeedbackModal from "@/components/RideFeedbackModal";
 import { DialogHost } from "@/components/ui/Dialog";
+import { ACCENT } from "@/constants/Colors";
 import "@/global.css";
 import { config } from "@/gluestack-ui.config";
-import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
+import { db } from "@/services/firebaseConfig";
 import { GluestackUIProvider } from "@gluestack-ui/themed";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { KeyboardProvider } from "react-native-keyboard-controller";
 import Constants from "expo-constants";
-import * as Notifications from "expo-notifications";
 import { useFonts } from "expo-font";
+import * as Notifications from "expo-notifications";
 import { Stack, useRouter } from "expo-router";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
 import {
@@ -40,6 +39,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 
 // ✅ Set full notification behavior
 Notifications.setNotificationHandler({
@@ -125,6 +126,8 @@ function RootLayoutContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [ratedRides, setRatedRides] = useState<Set<string>>(new Set());
   const [rateLaterRides, setRateLaterRides] = useState<Set<string>>(new Set());
+  // Second step after ride feedback: rate the other members of that ride
+  const [rateMembersRide, setRateMembersRide] = useState<{ id: string; memberIds: string[] } | null>(null);
 
   const rideCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const appStateRef = useRef(AppState.currentState);
@@ -299,6 +302,12 @@ function RootLayoutContent() {
         setRateLaterRides(next);
         await AsyncStorage.removeItem(`rate_reminder_${currentRide.id}`);
       }
+      // Queue up the member-rating step for this same ride (only if there
+      // is anyone besides the current user to rate).
+      const others = (currentRide.memberIds || []).filter((id: string) => id !== userId);
+      if (others.length > 0) {
+        setRateMembersRide({ id: currentRide.id, memberIds: currentRide.memberIds });
+      }
     }
     handleFeedbackClose();
   };
@@ -462,6 +471,15 @@ function RootLayoutContent() {
         onClose={handleFeedbackClose}
         onRateLater={handleRateLater}
         onFeedbackSubmit={handleFeedbackSubmit}
+      />
+
+      {/* Rate the other members of the ride (shown after feedback submit) */}
+      <RateMembersModal
+        visible={rateMembersRide !== null}
+        rideId={rateMembersRide?.id ?? null}
+        memberIds={rateMembersRide?.memberIds ?? []}
+        currentUserId={userId}
+        onClose={() => setRateMembersRide(null)}
       />
 
       {/* App-wide confirm dialogs, action menus, and toasts */}
