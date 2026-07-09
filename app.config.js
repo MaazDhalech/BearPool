@@ -4,8 +4,8 @@ export default {
   expo: {
     name: "BearPool",
     slug: "BearPool",
-    version: "1.2.0",
-    runtimeVersion: "1.2.0",
+    version: "2.0.0",
+    runtimeVersion: "2.0.0",
     updates: {
       url: "https://u.expo.dev/e469f4b5-1dbf-4a1d-aa5e-0417dee7cf2c",
     },
@@ -16,7 +16,7 @@ export default {
     newArchEnabled: true,
     ios: {
       bundleIdentifier: "com.rebu.bearpool",
-      buildNumber: "5",
+      buildNumber: "1",
       supportsTablet: true,
       entitlements: {
         "com.apple.developer.applesignin": ["Default"],
