@@ -1,4 +1,5 @@
-import { ACCENT } from "@/constants/Colors";
+import { darkTheme } from "@/constants/theme";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { getConversationId } from "@/utils/conversations";
@@ -8,12 +9,12 @@ import {
     Box,
     Button,
     HStack,
-    Heading,
     ScrollView,
     Text,
     VStack
 } from "@gluestack-ui/themed";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { NavHeader } from "@/components/ui/NavHeader";
 import {
     arrayRemove,
     arrayUnion,
@@ -26,7 +27,7 @@ import {
     where
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { Alert, TouchableOpacity } from "react-native";
+import { confirm, showMenu, toast } from "@/components/ui/Dialog";
 
 // Default avatar image
 const DEFAULT_AVATAR =
@@ -52,7 +53,7 @@ export default function UserProfileScreen() {
         const userSnap = await getDoc(userDocRef);
 
         if (!userSnap.exists()) {
-          Alert.alert("Error", "User profile not found.");
+          toast("User profile not found.", { type: "error" });
           router.back();
           return;
         }
@@ -77,7 +78,7 @@ export default function UserProfileScreen() {
 
       } catch (error) {
         console.error("Error fetching user profile:", error);
-        Alert.alert("Error", "Failed to load user profile.");
+        toast("Failed to load user profile.", { type: "error" });
       } finally {
         setLoading(false);
       }
@@ -151,50 +152,30 @@ export default function UserProfileScreen() {
         // Show alert with ride information using formatted locations
         const ridesList = sharedRides.map(ride => formatRideLocation(ride)).join("\n");
         
-        Alert.alert(
-          "Shared Rides Found",
-          `You and ${userProfile?.first_name || userProfile?.username || 'this user'} are both members of ${sharedRides.length} ride(s):\n\n${ridesList}\n\nWould you like to leave these rides before blocking this user?`,
-          [
-            {
-              text: "Cancel",
-              style: "cancel",
-              onPress: () => setIsBlocking(false)
-            },
-            {
-              text: "Block Only",
-              style: "destructive",
-              onPress: () => proceedWithBlock(false, [])
-            },
-            {
-              text: "Leave Rides & Block",
-              style: "destructive",
-              onPress: () => proceedWithBlock(true, sharedRides)
-            }
-          ]
-        );
+        showMenu({
+          title: "Shared Rides Found",
+          message: `You and ${userProfile?.first_name || userProfile?.username || 'this user'} are both members of ${sharedRides.length} ride(s):\n\n${ridesList}\n\nWould you like to leave these rides before blocking this user?`,
+          onCancel: () => setIsBlocking(false),
+          options: [
+            { label: "Block Only", destructive: true, onPress: () => proceedWithBlock(false, []) },
+            { label: "Leave Rides & Block", destructive: true, onPress: () => proceedWithBlock(true, sharedRides) },
+          ],
+        });
       } else {
         // No shared rides, proceed with normal block confirmation
-        Alert.alert(
-          "Block User",
-          `Are you sure you want to block ${userProfile?.first_name || userProfile?.username || 'this user'}? You won't see their posts or be able to interact with them.`,
-          [
-            {
-              text: "Cancel",
-              style: "cancel",
-              onPress: () => setIsBlocking(false)
-            },
-            {
-              text: "Block",
-              style: "destructive",
-              onPress: () => proceedWithBlock(false, [])
-            }
-          ]
-        );
+        const ok = await confirm({
+          title: "Block User",
+          message: `Are you sure you want to block ${userProfile?.first_name || userProfile?.username || 'this user'}? You won't see their posts or be able to interact with them.`,
+          confirmText: "Block",
+          destructive: true,
+        });
+        if (ok) proceedWithBlock(false, []);
+        else setIsBlocking(false);
       }
     } catch (error) {
       console.error("Error checking shared rides:", error);
       setIsBlocking(false);
-      Alert.alert("Error", "Failed to check shared rides. Please try again.");
+      toast("Failed to check shared rides. Please try again.", { type: "error" });
     }
   };
 
@@ -204,7 +185,7 @@ export default function UserProfileScreen() {
       if (shouldLeaveRides && sharedRides.length > 0) {
         const success = await leaveSharedRides(sharedRides);
         if (!success) {
-          Alert.alert("Error", "Failed to leave some rides. Please try again.");
+          toast("Failed to leave some rides. Please try again.", { type: "error" });
           setIsBlocking(false);
           return;
         }
@@ -222,12 +203,11 @@ export default function UserProfileScreen() {
         ? `You have left ${sharedRides.length} shared ride(s) and blocked this user.`
         : "User has been blocked.";
         
-      Alert.alert("Success", successMessage, [
-        { text: "OK", onPress: () => router.back() }
-      ]);
+      toast(successMessage, { type: "success" });
+      router.back();
     } catch (error) {
       console.error("Error blocking user:", error);
-      Alert.alert("Error", "Failed to block user. Please try again.");
+      toast("Failed to block user. Please try again.", { type: "error" });
     } finally {
       setIsBlocking(false);
     }
@@ -236,41 +216,35 @@ export default function UserProfileScreen() {
   const handleUnblockUser = async () => {
     if (!currentUserId || !userId || isBlocking) return;
 
-    Alert.alert(
-      "Unblock User",
-      `Are you sure you want to unblock ${userProfile?.first_name || userProfile?.username || 'this user'}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Unblock",
-          onPress: async () => {
-            setIsBlocking(true);
-            try {
-              // Get current blocked users list
-              const currentUserDocRef = doc(db, "users", currentUserId);
-              const currentUserSnap = await getDoc(currentUserDocRef);
-              
-              if (currentUserSnap.exists()) {
-                const currentBlockedUsers = currentUserSnap.data().blockedUsers || [];
-                const updatedBlockedUsers = currentBlockedUsers.filter((id: string) => id !== userId);
-                
-                await updateDoc(currentUserDocRef, {
-                  blockedUsers: updatedBlockedUsers
-                });
-                
-                setIsBlocked(false);
-                Alert.alert("Success", "User has been unblocked.");
-              }
-            } catch (error) {
-              console.error("Error unblocking user:", error);
-              Alert.alert("Error", "Failed to unblock user. Please try again.");
-            } finally {
-              setIsBlocking(false);
-            }
-          }
-        }
-      ]
-    );
+    const ok = await confirm({
+      title: "Unblock User",
+      message: `Are you sure you want to unblock ${userProfile?.first_name || userProfile?.username || 'this user'}?`,
+      confirmText: "Unblock",
+    });
+    if (!ok) return;
+
+    setIsBlocking(true);
+    try {
+      const currentUserDocRef = doc(db, "users", currentUserId);
+      const currentUserSnap = await getDoc(currentUserDocRef);
+
+      if (currentUserSnap.exists()) {
+        const currentBlockedUsers = currentUserSnap.data().blockedUsers || [];
+        const updatedBlockedUsers = currentBlockedUsers.filter((id: string) => id !== userId);
+
+        await updateDoc(currentUserDocRef, {
+          blockedUsers: updatedBlockedUsers
+        });
+
+        setIsBlocked(false);
+        toast("User has been unblocked.", { type: "success" });
+      }
+    } catch (error) {
+      console.error("Error unblocking user:", error);
+      toast("Failed to unblock user. Please try again.", { type: "error" });
+    } finally {
+      setIsBlocking(false);
+    }
   };
 
   const handleReportUser = () => {
@@ -290,23 +264,23 @@ export default function UserProfileScreen() {
 
   if (!isLoaded || loading) {
     return (
-      <Box flex={1} bg="#121212" justifyContent="center" alignItems="center">
-        <Text color="#a0a0a0">Loading profile...</Text>
+      <Box flex={1} bg={darkTheme.bg} justifyContent="center" alignItems="center">
+        <LoadingState label="Loading profile…" />
       </Box>
     );
   }
 
   if (!userProfile) {
     return (
-      <Box flex={1} bg="#121212" justifyContent="center" alignItems="center">
-        <Text color="#a0a0a0">Profile not found</Text>
+      <Box flex={1} bg={darkTheme.bg} justifyContent="center" alignItems="center">
+        <Text color={darkTheme.textSecondary}>Profile not found</Text>
         <Button
           mt="$4"
-          variant="outline"
-          borderColor="#333"
+          variant="solid"
+          bg={darkTheme.raised}
           onPress={() => router.back()}
         >
-          <Text color="white">Go Back</Text>
+          <Text color={darkTheme.textPrimary}>Go Back</Text>
         </Button>
       </Box>
     );
@@ -315,23 +289,17 @@ export default function UserProfileScreen() {
   const initials = (userProfile.first_name?.[0] || "") + (userProfile.last_name?.[0] || "") || userProfile.username?.[0] || "U";
 
   return (
-    <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: 120 }}>
-      <Box flex={1} bg="#121212" px="$4" py="$6">
-        <HStack justifyContent="space-between" alignItems="center" mb="$6" mt="$8">
-          <Heading size="xl" color="white">
-            Profile
-          </Heading>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text color={ACCENT} fontSize="$lg">Done</Text>
-          </TouchableOpacity>
-        </HStack>
+    <Box flex={1} bg={darkTheme.bg}>
+      <NavHeader title="Profile" />
+      <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+        <Box flex={1} bg={darkTheme.bg} px="$4" py="$6">
 
         <VStack space="lg" alignItems="center">
-          <Avatar size="2xl" bg="#1e1e1e" borderRadius="$full" mb="$4">
+          <Avatar size="2xl" bg={darkTheme.surface} borderRadius="$full" mb="$4">
             {userProfile.avatar ? (
               <AvatarImage source={{ uri: userProfile.avatar }} alt="Avatar" />
             ) : (
-              <Avatar.FallbackText color="white">
+              <Avatar.FallbackText color={darkTheme.textPrimary}>
                 {initials}
               </Avatar.FallbackText>
             )}
@@ -339,34 +307,34 @@ export default function UserProfileScreen() {
 
           <HStack space="xl" w="100%" justifyContent="space-evenly">
             <VStack alignItems="center">
-              <Text color="#a0a0a0">Rides Joined</Text>
-              <Text color="white" fontWeight="$bold" fontSize="$xl">
+              <Text color={darkTheme.textSecondary}>Rides Joined</Text>
+              <Text color={darkTheme.textPrimary} fontWeight="$bold" fontSize="$xl">
                 {userProfile.ridesJoined || 0}
               </Text>
             </VStack>
             <VStack alignItems="center">
-              <Text color="#a0a0a0">Rides Hosted</Text>
-              <Text color="white" fontWeight="$bold" fontSize="$xl">
+              <Text color={darkTheme.textSecondary}>Rides Hosted</Text>
+              <Text color={darkTheme.textPrimary} fontWeight="$bold" fontSize="$xl">
                 {userProfile.ridesHosted || 0}
               </Text>
             </VStack>
           </HStack>
 
           <VStack space="sm" w="100%" mt="$6">
-            <Text color="#a0a0a0">Name</Text>
-            <Text color="white" fontSize="$lg" fontWeight="$semibold">
+            <Text color={darkTheme.textSecondary}>Name</Text>
+            <Text color={darkTheme.textPrimary} fontSize="$lg" fontWeight="$semibold">
               {userProfile.first_name && userProfile.last_name 
                 ? `${userProfile.first_name} ${userProfile.last_name}`
                 : userProfile.username || "Unknown User"}
             </Text>
 
-            <Text color="#a0a0a0" mt="$4">Username</Text>
-            <Text color="white" fontSize="$lg" fontWeight="$semibold">
+            <Text color={darkTheme.textSecondary} mt="$4">Username</Text>
+            <Text color={darkTheme.textPrimary} fontSize="$lg" fontWeight="$semibold">
               {userProfile.username || "Not set"}
             </Text>
 
-            <Text color="#a0a0a0" mt="$4">Gender</Text>
-            <Text color="white" fontSize="$lg" fontWeight="$semibold">
+            <Text color={darkTheme.textSecondary} mt="$4">Gender</Text>
+            <Text color={darkTheme.textPrimary} fontSize="$lg" fontWeight="$semibold">
               {userProfile.gender === "M"
                 ? "Male"
                 : userProfile.gender === "F"
@@ -376,8 +344,8 @@ export default function UserProfileScreen() {
                 : "Not specified"}
             </Text>
 
-            <Text color="#a0a0a0" mt="$4">Member Since</Text>
-            <Text color="white" fontSize="$lg" fontWeight="$semibold">
+            <Text color={darkTheme.textSecondary} mt="$4">Member Since</Text>
+            <Text color={darkTheme.textPrimary} fontSize="$lg" fontWeight="$semibold">
               {userProfile.createdAt 
                 ? new Date(userProfile.createdAt.toDate ? userProfile.createdAt.toDate() : userProfile.createdAt).toLocaleDateString()
                 : "Unknown"}
@@ -402,44 +370,45 @@ export default function UserProfileScreen() {
 
             {isBlocked ? (
               <Button
-                bg="#666"
+                bg={darkTheme.textMuted}
                 onPress={handleUnblockUser}
                 disabled={isBlocking}
               >
-                <Text color="white" fontWeight="$semibold">
+                <Text color={darkTheme.textPrimary} fontWeight="$semibold">
                   {isBlocking ? "Unblocking..." : "Unblock User"}
                 </Text>
               </Button>
             ) : (
               <Button
-                bg="#ff4444"
+                bg={darkTheme.error}
                 onPress={handleBlockUser}
                 disabled={isBlocking}
               >
-                <Text color="white" fontWeight="$semibold">
+                <Text color={darkTheme.textPrimary} fontWeight="$semibold">
                   {isBlocking ? "Checking rides..." : "Block User"}
                 </Text>
               </Button>
             )}
 
             <Button
-              variant="outline"
-              borderColor="#ff6b6b"
+              variant="solid"
+              bg="#3a1f1f"
               onPress={handleReportUser}
             >
-              <Text color="#ff6b6b">Report User</Text>
+              <Text color={darkTheme.danger} fontWeight="$semibold">Report User</Text>
             </Button>
-            
+
             <Button
-              variant="outline"
-              borderColor="#333"
+              variant="solid"
+              bg={darkTheme.raised}
               onPress={() => router.back()}
             >
-              <Text color="white">Go Back</Text>
+              <Text color={darkTheme.textPrimary}>Go Back</Text>
             </Button>
           </VStack>
         </VStack>
       </Box>
-    </ScrollView>
+      </ScrollView>
+    </Box>
   );
 }

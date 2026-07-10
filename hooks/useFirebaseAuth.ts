@@ -13,6 +13,11 @@ export function useFirebaseAuth() {
   useEffect(() => {
     return onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
+      // Refresh the ID token once on sign-in so custom claims (e.g. `admin`)
+      // are current without waiting for the ~1h auto-refresh. Fire-and-forget.
+      if (firebaseUser) {
+        firebaseUser.getIdToken(true).catch(() => {});
+      }
     });
   }, []);
 

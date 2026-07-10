@@ -154,6 +154,20 @@ export const onRideMessageCreated = onDocumentCreated(
       return;
     }
 
+    // Mark the message as sent (server-acknowledged) so clients can render
+    // the single "sent" tick. Only an update — does not re-trigger onCreate.
+    if (message.sent !== true) {
+      try {
+        await event.data?.ref.update({ sent: true });
+      } catch (err) {
+        logger.error("Failed to mark message as sent", {
+          rideId,
+          messageId,
+          error: String(err),
+        });
+      }
+    }
+
     // Resolve message timestamp
     let messageTimestamp: admin.firestore.Timestamp;
     if (message.timestamp instanceof admin.firestore.Timestamp) {
@@ -197,10 +211,11 @@ export const onRideMessageCreated = onDocumentCreated(
         ? message.senderName
         : "New message";
 
+    const bodyText = String(message.text || "").trim();
     const payload: ExpoPushPayload = {
       sound: "default",
       title: `${rideLabel} — ${senderLabel}`,
-      body: formatBody(String(message.text || "")),
+      body: bodyText ? formatBody(bodyText) : message.imageUrl ? "📷 Photo" : "New message",
       data: { type: "chat_message", rideId },
     };
 

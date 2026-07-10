@@ -1,10 +1,13 @@
+import { darkTheme } from "@/constants/theme";
 import TOSOverlay from "@/components/TOSOverlay";
 import { ACCENT } from "@/constants/Colors";
 import { auth, db } from "@/services/firebaseConfig";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { initialsAvatarUrl } from "@/utils/avatar";
+import { Ionicons } from "@expo/vector-icons";
 import { Link, Stack, useRouter } from "expo-router";
 import {
   createUserWithEmailAndPassword,
+  deleteUser,
   sendEmailVerification,
 } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
@@ -13,6 +16,7 @@ import React from "react";
 import {
   ActivityIndicator,
   GestureResponderEvent,
+  Image,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -35,13 +39,13 @@ const isBerkeleyEmail = (email: string) =>
 //  DESIGN TOKENS (same as Login)
 // ─────────────────────────────────────────────
 const palette = {
-  bg: "#121212",
-  surface: "#1e1e1e",
-  rim: "#252525",
+  bg: darkTheme.bg,
+  surface: darkTheme.surface,
+  rim: darkTheme.surfaceAlt,
   accent: ACCENT,
-  ink: "#ffffff",
-  muted: "#a1a1a6",
-  ghost: "#545456",
+  ink: darkTheme.textPrimary,
+  muted: darkTheme.textSecondary,
+  ghost: darkTheme.textGhost,
 };
 
 const SPACING = { xs: 8, sm: 16, md: 24, lg: 32, xl: 48 };
@@ -80,7 +84,7 @@ const StyledInput = React.forwardRef<
           style={p.visibilityToggle}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <MaterialCommunityIcons
+          <Ionicons
             name={isPasswordVisible ? "eye-outline" : "eye-off-outline"}
             size={22 * SCALE}
             color={palette.muted}
@@ -136,9 +140,6 @@ const p = StyleSheet.create({
 // ─────────────────────────────────────────────
 //  SCREEN
 // ─────────────────────────────────────────────
-
-const BLANK_AVATAR =
-  "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
 
 type Gender = "M" | "F" | "NB";
 type GenderOption = Gender | "PNTS";
@@ -219,26 +220,42 @@ export default function Signup() {
     try {
       const { user } = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
 
-      // Send verification email
-      await sendEmailVerification(user);
-
-      // Write Firestore profile immediately (pre-verification)
       const genderValue: Gender | null =
         genderOption === null || genderOption === "PNTS" ? null : genderOption;
 
-      await setDoc(doc(db, "users", user.uid), {
-        avatar: BLANK_AVATAR,
-        username: cleanText(trimmedUsername),
-        email: trimmedEmail.toLowerCase(),
-        first_name: cleanText(trimmedFirstName),
-        last_name: cleanText(trimmedLastName),
-        gender: genderValue,
-        createdAt: new Date(),
-        ridesJoined: 0,
-        ridesHosted: 0,
-        tosAcceptedAt: new Date(),
-        tosVersion: "2025-11-15",
-      });
+      // Write the Firestore profile FIRST. If it fails, roll back by deleting
+      // the just-created Auth user so we never strand an orphan account (an Auth
+      // user with no profile doc, which breaks the app and shows up as "broken").
+      try {
+        await setDoc(doc(db, "users", user.uid), {
+          avatar: initialsAvatarUrl(trimmedFirstName, trimmedLastName),
+          username: cleanText(trimmedUsername),
+          email: trimmedEmail.toLowerCase(),
+          first_name: cleanText(trimmedFirstName),
+          last_name: cleanText(trimmedLastName),
+          gender: genderValue,
+          createdAt: new Date(),
+          ridesJoined: 0,
+          ridesHosted: 0,
+          tosAcceptedAt: new Date(),
+          tosVersion: "2025-11-15",
+        });
+      } catch (writeErr) {
+        try {
+          await deleteUser(user);
+        } catch {
+          // Best-effort cleanup; nothing more we can do client-side.
+        }
+        throw writeErr;
+      }
+
+      // Profile is safely written. Email verification is best-effort — the
+      // VerifyEmail screen can resend if this fails.
+      try {
+        await sendEmailVerification(user);
+      } catch {
+        // ignore — do not block signup on a transient email-send failure
+      }
 
       // Route to email verification screen
       router.replace({
@@ -281,7 +298,7 @@ export default function Signup() {
               style={s.backButton}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <MaterialCommunityIcons name="chevron-left" size={28} color={palette.ink} />
+              <Ionicons name="chevron-back" size={28} color={palette.ink} />
             </TouchableOpacity>
             <ScrollView
               contentContainerStyle={s.scrollContent}
@@ -289,7 +306,13 @@ export default function Signup() {
               showsVerticalScrollIndicator={false}
             >
               <View style={s.header}>
-                <Text style={s.brandTitle}>Create Account</Text>
+                <Image
+                  source={require("../../assets/images/newicon.png")}
+                  resizeMode="contain"
+                  style={{ ...s.logo, marginTop: 25 * SCALE, borderRadius: 20 * SCALE }}
+                />
+                <Text style={s.brandTitle}>BearPool</Text>
+                <Text style={s.subtitle}>The biggest ride-share board for Cal students.</Text>
               </View>
 
               {error ? (
@@ -315,7 +338,7 @@ export default function Signup() {
                   autoCorrect={false}
                   value={username}
                   placeholder="Choose a username"
-                  onChangeText={setUsername}
+                  onChangeText={(t) => setUsername(t.replace(/\s/g, ""))}
                 />
 
                 <View style={s.nameRow}>
@@ -395,10 +418,10 @@ export default function Signup() {
                       { label: "One special character (!@#$%^&*)", met: /[!@#$%^&*]/.test(password) },
                     ].map(({ label, met }) => (
                       <View key={label} style={s.ruleRow}>
-                        <MaterialCommunityIcons
-                          name={met ? "check-circle" : "circle-outline"}
+                        <Ionicons
+                          name={met ? "checkmark-circle" : "ellipse-outline"}
                           size={14 * SCALE}
-                          color={met ? "#4caf50" : palette.ghost}
+                          color={met ? darkTheme.success : palette.ghost}
                         />
                         <Text style={[s.ruleText, met && s.ruleMet]}>{label}</Text>
                       </View>
@@ -425,10 +448,15 @@ export default function Signup() {
                 <TouchableOpacity
                   onPress={() => setTosAccepted(!tosAccepted)}
                   activeOpacity={0.7}
+                  accessibilityRole="checkbox"
+                  accessibilityLabel="I agree to the Terms of Service"
+                  accessibilityState={{ checked: tosAccepted }}
                   style={s.tosContainer}
                 >
                   <View style={[s.checkbox, tosAccepted && s.checkboxChecked]}>
-                    {tosAccepted && <Text style={s.checkboxText}>✓</Text>}
+                    {tosAccepted && (
+                      <Ionicons name="checkmark" size={16 * SCALE} color={palette.bg} />
+                    )}
                   </View>
                   <Text style={s.tosText}>
                     I agree to the{" "}
@@ -500,17 +528,19 @@ const s = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
   },
-  header: { alignItems: "center", marginTop: SPACING.xl * SCALE, marginBottom: SPACING.md * SCALE },
-  brandTitle: { color: palette.ink, fontSize: 32 * SCALE, fontWeight: "800" },
+  header: { alignItems: "center", marginBottom: SPACING.lg * SCALE },
+  logo: { width: 90 * SCALE, height: 90 * SCALE, marginBottom: SPACING.sm * SCALE },
+  brandTitle: { color: palette.ink, fontSize: 42 * SCALE, fontWeight: "800" },
+  subtitle: { color: palette.muted, fontSize: 20 * SCALE, marginTop: 6 * SCALE },
   errorContainer: {
-    backgroundColor: "#2a0e0e",
+    backgroundColor: darkTheme.errorBg,
     padding: SPACING.sm * SCALE,
     borderRadius: BORDER_RADIUS.sm,
     marginBottom: SPACING.md * SCALE,
     borderWidth: 1,
-    borderColor: "#4a1e1e",
+    borderColor: darkTheme.errorBorder,
   },
-  errorText: { color: "#ff7d7d", textAlign: "center" },
+  errorText: { color: darkTheme.errorText, textAlign: "center" },
   formArea: { width: "100%" },
   nameRow: { flexDirection: "row", gap: SPACING.sm * SCALE },
   nameField: { flex: 1 },
@@ -566,9 +596,9 @@ const s = StyleSheet.create({
   },
   ruleRow: { flexDirection: "row", alignItems: "center", marginBottom: 4 * SCALE },
   ruleText: { color: palette.ghost, fontSize: 13 * SCALE, marginLeft: 6 * SCALE },
-  ruleMet: { color: "#4caf50" },
+  ruleMet: { color: darkTheme.success },
   passwordMismatch: {
-    color: "#ff7d7d",
+    color: darkTheme.errorText,
     fontSize: 13 * SCALE,
     marginTop: -SPACING.sm * SCALE,
     marginBottom: SPACING.md * SCALE,

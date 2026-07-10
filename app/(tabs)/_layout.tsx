@@ -1,17 +1,18 @@
-import { HapticTab } from "@/components/HapticTab";
-import { IconSymbol } from "@/components/ui/IconSymbol";
-import TabBarBackground from "@/components/ui/TabBarBackground";
-import { useColorScheme } from "@/hooks/useColorScheme";
+import { darkTheme } from "@/constants/theme";
 import { ACCENT } from "@/constants/Colors";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
-import { Ionicons } from "@expo/vector-icons";
-import { Tabs, useRouter } from "expo-router";
+import { db } from "@/services/firebaseConfig";
+import { createNativeBottomTabNavigator } from "@bottom-tabs/react-navigation";
+import { useRouter, withLayoutContext } from "expo-router";
+import { doc, getDoc } from "firebase/firestore";
 import React, { useEffect } from "react";
-import { Platform } from "react-native";
+
+// Bridge the native bottom-tabs navigator into expo-router's file-based routing.
+const BottomTabNavigator = createNativeBottomTabNavigator().Navigator;
+const Tabs = withLayoutContext(BottomTabNavigator);
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-  const { isSignedIn, isLoaded } = useFirebaseAuth();
+  const { isSignedIn, isLoaded, userId } = useFirebaseAuth();
   const router = useRouter();
 
   // Redirect to login if not signed in
@@ -21,78 +22,61 @@ export default function TabLayout() {
     }
   }, [isLoaded, isSignedIn]);
 
-  // Show nothing (for now) while loading auth state
+  // Profile-completeness gate: a signed-in user whose profile doc is missing or
+  // empty (an orphan / half-created account) is sent to CompleteProfile to
+  // self-heal, instead of into a broken tabs experience. Runs in the background
+  // so it doesn't delay the app for the vast majority with complete profiles.
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !userId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, "users", userId));
+        const data = snap.data();
+        const complete = snap.exists() && !!data?.first_name && !!data?.email;
+        if (!cancelled && !complete) {
+          router.replace("/(auth)/CompleteProfile" as any);
+        }
+      } catch {
+        // Don't block the app on a transient read failure.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoaded, isSignedIn, userId]);
+
+  // Show nothing while loading auth state
   if (!isLoaded || !isSignedIn) {
     return null;
   }
 
   return (
     <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: ACCENT,
-        tabBarInactiveTintColor: '#666666',
-        headerShown: false,
-        tabBarButton: HapticTab,
-        tabBarBackground: TabBarBackground,
-        tabBarStyle: {
-          backgroundColor: '#000000',
-          borderTopColor: '#000000',
-          ...Platform.select({
-            ios: {
-              position: "absolute",
-            },
-            default: {},
-          }),
-        },
-      }}
+      tabBarActiveTintColor={ACCENT}
+      tabBarInactiveTintColor={darkTheme.textMuted}
+      barTintColor="#000000"
     >
       <Tabs.Screen
         name="index"
-        options={{
-          title: "Home",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="house.fill" color={color} />
-          ),
-        }}
+        options={{ title: "Home", tabBarIcon: () => ({ sfSymbol: "house.fill" }) }}
       />
       <Tabs.Screen
         name="chats"
         options={{
           title: "Chats",
-          tabBarIcon: ({ color }) => 
-            Platform.OS === 'ios' ? (
-              <IconSymbol
-                size={28}
-                name="bubble.left.and.bubble.right.fill"
-                color={color}
-              />
-            ) : (
-              <Ionicons name="chatbubbles" size={28} color={color} />
-            )
+          tabBarIcon: () => ({ sfSymbol: "bubble.left.and.bubble.right.fill" }),
         }}
       />
       <Tabs.Screen
         name="post"
-        options={{
-          title: "Post",
-          tabBarIcon: ({ color }) => 
-            Platform.OS === 'ios' ? (
-              <IconSymbol size={28} name="plus.circle.fill" color={color} />
-            ) : (
-              <Ionicons name="add-circle" size={28} color={color} />
-            )
-        }}
+        options={{ title: "Post", tabBarIcon: () => ({ sfSymbol: "plus.circle.fill" }) }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color }) => 
-            Platform.OS === 'ios' ? (
-              <IconSymbol size={28} name="person.crop.circle" color={color} />
-            ) : (
-              <Ionicons name="person-circle" size={28} color={color} />
-            )
+          tabBarIcon: () => ({ sfSymbol: "person.crop.circle.fill" }),
         }}
       />
     </Tabs>

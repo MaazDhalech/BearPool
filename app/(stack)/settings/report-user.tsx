@@ -1,12 +1,13 @@
+import { darkTheme } from "@/constants/theme";
 import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
+import { NavHeader } from "@/components/ui/NavHeader";
 import {
   Box,
   Button,
   HStack,
   Heading,
-  Icon,
   Input,
   InputField,
   ScrollView,
@@ -24,14 +25,13 @@ import {
   getDoc,
   serverTimestamp,
 } from "firebase/firestore";
-import { ChevronLeft } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
 } from "react-native";
+import { toast } from "@/components/ui/Dialog";
 
 const REPORT_REASONS = [
   "Harassment or hate",
@@ -67,10 +67,7 @@ export default function ReportUserScreen() {
   useEffect(() => {
     const fetchData = async () => {
       if (!reporterId || !targetUserId) {
-        Alert.alert(
-          "Missing information",
-          "Unable to load report form. Please try again."
-        );
+        toast("Unable to load report form. Please try again.", { type: "error" });
         router.back();
         return;
       }
@@ -106,7 +103,7 @@ export default function ReportUserScreen() {
         }
       } catch (error) {
         console.error("Error loading report screen:", error);
-        Alert.alert("Error", "Failed to load report form. Please try again.");
+        toast("Failed to load report form. Please try again.", { type: "error" });
         router.back();
         return;
       } finally {
@@ -124,21 +121,20 @@ export default function ReportUserScreen() {
 
   const handleSubmit = async () => {
     if (!reporterId || !targetUserId) {
-      Alert.alert("Error", "Missing information for this report.");
+      toast("Missing information for this report.", { type: "error" });
       return;
     }
 
     if (!canSubmit) {
-      Alert.alert("Error", "Please choose a reason and provide details.");
+      toast("Please choose a reason and provide details.", { type: "error" });
       return;
     }
 
     const web3formsApiKey = Constants.expoConfig?.extra?.web3formsApiKey;
     if (!web3formsApiKey) {
-      Alert.alert(
-        "Error",
-        "Support service is not configured. Please contact the administrator."
-      );
+      toast("Support service is not configured. Please contact the administrator.", {
+        type: "error",
+      });
       return;
     }
 
@@ -193,17 +189,13 @@ export default function ReportUserScreen() {
         console.error("Failed to log report to Firestore:", dbError);
       }
 
-      Alert.alert(
-        "Report submitted",
-        "Thanks for keeping BearPool safe. Our team will review this report shortly.",
-        [{ text: "OK", onPress: () => router.back() }]
-      );
+      toast("Thanks for keeping BearPool safe. Our team will review this report shortly.", {
+        type: "success",
+      });
+      router.back();
     } catch (error) {
       console.error("Error submitting report:", error);
-      Alert.alert(
-        "Error",
-        "Failed to submit your report. Please try again later."
-      );
+      toast("Failed to submit your report. Please try again later.", { type: "error" });
     } finally {
       setSubmitting(false);
     }
@@ -211,8 +203,8 @@ export default function ReportUserScreen() {
 
   if (loading) {
     return (
-      <Box flex={1} bg="#121212" justifyContent="center" alignItems="center">
-        <Text color="#a0a0a0">Loading report form...</Text>
+      <Box flex={1} bg={darkTheme.bg} justifyContent="center" alignItems="center">
+        <Text color={darkTheme.textSecondary}>Loading report form...</Text>
       </Box>
     );
   }
@@ -225,25 +217,18 @@ export default function ReportUserScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
     >
-      <Box flex={1} bg="#121212">
+      <Box flex={1} bg={darkTheme.bg}>
+        <NavHeader title="Report User" />
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingBottom: 60, flexGrow: 1 }}
         >
           <Box px="$4" py="$6">
-            <HStack alignItems="center" mb="$6" mt="$8">
-              <TouchableOpacity onPress={() => router.back()}>
-                <Icon as={ChevronLeft} size="xl" color="white" />
-              </TouchableOpacity>
-              <Heading size="xl" color="white" ml="$3">
-                Report User
-              </Heading>
-            </HStack>
 
-            <Text color="#a0a0a0" fontSize="$sm" mb="$6" lineHeight="$md">
+            <Text color={darkTheme.textSecondary} fontSize="$sm" mb="$6" lineHeight="$md">
               You’re about to report{" "}
-              <Text color="white" fontWeight="$semibold">
+              <Text color={darkTheme.textPrimary} fontWeight="$semibold">
                 {targetInfo?.name}
               </Text>{" "}
               (@{targetInfo?.username}). We’ll review your report within 24 hours.
@@ -251,7 +236,7 @@ export default function ReportUserScreen() {
 
             <VStack space="lg">
               <VStack space="sm">
-                <Text color="#a0a0a0" fontSize="$sm">
+                <Text color={darkTheme.textSecondary} fontSize="$sm">
                   Reason
                 </Text>
                 <HStack flexWrap="wrap" space="sm">
@@ -269,15 +254,15 @@ export default function ReportUserScreen() {
                         marginBottom: 8,
                         borderWidth: 1,
                         borderColor:
-                          form.reason === reason ? ACCENT : "#333",
+                          form.reason === reason ? ACCENT : darkTheme.border,
                         backgroundColor:
-                          form.reason === reason ? "#2e2610" : "#1e1e1e",
+                          form.reason === reason ? "#2e2610" : darkTheme.surface,
                       }}
                     >
                       <Text
                         style={{
                           color:
-                            form.reason === reason ? ACCENT : "#a0a0a0",
+                            form.reason === reason ? ACCENT : darkTheme.textSecondary,
                           fontWeight:
                             form.reason === reason ? "600" : "400",
                         }}
@@ -290,14 +275,14 @@ export default function ReportUserScreen() {
               </VStack>
 
               <VStack space="sm">
-                <Text color="#a0a0a0" fontSize="$sm">
+                <Text color={darkTheme.textSecondary} fontSize="$sm">
                   Additional details
                 </Text>
-                <Textarea bg="#2a2a2a" borderColor="#333" borderRadius="$lg">
+                <Textarea bg={darkTheme.raised} borderColor={darkTheme.border} borderRadius="$lg">
                   <TextareaInput
                     placeholder="Describe what happened..."
-                    placeholderTextColor="#666"
-                    color="white"
+                    placeholderTextColor={darkTheme.textMuted}
+                    color={darkTheme.textPrimary}
                     value={form.message}
                     onChangeText={(text) =>
                       setForm((prev) => ({ ...prev, message: text }))
@@ -310,14 +295,14 @@ export default function ReportUserScreen() {
               </VStack>
 
               <VStack space="sm">
-                <Text color="#a0a0a0" fontSize="$sm">
+                <Text color={darkTheme.textSecondary} fontSize="$sm">
                   Your email (optional)
                 </Text>
-                <Input bg="#2a2a2a" borderColor="#333">
+                <Input bg={darkTheme.raised} borderColor={darkTheme.border}>
                   <InputField
                     placeholder="We'll follow up here"
-                    placeholderTextColor="#666"
-                    color="white"
+                    placeholderTextColor={darkTheme.textMuted}
+                    color={darkTheme.textPrimary}
                     value={reporterInfo.email}
                     onChangeText={(text) =>
                       setReporterInfo((prev) => ({ ...prev, email: text }))
@@ -333,7 +318,7 @@ export default function ReportUserScreen() {
                 onPress={handleSubmit}
                 isDisabled={!canSubmit || submitting}
               >
-                <Text color="#121212" fontWeight="$semibold">
+                <Text color={darkTheme.bg} fontWeight="$semibold">
                   {submitting ? "Submitting..." : "Submit Report"}
                 </Text>
               </Button>

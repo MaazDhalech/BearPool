@@ -1,6 +1,10 @@
+import { darkTheme } from "@/constants/theme";
 import { ACCENT } from "@/constants/Colors";
 import { db, auth } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
+import { NavHeader } from "@/components/ui/NavHeader";
+import { Sheet } from "@/components/ui/Sheet";
+import { confirm, toast } from "@/components/ui/Dialog";
 import { deleteUser, EmailAuthProvider, GoogleAuthProvider, OAuthProvider, reauthenticateWithCredential, signOut as firebaseSignOut } from "firebase/auth";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import * as AppleAuthentication from "expo-apple-authentication";
@@ -11,18 +15,8 @@ import {
   Box,
   Button,
   ButtonText,
-  CloseIcon,
   HStack,
-  Heading,
-  Icon,
-  Modal,
-  ModalBackdrop,
-  ModalBody,
-  ModalCloseButton,
-  ModalContent,
-  ModalHeader,
   ScrollView,
-  Spinner,
   Text,
   VStack,
 } from "@gluestack-ui/themed";
@@ -44,19 +38,10 @@ import {
   updateDoc,
   where
 } from "firebase/firestore";
-import {
-  Bell,
-  ChevronLeft,
-  FileText,
-  HelpCircle,
-  LogOut,
-  Shield,
-  Trash2,
-  UserX,
-} from "lucide-react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import {
-  Alert,
+  ActivityIndicator,
   KeyboardAvoidingView,
   Modal as RNModal,
   Platform,
@@ -82,7 +67,7 @@ interface BlockedUser {
 }
 
 interface SettingsItemProps {
-  icon: any;
+  icon: keyof typeof Ionicons.glyphMap;
   title: string;
   subtitle?: string;
   onPress: () => void;
@@ -102,43 +87,38 @@ const SettingsItem: React.FC<SettingsItemProps> = ({
     onPress={onPress}
     activeOpacity={0.7}
     style={{
-      backgroundColor: "#1e1e1e",
+      backgroundColor: darkTheme.surface,
       padding: 16,
       borderRadius: 12,
       marginBottom: 12,
       borderWidth: 1,
-      borderColor: "#333",
+      borderColor: darkTheme.border,
     }}
   >
     <HStack space="md" alignItems="center">
-      <Box bg="#2a2a2a" p="$3" borderRadius="$md">
-        <Icon as={icon} size="lg" color={color} />
+      <Box bg={darkTheme.raised} p="$3" borderRadius="$md">
+        <Ionicons name={icon} size={24} color={color} />
       </Box>
       <VStack flex={1}>
         <HStack justifyContent="space-between" alignItems="center">
-          <Text color="white" fontSize="$lg" fontWeight="$semibold">
+          <Text color={darkTheme.textPrimary} fontSize="$lg" fontWeight="$semibold">
             {title}
           </Text>
           {badge && (
-            <Box bg="#ff6b6b" px="$2" py="$1" borderRadius="$full">
-              <Text color="white" fontSize="$xs" fontWeight="$bold">
+            <Box bg={darkTheme.danger} px="$2" py="$1" borderRadius="$full">
+              <Text color={darkTheme.textPrimary} fontSize="$xs" fontWeight="$bold">
                 {badge}
               </Text>
             </Box>
           )}
         </HStack>
         {subtitle && (
-          <Text color="#a0a0a0" fontSize="$sm" mt="$1">
+          <Text color={darkTheme.textSecondary} fontSize="$sm" mt="$1">
             {subtitle}
           </Text>
         )}
       </VStack>
-      <Icon
-        as={ChevronLeft}
-        size="md"
-        color="#a0a0a0"
-        style={{ transform: [{ rotate: "180deg" }] }}
-      />
+      <Ionicons name="chevron-forward" size={20} color={darkTheme.textSecondary} />
     </HStack>
   </TouchableOpacity>
 );
@@ -232,7 +212,7 @@ export default function SettingsScreen() {
       setBlockedUsers(blockedUsersData);
     } catch (error) {
       console.error("Error fetching blocked users:", error);
-      Alert.alert("Error", "Failed to load blocked users.");
+      toast("Failed to load blocked users.", { type: "error" });
     } finally {
       setLoadingBlockedUsers(false);
     }
@@ -242,71 +222,57 @@ export default function SettingsScreen() {
   const handleUnblockUser = async (blockedUserId: string, username: string) => {
     if (!userId) return;
 
-    Alert.alert(
-      "Unblock User",
-      `Are you sure you want to unblock ${username}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Unblock",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await updateDoc(doc(db, "users", userId), {
-                blockedUsers: arrayRemove(blockedUserId),
-              });
+    const ok = await confirm({
+      title: "Unblock User",
+      message: `Are you sure you want to unblock ${username}?`,
+      confirmText: "Unblock",
+      destructive: true,
+    });
+    if (!ok) return;
 
-              setBlockedUsers((prev) =>
-                prev.filter((user) => user.id !== blockedUserId)
-              );
-              setProfileData((prev: any) => ({
-                ...prev,
-                blockedUsers:
-                  prev.blockedUsers?.filter((id: string) => id !== blockedUserId) ||
-                  [],
-              }));
+    try {
+      await updateDoc(doc(db, "users", userId), {
+        blockedUsers: arrayRemove(blockedUserId),
+      });
 
-              Alert.alert("Success", `${username} has been unblocked.`);
-            } catch (error) {
-              console.error("Error unblocking user:", error);
-              Alert.alert("Error", "Failed to unblock user. Please try again.");
-            }
-          },
-        },
-      ]
-    );
+      setBlockedUsers((prev) =>
+        prev.filter((user) => user.id !== blockedUserId)
+      );
+      setProfileData((prev: any) => ({
+        ...prev,
+        blockedUsers:
+          prev.blockedUsers?.filter((id: string) => id !== blockedUserId) ||
+          [],
+      }));
+
+      toast(`${username} has been unblocked.`, { type: "success" });
+    } catch (error) {
+      console.error("Error unblocking user:", error);
+      toast("Failed to unblock user. Please try again.", { type: "error" });
+    }
   };
 
   // Delete account handler
   const handleDeleteAccount = async () => {
     if (!userId) return;
 
-    Alert.alert(
-      "Delete Account",
-      "Are you sure you want to delete your account? This action cannot be undone. All your data will be permanently deleted.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            // Second confirmation
-            Alert.alert(
-              "Final Confirmation",
-              "This will permanently delete your account and all associated data. Are you absolutely sure?",
-              [
-                { text: "Cancel", style: "cancel" },
-                {
-                  text: "Yes, Delete My Account",
-                  style: "destructive",
-                  onPress: performAccountDeletion,
-                },
-              ]
-            );
-          },
-        },
-      ]
-    );
+    const first = await confirm({
+      title: "Delete Account",
+      message:
+        "Are you sure you want to delete your account? This action cannot be undone. All your data will be permanently deleted.",
+      confirmText: "Delete",
+      destructive: true,
+    });
+    if (!first) return;
+
+    const second = await confirm({
+      title: "Final Confirmation",
+      message:
+        "This will permanently delete your account and all associated data. Are you absolutely sure?",
+      confirmText: "Yes, Delete My Account",
+      destructive: true,
+    });
+    if (second) performAccountDeletion();
   };
 
 const cleanupUserRides = async (userId: string) => {
@@ -326,11 +292,11 @@ const cleanupUserRides = async (userId: string) => {
           memberIds: arrayRemove(userId),
         });
       } else {
-        // No other members — delete the ride entirely
+        // No other members - delete the ride entirely
         await deleteDoc(rideDoc.ref);
       }
     } else {
-      // Regular member — remove and free up a seat
+      // Regular member - remove and free up a seat
       await updateDoc(rideDoc.ref, {
         memberIds: arrayRemove(userId),
         seats: increment(1),
@@ -346,7 +312,7 @@ const performAccountDeletion = async () => {
   try {
     const currentUser = auth.currentUser;
     if (!currentUser) {
-      Alert.alert("Error", "Session expired. Please sign in again.");
+      toast("Session expired. Please sign in again.", { type: "error" });
       setDeletingAccount(false);
       return;
     }
@@ -356,12 +322,12 @@ const performAccountDeletion = async () => {
     await deleteUser(currentUser);
 
     router.replace("/(auth)/Login");
-    Alert.alert("Deleted", "Your account is gone forever.");
+    toast("Your account has been deleted.", { type: "info" });
   } catch (error: any) {
     if (error?.code === "auth/requires-recent-login") {
       setShowReauthModal(true);
     } else {
-      Alert.alert("Error", error.message || "Something went wrong");
+      toast(error.message || "Something went wrong", { type: "error" });
     }
   } finally {
     setDeletingAccount(false);
@@ -387,7 +353,7 @@ const handleReauthAndDelete = async () => {
       await performAccountDeletion();
     } catch (error: any) {
       if (error?.code !== "SIGN_IN_CANCELLED") {
-        Alert.alert("Error", error.message || "Google re-authentication failed.");
+        toast(error.message || "Google re-authentication failed.", { type: "error" });
       }
     }
     return;
@@ -415,7 +381,7 @@ const handleReauthAndDelete = async () => {
       await performAccountDeletion();
     } catch (error: any) {
       if (error?.code !== "ERR_REQUEST_CANCELED") {
-        Alert.alert("Error", error.message || "Apple re-authentication failed.");
+        toast(error.message || "Apple re-authentication failed.", { type: "error" });
       }
     }
     return;
@@ -457,22 +423,21 @@ const handleReauthAndDelete = async () => {
   const handleLogout = async () => {
     if (!isLoaded) return;
 
-    Alert.alert("Log Out", "Are you sure you want to log out?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Log Out",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await firebaseSignOut(auth);
-            router.replace("/(auth)/Login");
-          } catch (err) {
-            console.error("Error signing out:", err);
-            Alert.alert("Error", "Failed to sign out. Please try again.");
-          }
-        },
-      },
-    ]);
+    const ok = await confirm({
+      title: "Log Out",
+      message: "Are you sure you want to log out?",
+      confirmText: "Log Out",
+      destructive: true,
+    });
+    if (!ok) return;
+
+    try {
+      await firebaseSignOut(auth);
+      router.replace("/(auth)/Login");
+    } catch (err) {
+      console.error("Error signing out:", err);
+      toast("Failed to sign out. Please try again.", { type: "error" });
+    }
   };
 
   const handlePrivacySettings = () => {
@@ -497,19 +462,21 @@ const handleReauthAndDelete = async () => {
 
     try {
       if (value) {
-        // Enabling — check/request permission
+        // Enabling - check/request permission
         const { status } = await Notifications.getPermissionsAsync();
 
         if (status === "denied") {
           // Can't request again; send user to system settings
-          Alert.alert(
-            "Notifications Blocked",
-            "You've previously denied notifications. Please enable them in your device Settings.",
-            [
-              { text: "Cancel", style: "cancel" },
-              { text: "Open Settings", onPress: () => Linking.openSettings() },
-            ]
-          );
+          if (
+            await confirm({
+              title: "Notifications Blocked",
+              message:
+                "You've previously denied notifications. Please enable them in your device Settings.",
+              confirmText: "Open Settings",
+            })
+          ) {
+            Linking.openSettings();
+          }
           return;
         }
 
@@ -560,7 +527,7 @@ const handleReauthAndDelete = async () => {
       }
     } catch (error) {
       console.error("Failed to update notification preference", error);
-      Alert.alert("Error", "Failed to update notification settings.");
+      toast("Failed to update notification settings.", { type: "error" });
     } finally {
       setSavingNotif(false);
     }
@@ -572,8 +539,8 @@ const handleReauthAndDelete = async () => {
 
   if (loading) {
     return (
-      <Box flex={1} bg="#121212" justifyContent="center" alignItems="center">
-        <Text color="#a0a0a0">Loading settings...</Text>
+      <Box flex={1} bg={darkTheme.bg} justifyContent="center" alignItems="center">
+        <Text color={darkTheme.textSecondary}>Loading settings...</Text>
       </Box>
     );
   }
@@ -584,27 +551,19 @@ const handleReauthAndDelete = async () => {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
     >
-      <Box flex={1} bg="#121212">
+      <Box flex={1} bg={darkTheme.bg}>
+        <NavHeader title="Settings" />
         <ScrollView showsVerticalScrollIndicator={false}>
           <Box px="$4" py="$6">
-            {/* Header */}
-            <HStack alignItems="center" mb="$6" mt="$8">
-              <TouchableOpacity onPress={handleGoBack}>
-                <Icon as={ChevronLeft} size="xl" color="white" />
-              </TouchableOpacity>
-              <Heading size="xl" color="white" ml="$3">
-                Settings
-              </Heading>
-            </HStack>
 
             {/* Settings Items */}
             <VStack space="sm">
               <SettingsItem
-                icon={UserX}
+                icon="person-remove-outline"
                 title="Blocked Users"
                 subtitle="Manage users you've blocked"
                 onPress={() => setShowBlockedUsers(true)}
-                color="#ff6b6b"
+                color={darkTheme.danger}
                 badge={
                   profileData?.blockedUsers?.length > 0
                     ? profileData.blockedUsers.length.toString()
@@ -613,15 +572,15 @@ const handleReauthAndDelete = async () => {
               />
 
               <SettingsItem
-                icon={Shield}
+                icon="shield-checkmark-outline"
                 title="Privacy Policy"
                 subtitle="View our privacy policy"
                 onPress={handlePrivacySettings}
-                color="#4CAF50"
+                color={darkTheme.success}
               />
 
               <SettingsItem
-                icon={FileText}
+                icon="document-text-outline"
                 title="Terms of Service"
                 subtitle="Read our terms of service"
                 onPress={() => router.push("/(stack)/settings/terms-of-service")}
@@ -629,7 +588,7 @@ const handleReauthAndDelete = async () => {
               />
 
               <SettingsItem
-                icon={Bell}
+                icon="notifications-outline"
                 title="Notifications"
                 subtitle="Manage your notification preferences"
                 onPress={handleNotificationSettings}
@@ -637,7 +596,7 @@ const handleReauthAndDelete = async () => {
               />
 
               <SettingsItem
-                icon={HelpCircle}
+                icon="help-circle-outline"
                 title="Help & Support"
                 subtitle="Get help or contact our support team"
                 onPress={handleHelpSupport}
@@ -645,27 +604,27 @@ const handleReauthAndDelete = async () => {
               />
 
               <SettingsItem
-                icon={LogOut}
+                icon="log-out-outline"
                 title="Log Out"
                 subtitle="Sign out of your account"
                 onPress={handleLogout}
-                color="#ff6b6b"
+                color={darkTheme.danger}
               />
 
               <SettingsItem
-                icon={Trash2}
+                icon="trash-outline"
                 title="Delete Account"
                 subtitle="Permanently delete your account and all data"
                 onPress={handleDeleteAccount}
-                color="#ff5555"
+                color={darkTheme.danger}
               />
             </VStack>
 
             {deletingAccount && (
-              <Box mt="$4" p="$4" bg="#2a2a2a" borderRadius="$md">
+              <Box mt="$4" p="$4" bg={darkTheme.raised} borderRadius="$md">
                 <HStack space="sm" justifyContent="center" alignItems="center">
-                  <Spinner size="small" color="#ff6b6b" />
-                  <Text color="#ff6b6b" textAlign="center">
+                  <ActivityIndicator size="small" color={ACCENT} />
+                  <Text color={darkTheme.danger} textAlign="center">
                     Deleting account... Please wait.
                   </Text>
                 </HStack>
@@ -674,112 +633,86 @@ const handleReauthAndDelete = async () => {
           </Box>
         </ScrollView>
 
-        {/* Blocked Users Modal */}
-        <Modal
-          isOpen={showBlockedUsers}
+        {/* Blocked Users - bottom sheet */}
+        <Sheet
+          visible={showBlockedUsers}
           onClose={() => setShowBlockedUsers(false)}
-          finalFocusRef={undefined}
+          title="Blocked Users"
         >
-          <ModalBackdrop />
-          <ModalContent bg="#1e1e1e" maxWidth="$96" maxHeight="$3/4">
-            <ModalHeader>
-              <Heading size="lg" color="white">
-                Blocked Users
-              </Heading>
-              <ModalCloseButton>
-                <Icon as={CloseIcon} color="white" />
-              </ModalCloseButton>
-            </ModalHeader>
-            <ModalBody>
-              {loadingBlockedUsers ? (
-                <Box py="$4" alignItems="center">
-                  <Text color="#a0a0a0">Loading blocked users...</Text>
-                </Box>
-              ) : blockedUsers.length === 0 ? (
-                <Box py="$4" alignItems="center">
-                  <Text color="#a0a0a0">No blocked users</Text>
-                </Box>
-              ) : (
-                <ScrollView showsVerticalScrollIndicator={false}>
-                  <VStack space="md" py="$2">
-                    {blockedUsers.map((blockedUser) => (
-                      <HStack
-                        key={blockedUser.id}
-                        space="md"
-                        alignItems="center"
-                        bg="#2a2a2a"
-                        p="$3"
-                        borderRadius="$md"
+          <RNView style={{ paddingHorizontal: 24, maxHeight: 400 }}>
+            {loadingBlockedUsers ? (
+              <Box py="$4" alignItems="center">
+                <Text color={darkTheme.textSecondary}>Loading blocked users...</Text>
+              </Box>
+            ) : blockedUsers.length === 0 ? (
+              <Box py="$4" alignItems="center">
+                <Text color={darkTheme.textSecondary}>No blocked users</Text>
+              </Box>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <VStack space="md" py="$2">
+                  {blockedUsers.map((blockedUser) => (
+                    <HStack
+                      key={blockedUser.id}
+                      space="md"
+                      alignItems="center"
+                      bg={darkTheme.raised}
+                      p="$3"
+                      borderRadius="$md"
+                    >
+                      <Avatar size="md" bg={darkTheme.border}>
+                        {blockedUser.avatar ? (
+                          <AvatarImage
+                            source={{ uri: blockedUser.avatar }}
+                            alt="Avatar"
+                          />
+                        ) : (
+                          <Avatar.FallbackText color={darkTheme.textPrimary}>
+                            {(blockedUser.first_name?.[0] || "") +
+                              (blockedUser.last_name?.[0] || "") || "U"}
+                          </Avatar.FallbackText>
+                        )}
+                      </Avatar>
+
+                      <VStack flex={1}>
+                        <Text color={darkTheme.textPrimary} fontWeight="$semibold">
+                          {blockedUser.username}
+                        </Text>
+                        <Text color={darkTheme.textSecondary} fontSize="$sm">
+                          {blockedUser.first_name} {blockedUser.last_name}
+                        </Text>
+                      </VStack>
+
+                      <Button
+                        size="sm"
+                        bg={darkTheme.danger}
+                        onPress={() =>
+                          handleUnblockUser(blockedUser.id, blockedUser.username)
+                        }
                       >
-                        <Avatar size="md" bg="#333">
-                          {blockedUser.avatar ? (
-                            <AvatarImage
-                              source={{ uri: blockedUser.avatar }}
-                              alt="Avatar"
-                            />
-                          ) : (
-                            <Avatar.FallbackText color="white">
-                              {(blockedUser.first_name?.[0] || "") +
-                                (blockedUser.last_name?.[0] || "") || "U"}
-                            </Avatar.FallbackText>
-                          )}
-                        </Avatar>
+                        <ButtonText color={darkTheme.textPrimary} fontSize="$sm">
+                          Unblock
+                        </ButtonText>
+                      </Button>
+                    </HStack>
+                  ))}
+                </VStack>
+              </ScrollView>
+            )}
+          </RNView>
+        </Sheet>
 
-                        <VStack flex={1}>
-                          <Text color="white" fontWeight="$semibold">
-                            {blockedUser.username}
-                          </Text>
-                          <Text color="#a0a0a0" fontSize="$sm">
-                            {blockedUser.first_name} {blockedUser.last_name}
-                          </Text>
-                        </VStack>
-
-                        <Button
-                          size="sm"
-                          bg="#ff6b6b"
-                          onPress={() =>
-                            handleUnblockUser(
-                              blockedUser.id,
-                              blockedUser.username
-                            )
-                          }
-                        >
-                          <ButtonText color="white" fontSize="$sm">
-                            Unblock
-                          </ButtonText>
-                        </Button>
-                      </HStack>
-                    ))}
-                  </VStack>
-                </ScrollView>
-              )}
-            </ModalBody>
-          </ModalContent>
-        </Modal>
-
-        {/* Notification Settings — native bottom sheet */}
-        <RNModal
+        {/* Notification Settings - bottom sheet */}
+        <Sheet
           visible={showNotifSettings}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setShowNotifSettings(false)}
+          onClose={() => setShowNotifSettings(false)}
+          title="Notifications"
         >
-          <TouchableWithoutFeedback onPress={() => setShowNotifSettings(false)}>
-            <RNView style={styles.notifBackdrop} />
-          </TouchableWithoutFeedback>
-          <RNView style={styles.notifSheet}>
-            <RNView style={styles.notifHandle} />
-            <HStack justifyContent="space-between" alignItems="center" mb="$5">
-              <Heading size="lg" color="white">Notifications</Heading>
-              <TouchableOpacity onPress={() => setShowNotifSettings(false)}>
-                <Icon as={CloseIcon} color="#a0a0a0" size="lg" />
-              </TouchableOpacity>
-            </HStack>
-
+          <RNView style={{ paddingHorizontal: 24 }}>
             <RNView style={styles.notifRow}>
               <RNView style={{ flex: 1, marginRight: 16 }}>
-                <Text color="white" fontWeight="$semibold" fontSize="$md">Push Notifications</Text>
-                <Text color="#a0a0a0" fontSize="$sm" mt="$1">
+                <Text color={darkTheme.textPrimary} fontWeight="$semibold" fontSize="$md">Push Notifications</Text>
+                <Text color={darkTheme.textSecondary} fontSize="$sm" mt="$1">
                   Ride updates, chat messages, member activity
                 </Text>
               </RNView>
@@ -787,8 +720,8 @@ const handleReauthAndDelete = async () => {
                 value={notifEnabled}
                 onValueChange={handleNotifToggle}
                 disabled={savingNotif}
-                trackColor={{ false: "#444", true: ACCENT }}
-                thumbColor="#ffffff"
+                trackColor={{ false: darkTheme.borderStrong, true: ACCENT }}
+                thumbColor={darkTheme.textPrimary}
               />
             </RNView>
 
@@ -798,12 +731,12 @@ const handleReauthAndDelete = async () => {
                   Notifications are blocked in your device settings.
                 </Text>
                 <Button size="sm" bg={ACCENT} onPress={() => Linking.openSettings()}>
-                  <ButtonText color="#121212">Open Device Settings</ButtonText>
+                  <ButtonText color={darkTheme.bg}>Open Device Settings</ButtonText>
                 </Button>
               </RNView>
             )}
           </RNView>
-        </RNModal>
+        </Sheet>
 
         {/* Re-auth modal for account deletion */}
         <RNModal
@@ -829,7 +762,7 @@ const handleReauthAndDelete = async () => {
               <TextInput
                 style={styles.reauthInput}
                 placeholder="Your password"
-                placeholderTextColor="#555"
+                placeholderTextColor={darkTheme.textGhost}
                 secureTextEntry
                 value={reauthPassword}
                 onChangeText={setReauthPassword}
@@ -866,7 +799,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.6)",
   },
   notifSheet: {
-    backgroundColor: "#1e1e1e",
+    backgroundColor: darkTheme.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingHorizontal: 24,
@@ -876,7 +809,7 @@ const styles = StyleSheet.create({
   notifHandle: {
     width: 36,
     height: 4,
-    backgroundColor: "#555",
+    backgroundColor: darkTheme.textGhost,
     borderRadius: 2,
     alignSelf: "center",
     marginBottom: 20,
@@ -884,12 +817,12 @@ const styles = StyleSheet.create({
   notifRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#2a2a2a",
+    backgroundColor: darkTheme.raised,
     borderRadius: 12,
     padding: 16,
   },
   notifWarning: {
-    backgroundColor: "#2a2a2a",
+    backgroundColor: darkTheme.raised,
     borderRadius: 12,
     padding: 16,
     marginTop: 12,
@@ -903,7 +836,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   reauthSheet: {
-    backgroundColor: "#1e1e1e",
+    backgroundColor: darkTheme.surface,
     borderRadius: 20,
     marginHorizontal: 24,
     paddingHorizontal: 24,
@@ -911,35 +844,35 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
   },
   reauthTitle: {
-    color: "#ffffff",
+    color: darkTheme.textPrimary,
     fontSize: 18,
     fontWeight: "700",
     marginBottom: 8,
   },
   reauthSubtitle: {
-    color: "#a0a0a0",
+    color: darkTheme.textSecondary,
     fontSize: 14,
     marginBottom: 20,
     lineHeight: 20,
   },
   reauthInput: {
-    backgroundColor: "#2a2a2a",
+    backgroundColor: darkTheme.raised,
     borderRadius: 10,
     height: 50,
     paddingHorizontal: 16,
-    color: "#ffffff",
+    color: darkTheme.textPrimary,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: "#333",
+    borderColor: darkTheme.border,
     marginBottom: 12,
   },
   reauthError: {
-    color: "#ff7d7d",
+    color: darkTheme.errorText,
     fontSize: 13,
     marginBottom: 12,
   },
   reauthBtn: {
-    backgroundColor: "#ff5555",
+    backgroundColor: darkTheme.danger,
     borderRadius: 10,
     height: 50,
     alignItems: "center",
@@ -950,7 +883,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   reauthBtnText: {
-    color: "#ffffff",
+    color: darkTheme.textPrimary,
     fontSize: 16,
     fontWeight: "700",
   },

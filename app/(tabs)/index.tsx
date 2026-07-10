@@ -1,9 +1,15 @@
+import { darkTheme } from "@/constants/theme";
 import { ACCENT } from "@/constants/Colors";
 import { TYPE } from "@/constants/Typography";
 import { SPACE } from "@/constants/Spacing";
 import { FadeSlideIn } from "@/components/FadeSlideIn";
 import { SpringPressable } from "@/components/SpringPressable";
+import { NavHeader } from "@/components/ui/NavHeader";
+import { SearchInput } from "@/components/ui/SearchInput";
+import { FilterDropdown } from "@/components/ui/ContextMenu";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { db } from "@/services/firebaseConfig";
+import { checkIsAdmin } from "@/utils/admin";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import {
   Avatar,
@@ -12,8 +18,6 @@ import {
   Button,
   HStack,
   Heading,
-  Input,
-  InputField,
   Pressable,
   ScrollView,
   Text,
@@ -215,6 +219,7 @@ export default function HomeScreen() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [rides, setRides] = useState<Ride[]>([]);
+  const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<Record<string, User>>({});
   const [refreshing, setRefreshing] = useState(false);
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
@@ -226,6 +231,7 @@ export default function HomeScreen() {
 
   const ridesUnsubscribeRef = useRef<(() => void) | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const didInitBlockedRef = useRef(false);
 
   const fetchUserGender = async () => {
     if (!userId) return;
@@ -234,8 +240,9 @@ export default function HomeScreen() {
       if (userDoc.exists()) {
         const data = userDoc.data();
         setUserGender(data.gender || null);
-        setIsAdmin(data.isAdmin === true);
       }
+      // Admin status comes from the Auth custom claim, not the Firestore field.
+      setIsAdmin(await checkIsAdmin());
     } catch (err) {
       console.error("Error fetching user gender:", err);
     }
@@ -359,6 +366,7 @@ export default function HomeScreen() {
           const filteredRideData = filterRidesWithBlockedUsers(rideData);
 
           setRides(filteredRideData);
+          setLoading(false);
           await fetchUsersForRides(filteredRideData);
         } catch (err) {
           console.error("Error processing real-time update:", err);
@@ -411,9 +419,11 @@ export default function HomeScreen() {
       const filteredRideData = filterRidesWithBlockedUsers(rideData);
 
       setRides(filteredRideData);
+      setLoading(false);
       await fetchUsersForRides(filteredRideData);
     } catch (err) {
       console.error("Error fetching rides manually:", err);
+      setLoading(false);
     }
   };
 
@@ -433,11 +443,16 @@ export default function HomeScreen() {
     };
   }, [sortOrder]);
 
-  // Re-filter rides when blocked users list changes
+  // Re-filter rides whenever the blocked-users list changes - including when it
+  // becomes empty (unblocking the last user must un-hide their rides). The
+  // initial population is skipped here since initializeData() already sets up
+  // the listener with the freshly-fetched list.
   useEffect(() => {
-    if (blockedUsers.length > 0) {
-      setupRealTimeListener();
+    if (!didInitBlockedRef.current) {
+      didInitBlockedRef.current = true;
+      return;
     }
+    setupRealTimeListener();
   }, [blockedUsers]);
 
   useEffect(() => {
@@ -482,10 +497,10 @@ export default function HomeScreen() {
           py="$3"
           borderRadius="$md"
         >
-          <Text color="white" fontWeight="$bold">
+          <Text color={darkTheme.textPrimary} fontWeight="$bold">
             {isMissing ? "Set Your Gender" : "Restricted Ride"}
           </Text>
-          <Text color="white">
+          <Text color={darkTheme.textPrimary}>
             {isMissing
               ? "Update your gender in Profile to join restricted rides."
               : `This ride is reserved for ${label}.`}
@@ -515,10 +530,10 @@ export default function HomeScreen() {
           duration: 3000,
           render: () => (
             <Box bg="$red600" px="$4" py="$3" borderRadius="$md">
-              <Text color="white" fontWeight="$bold">
+              <Text color={darkTheme.textPrimary} fontWeight="$bold">
                 Ride Archived
               </Text>
-              <Text color="white">
+              <Text color={darkTheme.textPrimary}>
                 This ride has been archived and cannot be joined.
               </Text>
             </Box>
@@ -537,10 +552,10 @@ export default function HomeScreen() {
           duration: 3000,
           render: () => (
             <Box bg="$red600" px="$4" py="$3" borderRadius="$md">
-              <Text color="white" fontWeight="$bold">
+              <Text color={darkTheme.textPrimary} fontWeight="$bold">
                 Ride Has Started
               </Text>
-              <Text color="white">
+              <Text color={darkTheme.textPrimary}>
                 This ride has already started and cannot be joined.
               </Text>
             </Box>
@@ -565,10 +580,10 @@ export default function HomeScreen() {
           duration: 3000,
           render: () => (
             <Box bg="$red600" px="$4" py="$3" borderRadius="$md">
-              <Text color="white" fontWeight="$bold">
+              <Text color={darkTheme.textPrimary} fontWeight="$bold">
                 Ride Full
               </Text>
-              <Text color="white">This ride is full.</Text>
+              <Text color={darkTheme.textPrimary}>This ride is full.</Text>
             </Box>
           ),
         });
@@ -581,10 +596,10 @@ export default function HomeScreen() {
           duration: 3000,
           render: () => (
             <Box bg="$yellow600" px="$4" py="$3" borderRadius="$md">
-              <Text color="white" fontWeight="$bold">
+              <Text color={darkTheme.textPrimary} fontWeight="$bold">
                 Already Joined
               </Text>
-              <Text color="white">You're already part of this ride.</Text>
+              <Text color={darkTheme.textPrimary}>You&apos;re already part of this ride.</Text>
             </Box>
           ),
         });
@@ -600,10 +615,10 @@ export default function HomeScreen() {
           duration: 3000,
           render: () => (
             <Box bg="$yellow600" px="$4" py="$3" borderRadius="$md">
-              <Text color="white" fontWeight="$bold">
+              <Text color={darkTheme.textPrimary} fontWeight="$bold">
                 Finish Profile
               </Text>
-              <Text color="white">
+              <Text color={darkTheme.textPrimary}>
                 Complete your profile before joining rides.
               </Text>
             </Box>
@@ -646,10 +661,10 @@ export default function HomeScreen() {
         duration: 3000,
         render: () => (
           <Box bg="$green600" px="$4" py="$3" borderRadius="$md">
-            <Text color="white" fontWeight="$bold">
-              You're in
+            <Text color={darkTheme.textPrimary} fontWeight="$bold">
+              You&apos;re in
             </Text>
-            <Text color="white">Head to the chat to connect with your group.</Text>
+            <Text color={darkTheme.textPrimary}>Head to the chat to connect with your group.</Text>
           </Box>
         ),
       });
@@ -667,10 +682,10 @@ export default function HomeScreen() {
         duration: 3000,
         render: () => (
           <Box bg="$red600" px="$4" py="$3" borderRadius="$md">
-            <Text color="white" fontWeight="$bold">
+            <Text color={darkTheme.textPrimary} fontWeight="$bold">
               Join Failed
             </Text>
-            <Text color="white">Could not join this ride. Please try again.</Text>
+            <Text color={darkTheme.textPrimary}>Could not join this ride. Please try again.</Text>
           </Box>
         ),
       });
@@ -736,93 +751,64 @@ export default function HomeScreen() {
       return sortOrder === "newest" ? diff : -diff;
     });
 
-  const toggleSortOrder = () =>
-    setSortOrder((prev) => (prev === "newest" ? "oldest" : "newest"));
-
   return (
-    <View style={{ flex: 1, backgroundColor: "#121212" }}>
+    <View style={{ flex: 1, backgroundColor: darkTheme.bg }}>
       <LinearGradient
         colors={["rgba(255, 190, 92, 0.28)", "transparent"]}
         style={{ position: "absolute", top: 0, left: 0, right: 0, height: 280 }}
         pointerEvents="none"
       />
+      <NavHeader title="Home" showBack={false} />
       <ScrollView
         style={{ backgroundColor: "transparent" }}
-        contentContainerStyle={{ paddingHorizontal: SPACE.lg, paddingBottom: 120 }}
+        contentContainerStyle={{ paddingHorizontal: SPACE.lg, paddingTop: SPACE.md, paddingBottom: 120 }}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="#a0a0a0"
+            tintColor={ACCENT}
+            colors={[ACCENT]}
+            progressBackgroundColor={darkTheme.surface}
           />
         }
       >
-        {/* Title */}
-        <View style={{ marginTop: SPACE["4xl"], marginBottom: SPACE["2xl"] }}>
-          <Text style={{ color: "#ffffff", fontSize: TYPE.size.display, fontWeight: TYPE.weight.bold, lineHeight: TYPE.size.display * TYPE.leading.tight }}>
-            Upcoming{"\n"}Ride Groups
-          </Text>
-        </View>
-
-        {/* Search + Sort */}
-        <HStack alignItems="center" space="sm" mb="$3">
-          <Input flex={1} size="md" borderColor="#333" backgroundColor="#1e1e1e">
-            <InputField
-              placeholder="Search by location..."
-              placeholderTextColor="#666"
-              color="white"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-          </Input>
-          <TouchableOpacity
-            onPress={toggleSortOrder}
-            activeOpacity={0.7}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 4,
-              paddingHorizontal: 12,
-              paddingVertical: 8,
-              backgroundColor: "#1e1e1e",
-              borderRadius: 8,
-              borderWidth: 1,
-              borderColor: "#333",
-            }}
-          >
-            <Text style={{ color: ACCENT, fontSize: TYPE.size.label, fontWeight: TYPE.weight.semibold }}>
-              {sortOrder === "newest" ? "Soonest" : "Latest"}
-            </Text>
-            <Ionicons
-              name={sortOrder === "newest" ? "arrow-up" : "arrow-down"}
-              size={12}
-              color={ACCENT}
-            />
-          </TouchableOpacity>
+        {/* Search */}
+        <HStack mb="$3">
+          <SearchInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search by location..."
+          />
         </HStack>
 
-        {/* Gender filter toggle */}
-        <HStack alignItems="center" justifyContent="space-between" mb="$4" px="$1">
-          <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.caption }}>
-            Gender-restricted rides
-          </Text>
-          <Pressable
-            onPress={() => setShowRestrictedRides((prev) => !prev)}
-            px="$3"
-            py="$1"
-            borderRadius="$md"
-            borderWidth={1}
-            borderColor="#333"
-            backgroundColor={showRestrictedRides ? "#2e2610" : "#1e1e1e"}
-          >
-            <Text style={{ color: ACCENT, fontSize: TYPE.size.label, fontWeight: TYPE.weight.semibold }}>
-              {showRestrictedRides ? "Hide" : "Show"}
-            </Text>
-          </Pressable>
+        {/* Filter dropdowns */}
+        <HStack space="sm" mb="$4" alignItems="center">
+          <FilterDropdown
+            icon="swap-vertical"
+            title="Sort rides by departure"
+            selectedKey={sortOrder}
+            options={[
+              { key: "newest", label: "Soonest first", chipLabel: "Soonest" },
+              { key: "oldest", label: "Latest first", chipLabel: "Latest" },
+            ]}
+            onSelect={(k) => setSortOrder(k as "newest" | "oldest")}
+          />
+          <FilterDropdown
+            icon="people-outline"
+            title="Gender-restricted rides"
+            selectedKey={showRestrictedRides ? "all" : "hide"}
+            options={[
+              { key: "all", label: "Show all rides", chipLabel: "All rides" },
+              { key: "hide", label: "Hide gender-restricted", chipLabel: "Restricted hidden" },
+            ]}
+            onSelect={(k) => setShowRestrictedRides(k === "all")}
+          />
         </HStack>
 
         {/* Ride cards */}
         <VStack space="md" pb="$16">
+          {loading && <LoadingState label="Loading rides…" />}
           {filteredRides.map((ride) => {
             if (typeof ride !== "object" || ride === null) return null;
 
@@ -857,9 +843,9 @@ export default function HomeScreen() {
               >
                 <View
                   style={{
-                    backgroundColor: "#1e1e1e",
+                    backgroundColor: darkTheme.surface,
                     borderWidth: 1,
-                    borderColor: isLocked || !canJoin ? "#444" : "#333",
+                    borderColor: isLocked || !canJoin ? darkTheme.borderStrong : darkTheme.border,
                     borderRadius: 12,
                     padding: SPACE.lg,
                   }}
@@ -867,10 +853,10 @@ export default function HomeScreen() {
                   {/* Route + host menu */}
                   <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: SPACE.sm }}>
                     <View style={{ flex: 1, marginRight: SPACE.sm }}>
-                      <Text style={{ color: "#ffffff", fontSize: TYPE.size.heading, fontWeight: TYPE.weight.bold, lineHeight: TYPE.size.heading * TYPE.leading.tight }}>
+                      <Text style={{ color: darkTheme.textPrimary, fontSize: TYPE.size.heading, fontWeight: TYPE.weight.bold, lineHeight: TYPE.size.heading * TYPE.leading.tight }}>
                         {ride.to}
                       </Text>
-                      <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.label, fontWeight: TYPE.weight.medium, marginTop: 2 }}>
+                      <Text style={{ color: darkTheme.textSecondary, fontSize: TYPE.size.label, fontWeight: TYPE.weight.medium, marginTop: 2 }}>
                         from {ride.from}
                       </Text>
                     </View>
@@ -891,7 +877,7 @@ export default function HomeScreen() {
                             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                             style={{ padding: 4 }}
                           >
-                            <Ionicons name="ellipsis-vertical" size={18} color="#a0a0a0" />
+                            <Ionicons name="ellipsis-vertical" size={18} color={darkTheme.textSecondary} />
                           </TouchableOpacity>
                           {openDropdown === ride.id && (
                             <View
@@ -899,9 +885,9 @@ export default function HomeScreen() {
                                 position: "absolute",
                                 top: 28,
                                 right: 0,
-                                backgroundColor: "#2a2a2a",
+                                backgroundColor: darkTheme.raised,
                                 borderWidth: 1,
-                                borderColor: "#333",
+                                borderColor: darkTheme.border,
                                 borderRadius: 8,
                                 paddingVertical: SPACE.xs,
                                 minWidth: 100,
@@ -912,7 +898,7 @@ export default function HomeScreen() {
                                 onPress={(e) => { e.stopPropagation?.(); handleEditPress(ride.id); }}
                                 style={{ paddingHorizontal: SPACE.md, paddingVertical: SPACE.sm }}
                               >
-                                <Text style={{ color: "white", fontSize: TYPE.size.body }}>Edit Post</Text>
+                                <Text style={{ color: darkTheme.textPrimary, fontSize: TYPE.size.body }}>Edit Post</Text>
                               </TouchableOpacity>
                             </View>
                           )}
@@ -923,20 +909,20 @@ export default function HomeScreen() {
 
                   {/* Metadata row */}
                   <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.md, marginBottom: SPACE.sm }}>
-                    <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.caption }}>
+                    <Text style={{ color: darkTheme.textSecondary, fontSize: TYPE.size.caption }}>
                       {ride.date} · {ride.time}
                     </Text>
-                    <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.caption }}>
+                    <Text style={{ color: darkTheme.textSecondary, fontSize: TYPE.size.caption }}>
                       {ride.seats} {ride.seats === 1 ? "seat" : "seats"} left
                     </Text>
                     {genderPrefLabel && (
-                      <View style={{ backgroundColor: "#2a2a2a", paddingHorizontal: SPACE.sm, paddingVertical: 2, borderRadius: 4 }}>
-                        <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.micro }}>{genderPrefLabel}</Text>
+                      <View style={{ backgroundColor: darkTheme.raised, paddingHorizontal: SPACE.sm, paddingVertical: 2, borderRadius: 4 }}>
+                        <Text style={{ color: darkTheme.textSecondary, fontSize: TYPE.size.micro }}>{genderPrefLabel}</Text>
                       </View>
                     )}
                   </View>
 
-                  {/* Notes — 1 line max */}
+                  {/* Notes - 1 line max */}
                   {ride.notes ? (
                     <Text
                       style={{ color: "#808080", fontSize: TYPE.size.caption, marginBottom: SPACE.sm }}
@@ -954,25 +940,25 @@ export default function HomeScreen() {
                         {ride.memberIds.slice(0, 5).map((uid) => {
                           const u = users[uid] || { avatar: DEFAULT_AVATAR };
                           return (
-                            <Avatar key={uid} size="xs" bgColor="#1e1e1e">
+                            <Avatar key={uid} size="xs" bgColor={darkTheme.surface}>
                               <AvatarImage source={{ uri: u.avatar }} alt="User avatar" />
                             </Avatar>
                           );
                         })}
                         {ride.memberIds.length > 5 && (
-                          <View style={{ backgroundColor: "#2a2a2a", borderRadius: 99, width: 20, height: 20, alignItems: "center", justifyContent: "center" }}>
-                            <Text style={{ color: "#a0a0a0", fontSize: TYPE.size.micro }}>+{ride.memberIds.length - 5}</Text>
+                          <View style={{ backgroundColor: darkTheme.raised, borderRadius: 99, width: 20, height: 20, alignItems: "center", justifyContent: "center" }}>
+                            <Text style={{ color: darkTheme.textSecondary, fontSize: TYPE.size.micro }}>+{ride.memberIds.length - 5}</Text>
                           </View>
                         )}
                       </HStack>
                     ) : <View />}
-                    <Text style={{ color: "#555", fontSize: TYPE.size.label }}>
+                    <Text style={{ color: darkTheme.textGhost, fontSize: TYPE.size.label }}>
                       {rideStarted ? "Started" : getRelativeTime(ride.createdAt)}
                     </Text>
                   </View>
 
                   {/* Divider */}
-                  <View style={{ height: 1, backgroundColor: "#2a2a2a", marginVertical: SPACE.md }} />
+                  <View style={{ height: 1, backgroundColor: darkTheme.raised, marginVertical: SPACE.md }} />
 
                   {/* CTA row */}
                   <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
@@ -989,10 +975,10 @@ export default function HomeScreen() {
                           paddingVertical: SPACE.sm,
                           borderRadius: 8,
                           borderWidth: 1,
-                          borderColor: "#444",
+                          borderColor: darkTheme.borderStrong,
                         }}
                       >
-                        <Text style={{ color: "#666", fontSize: TYPE.size.body, fontWeight: TYPE.weight.semibold }}>
+                        <Text style={{ color: darkTheme.textMuted, fontSize: TYPE.size.body, fontWeight: TYPE.weight.semibold }}>
                           {missingGender ? "Set Gender" : "Restricted"}
                         </Text>
                       </SpringPressable>
@@ -1006,15 +992,14 @@ export default function HomeScreen() {
                           paddingHorizontal: SPACE.lg,
                           paddingVertical: SPACE.sm,
                           borderRadius: 8,
-                          borderWidth: 1,
-                          borderColor: ACCENT,
+                          backgroundColor: ACCENT,
                         }}
                       >
-                        <Text style={{ color: ACCENT, fontSize: TYPE.size.body, fontWeight: TYPE.weight.semibold }}>View Chat</Text>
+                        <Text style={{ color: darkTheme.bg, fontSize: TYPE.size.body, fontWeight: TYPE.weight.semibold }}>View Chat</Text>
                       </SpringPressable>
                     ) : !canJoin ? (
-                      <View style={{ paddingHorizontal: SPACE.lg, paddingVertical: SPACE.sm, borderRadius: 8, borderWidth: 1, borderColor: "#444" }}>
-                        <Text style={{ color: "#555", fontSize: TYPE.size.body }}>{rideStarted ? "Started" : "Closed"}</Text>
+                      <View style={{ paddingHorizontal: SPACE.lg, paddingVertical: SPACE.sm, borderRadius: 8, borderWidth: 1, borderColor: darkTheme.borderStrong }}>
+                        <Text style={{ color: darkTheme.textGhost, fontSize: TYPE.size.body }}>{rideStarted ? "Started" : "Closed"}</Text>
                       </View>
                     ) : (
                       <SpringPressable
@@ -1027,11 +1012,11 @@ export default function HomeScreen() {
                           paddingHorizontal: SPACE.lg,
                           paddingVertical: SPACE.sm,
                           borderRadius: 8,
-                          backgroundColor: ride.seats <= 0 ? "#2a2a2a" : ACCENT,
+                          backgroundColor: ride.seats <= 0 ? darkTheme.raised : ACCENT,
                         }}
                       >
                         <Text style={{
-                          color: ride.seats <= 0 ? "#666" : "#121212",
+                          color: ride.seats <= 0 ? darkTheme.textMuted : darkTheme.bg,
                           fontSize: TYPE.size.body,
                           fontWeight: TYPE.weight.semibold,
                         }}>
@@ -1057,7 +1042,7 @@ export default function HomeScreen() {
             );
           })}
 
-          {filteredRides.length === 0 && (
+          {!loading && filteredRides.length === 0 && (
             <FadeSlideIn delay={100}>
               <VStack alignItems="center" mt="$8" px="$6" space="md">
                 <Image
@@ -1065,13 +1050,13 @@ export default function HomeScreen() {
                   style={{ width: 260, height: 260 }}
                   resizeMode="contain"
                 />
-                <Text style={{ color: "#ffffff", fontSize: TYPE.size.heading, fontWeight: TYPE.weight.bold, textAlign: "center" }}>
+                <Text style={{ color: darkTheme.textPrimary, fontSize: TYPE.size.heading, fontWeight: TYPE.weight.bold, textAlign: "center" }}>
                   {searchQuery ? "No rides match your search" : "No rides posted yet"}
                 </Text>
-                <Text style={{ color: "#a0a0a0", textAlign: "center", fontSize: TYPE.size.body, lineHeight: TYPE.size.body * TYPE.leading.relaxed }}>
+                <Text style={{ color: darkTheme.textSecondary, textAlign: "center", fontSize: TYPE.size.body, lineHeight: TYPE.size.body * TYPE.leading.relaxed }}>
                   {searchQuery
                     ? "Try a different location or clear the search."
-                    : "Be the first — post a ride and find people to split the cost with."}
+                    : "Be the first to post a ride and find people to split the cost with."}
                 </Text>
                 {!searchQuery && (
                   <SpringPressable
@@ -1084,7 +1069,7 @@ export default function HomeScreen() {
                       borderRadius: 10,
                     }}
                   >
-                    <Text style={{ color: "#121212", fontWeight: TYPE.weight.semibold, fontSize: TYPE.size.body }}>
+                    <Text style={{ color: darkTheme.bg, fontWeight: TYPE.weight.semibold, fontSize: TYPE.size.body }}>
                       + Post a Ride
                     </Text>
                   </SpringPressable>

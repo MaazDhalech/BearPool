@@ -1,35 +1,36 @@
+import { darkTheme } from "@/constants/theme";
 import { ACCENT } from "@/constants/Colors";
 import { LinearGradient } from "expo-linear-gradient";
 import { Stack, useRouter } from "expo-router";
-import { Car, List, MessageCircle } from "lucide-react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const SCALE = 0.9;
 
 const palette = {
-  bg: "#121212",
-  surface: "#1e1e1e",
-  rim: "#252525",
+  bg: darkTheme.bg,
+  surface: darkTheme.surface,
+  rim: darkTheme.surfaceAlt,
   accent: ACCENT,
-  ink: "#ffffff",
-  muted: "#a1a1a6",
-  ghost: "#545456",
+  ink: darkTheme.textPrimary,
+  muted: darkTheme.textSecondary,
+  ghost: darkTheme.textGhost,
 };
 
 const FEATURES = [
   {
-    Icon: Car,
+    icon: "car-outline" as const,
     title: "Split a rideshare",
     body: "Post a trip and find Cal students to split the cost of any ride service.",
   },
   {
-    Icon: List,
+    icon: "list-outline" as const,
     title: "Browse the board",
     body: "See rides posted by other verified students and join one that fits your schedule.",
   },
   {
-    Icon: MessageCircle,
+    icon: "chatbubble-ellipses-outline" as const,
     title: "Chat with your group",
     body: "Every ride has a group chat to coordinate pickup, timing, and cost splits.",
   },
@@ -58,23 +59,23 @@ export default function Welcome() {
               resizeMode="contain"
             />
             <Text style={s.title}>Welcome to BearPool</Text>
-            <Text style={s.subtitle}>You're now part of the biggest Cal ride-share board.</Text>
+            <Text style={s.subtitle}>You&apos;re now part of the biggest Cal ride-share board.</Text>
           </View>
 
-          {/* Callout — clarify what BearPool is */}
+          {/* Callout - clarify what BearPool is */}
           <View style={s.callout}>
             <Text style={s.calloutTitle}>BearPool is for splitting rides</Text>
             <Text style={s.calloutBody}>
-              Coordinate any ride service with other verified Cal students — as of now, BearPool is not for carpooling in personal cars. Post a trip, find people heading the same way, and split the cost.
+              Coordinate any ride service with other verified Cal students. As of now, BearPool is not for carpooling in personal cars. Post a trip, find people heading the same way, and split the cost.
             </Text>
           </View>
 
           {/* Feature rows */}
           <View style={s.features}>
-            {FEATURES.map(({ Icon, title, body }) => (
+            {FEATURES.map(({ icon, title, body }) => (
               <View key={title} style={s.featureRow}>
                 <View style={s.iconWrap}>
-                  <Icon size={20} color={palette.accent} strokeWidth={1.8} />
+                  <Ionicons name={icon} size={20} color={palette.accent} />
                 </View>
                 <View style={s.featureText}>
                   <Text style={s.featureTitle}>{title}</Text>

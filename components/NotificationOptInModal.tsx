@@ -1,3 +1,4 @@
+import { darkTheme } from "@/constants/theme";
 import { ACCENT } from "@/constants/Colors";
 import { Ionicons } from "@expo/vector-icons";
 import { useMemo } from "react";
@@ -51,11 +52,11 @@ export const NotificationOptInModal = ({
           style={{
             width: "100%",
             maxWidth: 420,
-            backgroundColor: "#121212",
+            backgroundColor: darkTheme.bg,
             borderRadius: 14,
             padding: 20,
             borderWidth: 1,
-            borderColor: "#2a2a2a",
+            borderColor: darkTheme.raised,
           }}
         >
           <View
@@ -65,10 +66,10 @@ export const NotificationOptInModal = ({
               marginBottom: 12,
             }}
           >
-            <Ionicons name="notifications" size={22} color="#ffffff" />
+            <Ionicons name="notifications" size={22} color={darkTheme.textPrimary} />
             <Text
               style={{
-                color: "#ffffff",
+                color: darkTheme.textPrimary,
                 fontSize: 18,
                 fontWeight: "700",
                 marginLeft: 8,
@@ -111,7 +112,7 @@ export const NotificationOptInModal = ({
                 borderRadius: 10,
               }}
             >
-              <Text style={{ color: "#121212", fontSize: 14, fontWeight: "700" }}>
+              <Text style={{ color: darkTheme.bg, fontSize: 14, fontWeight: "700" }}>
                 {primaryLabel}
               </Text>
             </Pressable>

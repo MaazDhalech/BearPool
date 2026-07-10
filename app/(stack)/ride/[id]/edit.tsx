@@ -1,3 +1,4 @@
+import { darkTheme } from "@/constants/theme";
 import { ACCENT } from "@/constants/Colors";
 import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
@@ -11,7 +12,6 @@ import { deleteDoc, doc, getDoc, updateDoc } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -22,7 +22,8 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { NavHeader } from "@/components/ui/NavHeader";
+import { confirm, toast } from "@/components/ui/Dialog";
 
 import * as filter from "leo-profanity";
 
@@ -36,7 +37,6 @@ export default function EditRideScreen() {
   const { userId } = useFirebaseAuth();
   const router = useRouter();
   const { id } = useLocalSearchParams();
-  const insets = useSafeAreaInsets();
 
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -103,10 +103,9 @@ export default function EditRideScreen() {
   // === Content validation using leo-profanity ===
   const validateContent = (text: string, fieldName: string): boolean => {
     if (filter.check(text)) {
-      Alert.alert(
-        "Inappropriate Content",
-        `Please remove inappropriate language from the ${fieldName} field.`,
-      );
+      toast(`Please remove inappropriate language from the ${fieldName} field.`, {
+        type: "error",
+      });
       return false;
     }
     return true;
@@ -200,10 +199,7 @@ export default function EditRideScreen() {
 
     // Block profanity in real-time
     if (filter.check(text)) {
-      Alert.alert(
-        "Inappropriate Content",
-        "Please avoid using inappropriate language.",
-      );
+      toast("Please avoid using inappropriate language.", { type: "error" });
       return;
     }
 
@@ -218,14 +214,14 @@ export default function EditRideScreen() {
       try {
         const rideDoc = await getDoc(doc(db, "rides", id as string));
         if (!rideDoc.exists()) {
-          Alert.alert("Error", "Ride not found");
+          toast("Ride not found", { type: "error" });
           router.back();
           return;
         }
 
         const rideData = rideDoc.data();
         if (rideData.hostId !== userId) {
-          Alert.alert("Error", "You can only edit your own rides");
+          toast("You can only edit your own rides", { type: "error" });
           router.back();
           return;
         }
@@ -275,7 +271,7 @@ export default function EditRideScreen() {
         }
       } catch (error) {
         console.error("Error loading ride data:", error);
-        Alert.alert("Error", "Failed to load ride data");
+        toast("Failed to load ride data", { type: "error" });
         router.back();
       } finally {
         setInitialLoading(false);
@@ -308,7 +304,7 @@ export default function EditRideScreen() {
   // === Save changes ===
   const handleSaveChanges = async () => {
     if (!from || !to || !seats) {
-      Alert.alert("Error", "Please fill out all required fields");
+      toast("Please fill out all required fields", { type: "error" });
       return;
     }
 
@@ -319,15 +315,12 @@ export default function EditRideScreen() {
     // Validate that date is in the future
     const now = new Date();
     if (date <= now) {
-      Alert.alert(
-        "Invalid Date",
-        "Please select a date and time in the future.",
-      );
+      toast("Please select a date and time in the future.", { type: "error" });
       return;
     }
 
     if (!id) {
-      Alert.alert("Error", "No ride ID provided");
+      toast("No ride ID provided", { type: "error" });
       return;
     }
 
@@ -348,44 +341,38 @@ export default function EditRideScreen() {
         genderPref,
       });
 
-      Alert.alert("Success", "Ride updated successfully!", [
-        { text: "OK", onPress: () => router.back() },
-      ]);
+      toast("Ride updated successfully!", { type: "success" });
+      router.back();
     } catch (error) {
       console.error("Error updating ride:", error);
-      Alert.alert("Error", "Failed to update ride. Please try again.");
+      toast("Failed to update ride. Please try again.", { type: "error" });
     } finally {
       setLoading(false);
     }
   };
 
   // === Delete ride ===
-  const handleDeleteRide = () => {
-    Alert.alert(
-      "Delete Ride",
-      "Are you sure you want to delete this ride? This action cannot be undone.",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => setShowDeleteModal(true),
-        },
-      ],
-    );
+  const handleDeleteRide = async () => {
+    if (
+      await confirm({
+        title: "Delete Ride",
+        message: "Are you sure you want to delete this ride? This action cannot be undone.",
+        confirmText: "Delete",
+        destructive: true,
+      })
+    ) {
+      setShowDeleteModal(true);
+    }
   };
 
   const handleSubmitDeletion = async () => {
     if (!deletionReason) {
-      Alert.alert("Error", "Please select a reason for deleting the ride.");
+      toast("Please select a reason for deleting the ride.", { type: "error" });
       return;
     }
 
     if (deletionReason === "Other" && !customReason.trim()) {
-      Alert.alert("Error", "Please provide a reason for deletion.");
+      toast("Please provide a reason for deletion.", { type: "error" });
       return;
     }
 
@@ -409,20 +396,12 @@ export default function EditRideScreen() {
       // Delete the ride document
       await deleteDoc(rideRef);
 
-      Alert.alert("Success", "Ride deleted successfully!", [
-        {
-          text: "OK",
-          onPress: () => {
-            // Navigate back to chats or home screen
-            router.replace("/(tabs)/chats");
-          },
-        },
-      ]);
+      toast("Ride deleted successfully!", { type: "success" });
+      // Pop the (now-deleted) ride screens off the stack, then land on chats
+      router.dismissTo("/(tabs)/chats");
     } catch (error) {
       console.error("Error deleting ride:", error);
-      Alert.alert("Error", "Failed to delete ride. Please try again.", [
-        { text: "OK", style: "default" },
-      ]);
+      toast("Failed to delete ride. Please try again.", { type: "error" });
     } finally {
       setDeleting(false);
       setShowDeleteModal(false);
@@ -436,13 +415,13 @@ export default function EditRideScreen() {
       <View
         style={{
           flex: 1,
-          backgroundColor: "#121212",
+          backgroundColor: darkTheme.bg,
           justifyContent: "center",
           alignItems: "center",
         }}
       >
         <ActivityIndicator size="large" color={ACCENT} />
-        <Text style={{ color: "#ffffff", marginTop: 16 }}>
+        <Text style={{ color: darkTheme.textPrimary, marginTop: 16 }}>
           Loading ride details...
         </Text>
       </View>
@@ -458,56 +437,35 @@ export default function EditRideScreen() {
     <Stack.Screen options={{ gestureEnabled: !loading }} />
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={{ flex: 1, backgroundColor: "#121212" }}
+      style={{ flex: 1, backgroundColor: darkTheme.bg }}
       keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}
     >
       {/* Header */}
-      <View
-        style={{
-          paddingTop: insets.top,
-          paddingHorizontal: 16,
-          paddingBottom: 16,
-          borderBottomWidth: 1,
-          borderBottomColor: "#333",
-          flexDirection: "row",
-          alignItems: "center",
-        }}
-      >
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={{ padding: 8, borderRadius: 20, marginRight: 12 }}
-        >
-          <Ionicons name="arrow-back" size={24} color="white" />
-        </TouchableOpacity>
-        <Text
-          style={{ color: "#ffffff", fontSize: 20, fontWeight: "700", flex: 1 }}
-        >
-          Edit Ride
-        </Text>
-      </View>
+      <NavHeader title="Edit Ride" />
 
       <ScrollView
         contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 16, paddingVertical: 20, paddingBottom: 120 }}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
         <View style={{ marginBottom: 20 }}>
           {/* From */}
           <View style={{ marginBottom: 16 }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+            <Text style={{ color: darkTheme.textSecondary, marginBottom: 8, fontSize: 14 }}>
               From
             </Text>
             <TextInput
               value={from}
               placeholder="e.g. Berkeley – Unit 1"
-              placeholderTextColor="#666"
+              placeholderTextColor={darkTheme.textMuted}
               onChangeText={(text) => handleTextChange(text, setFrom)}
               style={{
-                backgroundColor: "#1e1e1e",
-                color: "#ffffff",
+                backgroundColor: darkTheme.surface,
+                color: darkTheme.textPrimary,
                 padding: 14,
                 borderRadius: 8,
                 borderWidth: 1,
-                borderColor: "#333",
+                borderColor: darkTheme.border,
                 fontSize: 16,
               }}
             />
@@ -515,21 +473,21 @@ export default function EditRideScreen() {
 
           {/* To */}
           <View style={{ marginBottom: 16 }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+            <Text style={{ color: darkTheme.textSecondary, marginBottom: 8, fontSize: 14 }}>
               To
             </Text>
             <TextInput
               value={to}
               placeholder="e.g. SFO Terminal 2"
-              placeholderTextColor="#666"
+              placeholderTextColor={darkTheme.textMuted}
               onChangeText={(text) => handleTextChange(text, setTo)}
               style={{
-                backgroundColor: "#1e1e1e",
-                color: "#ffffff",
+                backgroundColor: darkTheme.surface,
+                color: darkTheme.textPrimary,
                 padding: 14,
                 borderRadius: 8,
                 borderWidth: 1,
-                borderColor: "#333",
+                borderColor: darkTheme.border,
                 fontSize: 16,
               }}
             />
@@ -537,57 +495,61 @@ export default function EditRideScreen() {
 
           {/* Date Picker */}
           <View style={{ marginBottom: 16 }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+            <Text style={{ color: darkTheme.textSecondary, marginBottom: 8, fontSize: 14 }}>
               Date
             </Text>
             <TouchableOpacity
               onPress={showDatePickerModal}
+              accessibilityRole="button"
+              accessibilityLabel={`Change date, currently ${formattedDate}`}
               style={{
-                backgroundColor: "#1e1e1e",
+                backgroundColor: darkTheme.surface,
                 padding: 14,
                 borderRadius: 8,
                 borderWidth: 1,
-                borderColor: "#333",
+                borderColor: darkTheme.border,
                 flexDirection: "row",
                 justifyContent: "space-between",
                 alignItems: "center",
               }}
             >
-              <Text style={{ color: "#ffffff", fontSize: 16 }}>
+              <Text style={{ color: darkTheme.textPrimary, fontSize: 16 }}>
                 {formattedDate}
               </Text>
-              <Text style={{ color: ACCENT, fontSize: 16 }}>📅</Text>
+              <Ionicons name="calendar-outline" size={18} color={ACCENT} />
             </TouchableOpacity>
           </View>
 
           {/* Time Picker */}
           <View style={{ marginBottom: 16 }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+            <Text style={{ color: darkTheme.textSecondary, marginBottom: 8, fontSize: 14 }}>
               Time
             </Text>
             <TouchableOpacity
               onPress={showTimePickerModal}
+              accessibilityRole="button"
+              accessibilityLabel={`Change time, currently ${formattedTime}`}
               style={{
-                backgroundColor: "#1e1e1e",
+                backgroundColor: darkTheme.surface,
                 padding: 14,
                 borderRadius: 8,
                 borderWidth: 1,
-                borderColor: "#333",
+                borderColor: darkTheme.border,
                 flexDirection: "row",
                 justifyContent: "space-between",
                 alignItems: "center",
               }}
             >
-              <Text style={{ color: "#ffffff", fontSize: 16 }}>
+              <Text style={{ color: darkTheme.textPrimary, fontSize: 16 }}>
                 {formattedTime}
               </Text>
-              <Text style={{ color: ACCENT, fontSize: 16 }}>🕒</Text>
+              <Ionicons name="time-outline" size={18} color={ACCENT} />
             </TouchableOpacity>
           </View>
 
           {/* Seats */}
           <View style={{ marginBottom: 16 }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+            <Text style={{ color: darkTheme.textSecondary, marginBottom: 8, fontSize: 14 }}>
               How many other people do you want in the car?
             </Text>
             <View
@@ -604,18 +566,18 @@ export default function EditRideScreen() {
                 }
                 disabled={getSafeSeats() <= 1}
                 style={{
-                  backgroundColor: getSafeSeats() <= 1 ? "#333" : ACCENT,
+                  backgroundColor: getSafeSeats() <= 1 ? darkTheme.border : ACCENT,
                   padding: 12,
                   borderRadius: 8,
                   marginRight: 16,
                 }}
               >
-                <Text style={{ color: getSafeSeats() <= 1 ? "#a0a0a0" : "#121212", fontSize: 18 }}>-</Text>
+                <Text style={{ color: getSafeSeats() <= 1 ? darkTheme.textSecondary : darkTheme.bg, fontSize: 18 }}>-</Text>
               </TouchableOpacity>
 
               <Text
                 style={{
-                  color: "white",
+                  color: darkTheme.textPrimary,
                   fontSize: 18,
                   minWidth: 30,
                   textAlign: "center",
@@ -630,25 +592,25 @@ export default function EditRideScreen() {
                 }
                 disabled={getSafeSeats() >= 5}
                 style={{
-                  backgroundColor: getSafeSeats() >= 5 ? "#333" : ACCENT,
+                  backgroundColor: getSafeSeats() >= 5 ? darkTheme.border : ACCENT,
                   padding: 12,
                   borderRadius: 8,
                   marginLeft: 16,
                 }}
               >
-                <Text style={{ color: getSafeSeats() >= 5 ? "#a0a0a0" : "#121212", fontSize: 18 }}>+</Text>
+                <Text style={{ color: getSafeSeats() >= 5 ? darkTheme.textSecondary : darkTheme.bg, fontSize: 18 }}>+</Text>
               </TouchableOpacity>
             </View>
           </View>
 
           {/* Gender Preference */}
           <View style={{ marginBottom: 16 }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+            <Text style={{ color: darkTheme.textSecondary, marginBottom: 8, fontSize: 14 }}>
               Gender Preference
             </Text>
-            <Text style={{ color: "#666", fontSize: 12, marginBottom: 8 }}>
+            <Text style={{ color: darkTheme.textMuted, fontSize: 12, marginBottom: 8 }}>
               We only show options that match your profile to keep rides aligned
-              with your identity. Riders who don't match won't see this post.
+              with your identity. Riders who don&apos;t match won&apos;t see this post.
             </Text>
             <View
               style={{
@@ -665,20 +627,20 @@ export default function EditRideScreen() {
                   activeOpacity={0.8}
                   style={{
                     backgroundColor:
-                      genderPref === option.value ? "#2e2610" : "#1e1e1e",
+                      genderPref === option.value ? "#2e2610" : darkTheme.surface,
                     paddingVertical: 12,
                     paddingHorizontal: 16,
                     borderRadius: 8,
                     borderWidth: 1,
                     borderColor:
-                      genderPref === option.value ? ACCENT : "#333",
+                      genderPref === option.value ? ACCENT : darkTheme.border,
                     marginBottom: 8,
                     width: allowedGenderPrefOptions.length > 1 ? "48%" : "100%",
                   }}
                 >
                   <Text
                     style={{
-                      color: genderPref === option.value ? ACCENT : "#a0a0a0",
+                      color: genderPref === option.value ? ACCENT : darkTheme.textSecondary,
                       textAlign: "center",
                       fontSize: 14,
                       fontWeight: genderPref === option.value ? "600" : "400",
@@ -693,25 +655,25 @@ export default function EditRideScreen() {
 
           {/* Notes */}
           <View style={{ marginBottom: 24 }}>
-            <Text style={{ color: "#a0a0a0", marginBottom: 8, fontSize: 14 }}>
+            <Text style={{ color: darkTheme.textSecondary, marginBottom: 8, fontSize: 14 }}>
               Notes
             </Text>
             <TextInput
               value={notes}
               placeholder="Optional"
-              placeholderTextColor="#666"
+              placeholderTextColor={darkTheme.textMuted}
               onChangeText={(text) =>
                 handleTextChange(text, setNotes, MAX_NOTES_LENGTH)
               }
               maxLength={MAX_NOTES_LENGTH}
               multiline={true}
               style={{
-                backgroundColor: "#1e1e1e",
-                color: "#ffffff",
+                backgroundColor: darkTheme.surface,
+                color: darkTheme.textPrimary,
                 padding: 14,
                 borderRadius: 8,
                 borderWidth: 1,
-                borderColor: "#333",
+                borderColor: darkTheme.border,
                 fontSize: 16,
                 minHeight: 80,
                 textAlignVertical: "top",
@@ -719,7 +681,7 @@ export default function EditRideScreen() {
             />
             <Text
               style={{
-                color: "#666",
+                color: darkTheme.textMuted,
                 fontSize: 12,
                 marginTop: 4,
                 textAlign: "right",
@@ -749,7 +711,7 @@ export default function EditRideScreen() {
           >
             <Text
               style={{
-                color: "#121212",
+                color: darkTheme.bg,
                 textAlign: "center",
                 fontWeight: "600",
                 fontSize: 16,
@@ -769,13 +731,13 @@ export default function EditRideScreen() {
               padding: 16,
               borderRadius: 8,
               borderWidth: 1,
-              borderColor: "#ff5555",
+              borderColor: darkTheme.danger,
               opacity: loading ? 0.7 : 1,
             }}
           >
             <Text
               style={{
-                color: "#ff5555",
+                color: darkTheme.danger,
                 textAlign: "center",
                 fontWeight: "600",
                 fontSize: 16,
@@ -804,7 +766,7 @@ export default function EditRideScreen() {
         >
           <View
             style={{
-              backgroundColor: "#1e1e1e",
+              backgroundColor: darkTheme.surface,
               borderRadius: 16,
               padding: 24,
               maxHeight: "80%",
@@ -813,7 +775,7 @@ export default function EditRideScreen() {
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text
                 style={{
-                  color: "white",
+                  color: darkTheme.textPrimary,
                   fontSize: 20,
                   fontWeight: "600",
                   marginBottom: 2,
@@ -823,29 +785,29 @@ export default function EditRideScreen() {
               </Text>
               {from && to ? (
                 <Text
-                  style={{ color: "white", marginBottom: 16, fontSize: 18 }}
+                  style={{ color: darkTheme.textPrimary, marginBottom: 16, fontSize: 18 }}
                 >
                   {from} → {to}
                 </Text>
               ) : (
                 <Text
-                  style={{ color: "white", marginBottom: 16, fontSize: 18 }}
+                  style={{ color: darkTheme.textPrimary, marginBottom: 16, fontSize: 18 }}
                 >
                   Untitled Ride
                 </Text>
               )}
 
               <Text
-                style={{ color: "#a0a0a0", marginBottom: 24, fontSize: 14 }}
+                style={{ color: darkTheme.textSecondary, marginBottom: 24, fontSize: 14 }}
               >
-                Please help us improve by telling us why you're deleting this
+                Please help us improve by telling us why you&apos;re deleting this
                 ride.
               </Text>
 
               <View style={{ marginBottom: 24 }}>
                 <Text
                   style={{
-                    color: "white",
+                    color: darkTheme.textPrimary,
                     fontWeight: "600",
                     fontSize: 16,
                     marginBottom: 12,
@@ -863,7 +825,7 @@ export default function EditRideScreen() {
                       alignItems: "center",
                       padding: 12,
                       backgroundColor:
-                        deletionReason === reason ? "#2a2a2a" : "#252525",
+                        deletionReason === reason ? darkTheme.raised : darkTheme.surfaceAlt,
                       borderRadius: 8,
                       marginBottom: 8,
                     }}
@@ -875,13 +837,13 @@ export default function EditRideScreen() {
                         borderRadius: 10,
                         borderWidth: 2,
                         borderColor:
-                          deletionReason === reason ? "#ff5555" : "#666",
+                          deletionReason === reason ? darkTheme.danger : darkTheme.textMuted,
                         backgroundColor:
-                          deletionReason === reason ? "#ff5555" : "transparent",
+                          deletionReason === reason ? darkTheme.danger : "transparent",
                         marginRight: 12,
                       }}
                     />
-                    <Text style={{ color: "white", flex: 1, fontSize: 16 }}>
+                    <Text style={{ color: darkTheme.textPrimary, flex: 1, fontSize: 16 }}>
                       {reason}
                     </Text>
                   </TouchableOpacity>
@@ -891,7 +853,7 @@ export default function EditRideScreen() {
                 <View style={{ marginBottom: 24 }}>
                   <Text
                     style={{
-                      color: "white",
+                      color: darkTheme.textPrimary,
                       fontWeight: "600",
                       fontSize: 16,
                       marginBottom: 8,
@@ -901,17 +863,17 @@ export default function EditRideScreen() {
                   </Text>
                   <TextInput
                     style={{
-                      backgroundColor: "#252525",
-                      borderColor: "#333",
+                      backgroundColor: darkTheme.surfaceAlt,
+                      borderColor: darkTheme.border,
                       borderWidth: 1,
                       borderRadius: 8,
-                      color: "white",
+                      color: darkTheme.textPrimary,
                       padding: 12,
                       minHeight: 100,
                       textAlignVertical: "top",
                       fontSize: 16,
                     }}
-                    placeholderTextColor="#666"
+                    placeholderTextColor={darkTheme.textMuted}
                     multiline
                     onChangeText={setCustomReason}
                     value={customReason}
@@ -925,7 +887,7 @@ export default function EditRideScreen() {
                   onPress={handleSubmitDeletion}
                   disabled={deleting || !deletionReason}
                   style={{
-                    backgroundColor: "#ff5555",
+                    backgroundColor: darkTheme.danger,
                     padding: 16,
                     borderRadius: 8,
                     opacity: deleting || !deletionReason ? 0.6 : 1,
@@ -940,10 +902,10 @@ export default function EditRideScreen() {
                         gap: 8,
                       }}
                     >
-                      <ActivityIndicator size="small" color="white" />
+                      <ActivityIndicator size="small" color={darkTheme.textPrimary} />
                       <Text
                         style={{
-                          color: "white",
+                          color: darkTheme.textPrimary,
                           fontSize: 16,
                           fontWeight: "600",
                         }}
@@ -954,7 +916,7 @@ export default function EditRideScreen() {
                   ) : (
                     <Text
                       style={{
-                        color: "white",
+                        color: darkTheme.textPrimary,
                         textAlign: "center",
                         fontSize: 16,
                         fontWeight: "600",
@@ -979,12 +941,12 @@ export default function EditRideScreen() {
                     padding: 16,
                     borderRadius: 8,
                     borderWidth: 1,
-                    borderColor: "#666",
+                    borderColor: darkTheme.textMuted,
                   }}
                 >
                   <Text
                     style={{
-                      color: "#a0a0a0",
+                      color: darkTheme.textSecondary,
                       textAlign: "center",
                       fontSize: 16,
                     }}
@@ -1018,7 +980,7 @@ export default function EditRideScreen() {
               <TouchableWithoutFeedback>
                 <View
                   style={{
-                    backgroundColor: "#1e1e1e",
+                    backgroundColor: darkTheme.surface,
                     borderRadius: 16,
                     padding: 24,
                     width: "90%",
@@ -1028,7 +990,7 @@ export default function EditRideScreen() {
                 >
                   <Text
                     style={{
-                      color: "#ffffff",
+                      color: darkTheme.textPrimary,
                       fontSize: 20,
                       fontWeight: "600",
                       marginBottom: 20,
@@ -1043,9 +1005,9 @@ export default function EditRideScreen() {
                     onChange={handleDateChange}
                     minimumDate={new Date()}
                     themeVariant="dark"
-                    textColor="#ffffff"
+                    textColor={darkTheme.textPrimary}
                     style={{
-                      backgroundColor: "#1e1e1e",
+                      backgroundColor: darkTheme.surface,
                       width: "100%",
                       height: 180,
                     }}
@@ -1063,7 +1025,7 @@ export default function EditRideScreen() {
                   >
                     <Text
                       style={{
-                        color: "#121212",
+                        color: darkTheme.bg,
                         textAlign: "center",
                         fontSize: 16,
                         fontWeight: "600",
@@ -1099,7 +1061,7 @@ export default function EditRideScreen() {
               <TouchableWithoutFeedback>
                 <View
                   style={{
-                    backgroundColor: "#1e1e1e",
+                    backgroundColor: darkTheme.surface,
                     borderRadius: 16,
                     padding: 24,
                     width: "90%",
@@ -1109,7 +1071,7 @@ export default function EditRideScreen() {
                 >
                   <Text
                     style={{
-                      color: "#ffffff",
+                      color: darkTheme.textPrimary,
                       fontSize: 20,
                       fontWeight: "600",
                       marginBottom: 20,
@@ -1123,9 +1085,9 @@ export default function EditRideScreen() {
                     display="spinner"
                     onChange={handleTimeChange}
                     themeVariant="dark"
-                    textColor="#ffffff"
+                    textColor={darkTheme.textPrimary}
                     style={{
-                      backgroundColor: "#1e1e1e",
+                      backgroundColor: darkTheme.surface,
                       width: "100%",
                       height: 180,
                     }}
@@ -1144,7 +1106,7 @@ export default function EditRideScreen() {
                   >
                     <Text
                       style={{
-                        color: "#121212",
+                        color: darkTheme.bg,
                         textAlign: "center",
                         fontSize: 16,
                         fontWeight: "600",
@@ -1180,7 +1142,7 @@ export default function EditRideScreen() {
               <TouchableWithoutFeedback>
                 <View
                   style={{
-                    backgroundColor: "#1e1e1e",
+                    backgroundColor: darkTheme.surface,
                     borderRadius: 16,
                     padding: 24,
                     width: "90%",
@@ -1207,7 +1169,7 @@ export default function EditRideScreen() {
                     </TouchableOpacity>
                     <Text
                       style={{
-                        color: "#ffffff",
+                        color: darkTheme.textPrimary,
                         fontSize: 18,
                         fontWeight: "600",
                       }}
@@ -1237,9 +1199,9 @@ export default function EditRideScreen() {
                     onChange={handleDateChange}
                     minimumDate={new Date()}
                     themeVariant="dark"
-                    textColor="#ffffff"
+                    textColor={darkTheme.textPrimary}
                     style={{
-                      backgroundColor: "#1e1e1e",
+                      backgroundColor: darkTheme.surface,
                       width: "100%",
                       height: 200,
                     }}
@@ -1271,7 +1233,7 @@ export default function EditRideScreen() {
               <TouchableWithoutFeedback>
                 <View
                   style={{
-                    backgroundColor: "#1e1e1e",
+                    backgroundColor: darkTheme.surface,
                     borderRadius: 16,
                     padding: 24,
                     width: "90%",
@@ -1298,7 +1260,7 @@ export default function EditRideScreen() {
                     </TouchableOpacity>
                     <Text
                       style={{
-                        color: "#ffffff",
+                        color: darkTheme.textPrimary,
                         fontSize: 18,
                         fontWeight: "600",
                       }}
@@ -1327,9 +1289,9 @@ export default function EditRideScreen() {
                     display="spinner"
                     onChange={handleTimeChange}
                     themeVariant="dark"
-                    textColor="#ffffff"
+                    textColor={darkTheme.textPrimary}
                     style={{
-                      backgroundColor: "#1e1e1e",
+                      backgroundColor: darkTheme.surface,
                       width: "100%",
                       height: 200,
                     }}

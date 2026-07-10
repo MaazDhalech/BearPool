@@ -1,9 +1,24 @@
+import { darkTheme } from "@/constants/theme";
 import { ACCENT } from "@/constants/Colors";
+import { ImageLightbox } from "@/components/ImageLightbox";
+import { findLinks, LinkedText } from "@/components/LinkedText";
+import { LinkPreview } from "@/components/LinkPreview";
+import { MessageReactions, type Reaction } from "@/components/MessageReactions";
+import { PhonePreview } from "@/components/PhonePreview";
+import { NavHeader } from "@/components/ui/NavHeader";
+import { MessageMenu, type MessageMenuState, type MessageMenuAction } from "@/components/ui/MessageMenu";
+import { ChatMessageMenu, nativeContextMenuAvailable, type MenuAction } from "@/components/ui/ContextMenu";
+import { toast } from "@/components/ui/Dialog";
+import { GlassSurface } from "@/components/ui/GlassSurface";
 import { SPACE } from "@/constants/Spacing";
 import { TYPE } from "@/constants/Typography";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
-import { db } from "@/services/firebaseConfig";
+import { db, storage } from "@/services/firebaseConfig";
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import * as ImageManipulator from "expo-image-manipulator";
+import * as ImagePicker from "expo-image-picker";
+import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
 import {
   Avatar,
   HStack,
@@ -21,9 +36,11 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  limit,
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   Timestamp,
@@ -32,18 +49,21 @@ import {
 import * as filter from "leo-profanity";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   Animated,
   FlatList,
-  Keyboard,
-  KeyboardAvoidingView,
+  ActivityIndicator,
   Platform,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TouchableOpacity as GHTouchableOpacity } from "react-native-gesture-handler";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
+import {
+  Gesture,
+  GestureDetector,
+} from "react-native-gesture-handler";
 import ReAnimated, {
   Easing,
+  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -78,6 +98,14 @@ type RideInfo = {
   rideFull: boolean;
 };
 
+type ReplyMeta = {
+  id: string;
+  text: string;
+  senderName: string;
+  senderId: string;
+  imageUrl?: string;
+};
+
 type Message = {
   id: string;
   text: string;
@@ -88,7 +116,17 @@ type Message = {
   system?: boolean;
   archivedNotice?: boolean;
   deleted?: boolean;
+  sent?: boolean;
+  replyTo?: ReplyMeta | null;
+  reactions?: Reaction[] | null;
+  imageUrl?: string;
+  imageWidth?: number;
+  imageHeight?: number;
 };
+
+// 4 reactions so the native iOS menu's palette row stays on a single line.
+const REACTION_EMOJIS = ["👍", "❤️", "😂", "👎"];
+const MESSAGE_PAGE_SIZE = 50;
 
 type ProcessedMessage = Message & {
   isFirstInGroup: boolean;
@@ -129,7 +167,7 @@ function ChatEmptyState() {
       </ReAnimated.View>
       <Text
         style={{
-          color: "#ffffff",
+          color: darkTheme.textPrimary,
           fontSize: TYPE.size.subheading,
           fontWeight: TYPE.weight.bold,
           textAlign: "center",
@@ -140,13 +178,13 @@ function ChatEmptyState() {
       </Text>
       <Text
         style={{
-          color: "#a0a0a0",
+          color: darkTheme.textSecondary,
           fontSize: TYPE.size.body,
           textAlign: "center",
           lineHeight: TYPE.size.body * 1.7,
         }}
       >
-        Say hi to your group — coordinate pickup spots, arrival times, or just break the ice.
+        Say hi to your group. Coordinate pickup spots, arrival times, or just break the ice.
       </Text>
     </View>
   );
@@ -181,12 +219,110 @@ function TypingDots() {
   const s2 = useAnimatedStyle(() => ({ opacity: 0.35 + d2.value * 0.65, transform: [{ translateY: -d2.value * 4 }] }));
   const s3 = useAnimatedStyle(() => ({ opacity: 0.35 + d3.value * 0.65, transform: [{ translateY: -d3.value * 4 }] }));
 
-  const dot = { width: 6, height: 6, borderRadius: 3, backgroundColor: "#888" as const };
+  const dot = { width: 6, height: 6, borderRadius: 3, backgroundColor: darkTheme.textFaint };
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 2 }}>
       <ReAnimated.View style={[dot, s1]} />
       <ReAnimated.View style={[dot, s2]} />
       <ReAnimated.View style={[dot, s3]} />
+    </View>
+  );
+}
+
+const REPLY_THRESHOLD = 56;
+
+// Swipe-to-reply wrapper (WhatsApp/iMessage style). Other-user messages swipe
+// right with the "Reply" hint in the left gutter; your own (right-aligned)
+// messages swipe left with the hint on the right, so it stays on the bubble's
+// side. Past the threshold it fires a haptic and triggers onReply.
+function SwipeableMessage({
+  onReply,
+  onLongPress,
+  mirrored,
+  children,
+}: {
+  onReply: () => void;
+  onLongPress?: () => void;
+  mirrored: boolean;
+  children: React.ReactNode;
+}) {
+  const tx = useSharedValue(0);
+  const hapticFired = useSharedValue(false);
+  const dir = mirrored ? -1 : 1;
+
+  const fireHaptic = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+  // Long-press → context menu. Driven through gesture-handler (not a nested
+  // Touchable) so it composes with the swipe Pan; on the New Architecture a
+  // Touchable inside this GestureDetector doesn't reliably receive long-press.
+  const longPress = Gesture.LongPress()
+    .minDuration(300)
+    .maxDistance(20)
+    .onStart(() => {
+      if (onLongPress) runOnJS(onLongPress)();
+    });
+
+  const pan = Gesture.Pan()
+    .activeOffsetX(mirrored ? -14 : 14)
+    .failOffsetY([-14, 14])
+    .onUpdate((e) => {
+      // Magnitude in the reply direction, clamped 0..84.
+      const mag = Math.min(Math.max(e.translationX * dir, 0), 84);
+      tx.value = mag * dir;
+      if (mag >= REPLY_THRESHOLD && !hapticFired.value) {
+        hapticFired.value = true;
+        runOnJS(fireHaptic)();
+      } else if (mag < REPLY_THRESHOLD && hapticFired.value) {
+        hapticFired.value = false;
+      }
+    })
+    .onEnd(() => {
+      if (Math.abs(tx.value) >= REPLY_THRESHOLD) runOnJS(onReply)();
+      tx.value = withSpring(0, { damping: 26, stiffness: 220, overshootClamping: true });
+      hapticFired.value = false;
+    });
+
+  const rowStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: tx.value }],
+  }));
+  // Reply hint revealed in the gutter as the row slides.
+  const hintStyle = useAnimatedStyle(() => {
+    const p = Math.min(Math.abs(tx.value) / REPLY_THRESHOLD, 1);
+    return { opacity: p, transform: [{ translateX: (1 - p) * 8 * -dir }] };
+  });
+
+  return (
+    <View>
+      <ReAnimated.View
+        pointerEvents="none"
+        style={[
+          {
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            width: 72,
+            alignItems: "center",
+            justifyContent: "center",
+            ...(mirrored ? { right: SPACE.md } : { left: SPACE.md }),
+          },
+          hintStyle,
+        ]}
+      >
+        <Ionicons name="arrow-undo" size={18} color={darkTheme.textSecondary} />
+        <Text
+          style={{
+            fontSize: TYPE.size.micro,
+            color: darkTheme.textSecondary,
+            fontWeight: "600",
+            marginTop: 2,
+          }}
+        >
+          Reply
+        </Text>
+      </ReAnimated.View>
+      <GestureDetector gesture={Gesture.Race(pan, longPress)}>
+        <ReAnimated.View style={rowStyle}>{children}</ReAnimated.View>
+      </GestureDetector>
     </View>
   );
 }
@@ -203,10 +339,17 @@ export default function RideChatScreen() {
   const [isArchived, setIsArchived] = useState(false);
   const [timeUntilArchive, setTimeUntilArchive] = useState<string | null>(null);
   const [shouldShowArchiveCountdown, setShouldShowArchiveCountdown] = useState(false);
-  const [autoScroll, setAutoScroll] = useState(true);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
-  const [selectedMsgId, setSelectedMsgId] = useState<string | null>(null);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [memberReadAt, setMemberReadAt] = useState<Record<string, number>>({});
+  const [replyTo, setReplyTo] = useState<ReplyMeta | null>(null);
+  const [menu, setMenu] = useState<MessageMenuState | null>(null);
+  const bubbleRefs = useRef<Record<string, View | null>>({});
+  const [messageLimit, setMessageLimit] = useState(MESSAGE_PAGE_SIZE);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [lightboxUri, setLightboxUri] = useState<string | null>(null);
+  const inputRef = useRef<any>(null);
 
   const userMapRef = useRef<UserMap>({});
   const flatListRef = useRef<FlatList<ListItem>>(null);
@@ -220,7 +363,6 @@ export default function RideChatScreen() {
 
   const insets = useSafeAreaInsets();
   const safeBottom = insets.bottom > 0 ? insets.bottom : 8;
-  const inputPadBottom = keyboardHeight > 0 ? 3 : safeBottom;
 
   const animatedValue = useRef(new Animated.Value(0)).current;
   const sendScale = useSharedValue(1);
@@ -228,26 +370,7 @@ export default function RideChatScreen() {
     transform: [{ scale: sendScale.value }],
   }));
 
-  // ── Keyboard height tracking ──────────────────────────
-  useEffect(() => {
-    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const onShow = (e: any) => setKeyboardHeight(e.endCoordinates.height);
-    const onHide = () => setKeyboardHeight(0);
-    const subShow = Keyboard.addListener(showEvent, onShow);
-    const subHide = Keyboard.addListener(hideEvent, onHide);
-    return () => {
-      subShow.remove();
-      subHide.remove();
-    };
-  }, []);
-
   // ── Scroll ──────────────────────────────────────────
-  const setAutoScrollBoth = useCallback((val: boolean) => {
-    autoScrollRef.current = val;
-    setAutoScroll(val);
-  }, []);
-
   const scrollToBottom = useCallback((animated = true) => {
     flatListRef.current?.scrollToOffset({ offset: 0, animated });
   }, []);
@@ -280,6 +403,9 @@ export default function RideChatScreen() {
     useCallback(() => {
       if (!rideId || !user?.uid) return;
       hasLoadedMessagesRef.current = false;
+      // Always land on the latest message when (re)opening the chat.
+      autoScrollRef.current = true;
+      scrollToBottom(false);
       updateReadState({ activeChat: true, activeAt: serverTimestamp() });
 
       readStateHeartbeatRef.current = setInterval(() => {
@@ -293,7 +419,7 @@ export default function RideChatScreen() {
         }
         updateReadState({ activeChat: false, activeAt: serverTimestamp() });
       };
-    }, [rideId, updateReadState, user?.uid]),
+    }, [rideId, updateReadState, user?.uid, scrollToBottom]),
   );
 
   // ── Send button animation ────────────────────────────
@@ -303,7 +429,7 @@ export default function RideChatScreen() {
       duration: 150,
       useNativeDriver: false,
     }).start();
-    sendScale.value = withSpring(0.88, { damping: 18, stiffness: 500 });
+    sendScale.value = withSpring(0.88, { damping: 22, stiffness: 500, overshootClamping: true });
   };
 
   const animatePressOut = () => {
@@ -312,12 +438,12 @@ export default function RideChatScreen() {
       duration: 150,
       useNativeDriver: false,
     }).start();
-    sendScale.value = withSpring(1, { damping: 12, stiffness: 300 });
+    sendScale.value = withSpring(1, { damping: 20, stiffness: 300, overshootClamping: true });
   };
 
   const interpolatedColor = animatedValue.interpolate({
     inputRange: [0, 1],
-    outputRange: [ACCENT, "#2a2a2a"],
+    outputRange: [ACCENT, darkTheme.raised],
   });
 
   // ── Helpers ──────────────────────────────────────────
@@ -538,18 +664,30 @@ export default function RideChatScreen() {
     userMapRef.current = userMap;
   }, [userMap]);
 
-  // ── Messages subscription ─────────────────────────────
+  const loadEarlier = useCallback(() => {
+    setLoadingEarlier(true);
+    setMessageLimit((l) => l + MESSAGE_PAGE_SIZE);
+  }, []);
+
+  // ── Messages subscription (paginated: live window of the latest N) ─────
   useEffect(() => {
     if (!rideId) return;
 
+    // Fetch the most recent `messageLimit` messages, kept live. "Load earlier"
+    // grows the window. orderBy desc + limit, then reverse to ascending.
     const q = query(
       collection(db, "rides", String(rideId), "messages"),
-      orderBy("timestamp", "asc"),
+      orderBy("timestamp", "desc"),
+      limit(messageLimit),
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as Message[];
+      const msgs = snapshot.docs
+        .map((d) => ({ id: d.id, ...d.data() }) as Message)
+        .reverse();
       setMessages(msgs);
+      setHasMoreMessages(snapshot.size >= messageLimit);
+      setLoadingEarlier(false);
 
       if (isFocused) {
         let newestSenderId: string | null = null;
@@ -576,13 +714,17 @@ export default function RideChatScreen() {
     });
 
     return () => unsubscribe();
-  }, [rideId, isFocused, markReadIfAllowed, user?.uid]);
+  }, [rideId, isFocused, markReadIfAllowed, user?.uid, messageLimit]);
 
   // ── Fetch user details (separate from snapshot to avoid async race) ──
   useEffect(() => {
     if (messages.length === 0) return;
     const uniqueIds = Array.from(
-      new Set(messages.map((m) => m.senderId).filter(Boolean) as string[]),
+      new Set([
+        ...(messages.map((m) => m.senderId).filter(Boolean) as string[]),
+        // Reactors may not have sent a message — resolve their names too.
+        ...messages.flatMap((m) => (m.reactions ?? []).flatMap((r) => r.userIds)),
+      ]),
     );
     const newMap = { ...userMapRef.current };
     let hasUpdates = false;
@@ -602,6 +744,33 @@ export default function RideChatScreen() {
       if (hasUpdates) setUserMap({ ...newMap });
     });
   }, [messages]);
+
+  // ── Read receipts: each member's lastReadAt ──────────
+  useEffect(() => {
+    if (!rideId) return;
+    const readStateCol = collection(db, "rides", String(rideId), "readState");
+    const unsub = onSnapshot(readStateCol, (snap) => {
+      const map: Record<string, number> = {};
+      snap.docs.forEach((d) => {
+        const ms = d.data().lastReadAt?.toMillis?.();
+        if (typeof ms === "number") map[d.id] = ms;
+      });
+      setMemberReadAt(map);
+    });
+    return () => unsub();
+  }, [rideId]);
+
+  // "Seen by all" = every other member's lastReadAt is at/after the message time
+  const isSeenByAll = useCallback(
+    (msg: Message) => {
+      const ts = msg.timestamp?.toMillis?.();
+      if (!ts || !rideInfo) return false;
+      const others = rideInfo.memberIds.filter((id) => id && id !== user?.uid);
+      if (others.length === 0) return false;
+      return others.every((id) => (memberReadAt[id] ?? 0) >= ts);
+    },
+    [rideInfo, memberReadAt, user?.uid],
+  );
 
   // ── Typing indicator subscription ────────────────────
   useEffect(() => {
@@ -719,164 +888,92 @@ export default function RideChatScreen() {
     [user?.uid, rideId],
   );
 
-  const handleLongPress = useCallback(
-    (msg: Message) => {
-      if (msg.deleted) return;
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      const options: any[] = [{ text: "Cancel", style: "cancel" }];
-      if (msg.senderId === user?.uid) {
-        options.unshift({
-          text: "Delete",
-          style: "destructive",
-          onPress: () =>
-            updateDoc(doc(db, "rides", String(rideId), "messages", msg.id), { deleted: true }),
+  // Toggle the current user's reaction on a message (read-modify-write so the
+  // nested userIds arrays stay consistent under concurrent reactions).
+  const toggleReaction = useCallback(
+    async (messageId: string, emoji: string) => {
+      if (!rideId || !user?.uid) return;
+      const uid = user.uid;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const ref = doc(db, "rides", String(rideId), "messages", messageId);
+      try {
+        await runTransaction(db, async (txn) => {
+          const snap = await txn.get(ref);
+          if (!snap.exists()) return;
+          const data = snap.data();
+          const reactions: Reaction[] = Array.isArray(data.reactions)
+            ? data.reactions.map((r: Reaction) => ({
+                emoji: r.emoji,
+                userIds: [...(r.userIds || [])],
+              }))
+            : [];
+
+          const existing = reactions.find((r) => r.emoji === emoji);
+          if (existing) {
+            existing.userIds = existing.userIds.includes(uid)
+              ? existing.userIds.filter((id) => id !== uid)
+              : [...existing.userIds, uid];
+          } else {
+            reactions.push({ emoji, userIds: [uid] });
+          }
+
+          txn.update(ref, {
+            reactions: reactions.filter((r) => r.userIds.length > 0),
+          });
         });
-      } else if (msg.senderId) {
-        options.unshift({
-          text: "Report User",
-          style: "destructive",
-          onPress: () =>
-            router.push({
-              pathname: "/(stack)/settings/report-user",
-              params: { userId: msg.senderId, rideId: rideId as string },
-            }),
-        });
+      } catch (err) {
+        console.error("Failed to toggle reaction", err);
       }
-      Alert.alert("Message Options", undefined, options);
     },
-    [user?.uid, rideId],
+    [rideId, user?.uid],
   );
 
-  const sendMessage = async (messageText: string) => {
-    try {
-      const senderDoc = userMap[user?.uid || ""];
-      const senderName =
-        senderDoc?.name || user?.displayName || user?.email || "Anonymous";
-      await addDoc(collection(db, "rides", String(rideId), "messages"), {
-        text: messageText,
-        senderId: user?.uid,
-        senderName,
-        timestamp: serverTimestamp(),
+  const handleReply = useCallback(
+    (msg: Message) => {
+      const name =
+        msg.senderId === user?.uid
+          ? "You"
+          : userMap[msg.senderId || ""]?.name || msg.senderName || "Unknown";
+      setReplyTo({
+        id: msg.id,
+        text: msg.text,
+        senderName: name,
+        senderId: msg.senderId || "",
+        ...(msg.imageUrl ? { imageUrl: msg.imageUrl } : {}),
       });
-      setInput("");
-    } catch (err) {
-      console.error("Failed to send message:", err);
-      Alert.alert("Error", "Failed to send message. Please try again.");
-    }
-  };
+      // Defer so the input is rendered and the swipe gesture has settled,
+      // otherwise the focus() no-ops and the keyboard never opens.
+      setTimeout(() => inputRef.current?.focus?.(), 60);
+    },
+    [user?.uid, userMap],
+  );
 
-  const handleSend = async () => {
-    const trimmed = input.trim();
-    if (!trimmed || !rideId || !user?.uid || trimmed.length > MAX_CHARS) return;
+  // The message bubble visual — reused by the list and by the long-press menu
+  // (which re-draws a lifted copy). `interactive` enables the lightbox tap;
+  // `opts.setRef` lets the caller measure the bubble for menu positioning.
+  const renderMessageBubble = useCallback(
+    (
+      msg: Message,
+      isCurrentUser: boolean,
+      isFirstInGroup: boolean,
+      isLastInGroup: boolean,
+      interactive: boolean,
+      opts?: { onLongPress?: () => void; setRef?: (r: View | null) => void },
+    ) => {
+      const links = findLinks(msg.text);
+      const firstPhone = links.find((l) => l.type === "phone");
+      const firstUrl = links.find((l) => l.type === "url");
+      const trimmedText = msg.text.trim();
+      const isOnlyPhone = !!firstPhone && trimmedText === firstPhone.value;
+      const isOnlyUrl = !!firstUrl && trimmedText === firstUrl.value;
+      const hasImage = !!msg.imageUrl;
+      const bareBubble = isOnlyPhone || isOnlyUrl || hasImage;
+      const linkColor = isCurrentUser ? "#0a3d91" : "#5ab0ff";
+      const imgW = 240;
+      const imgAspect =
+        msg.imageWidth && msg.imageHeight ? msg.imageWidth / msg.imageHeight : 1;
+      const imgH = Math.min(Math.max(imgW / imgAspect, 120), 320);
 
-    const { filtered, containsProfanity } = filterContent(trimmed);
-    if (containsProfanity) {
-      Alert.alert(
-        "Message Not Sent",
-        "Your message contains inappropriate language and cannot be sent.",
-        [{ text: "OK" }],
-      );
-      return;
-    }
-
-    clearTyping();
-    scrollToBottom(true);
-    await sendMessage(filtered);
-  };
-
-  // ── Render item ──────────────────────────────────────
-  const renderItem = useCallback(
-    ({ item }: { item: ListItem }) => {
-      if (item.type === "divider") {
-        return (
-          <View style={{ alignItems: "center", paddingVertical: SPACE.md }}>
-            <Text
-              style={{ fontSize: TYPE.size.label, color: "#555", fontWeight: "500" }}
-            >
-              {item.text}
-            </Text>
-          </View>
-        );
-      }
-
-      const msg = item.data;
-      const isSystem = msg.system === true;
-      const isArchivedNotice = !!msg.archivedNotice;
-
-      if (isSystem || isArchivedNotice) {
-        const text = msg.text ?? "";
-        const iconName: keyof typeof Ionicons.glyphMap = isArchivedNotice
-          ? "archive-outline"
-          : text.toLowerCase().includes("joined")
-          ? "person-add-outline"
-          : text.toLowerCase().includes("left")
-          ? "person-remove-outline"
-          : "information-circle-outline";
-
-        return (
-          <View style={{ alignItems: "center", paddingVertical: SPACE.sm }}>
-            <View
-              style={{
-                backgroundColor: isArchivedNotice ? "#2d2d00" : "#1e1e1e",
-                borderWidth: isArchivedNotice ? 1 : 0,
-                borderColor: "#555500",
-                borderRadius: 999,
-                paddingHorizontal: SPACE.md,
-                paddingVertical: 5,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 5,
-              }}
-            >
-              <Ionicons
-                name={iconName}
-                size={12}
-                color={isArchivedNotice ? "#ffff99" : "#555"}
-              />
-              <Text
-                style={{
-                  fontSize: TYPE.size.label,
-                  color: isArchivedNotice ? "#ffff99" : "#555",
-                  textAlign: "center",
-                }}
-              >
-                {text}
-              </Text>
-            </View>
-          </View>
-        );
-      }
-
-      if (msg.deleted) {
-        return (
-          <View
-            style={{
-              alignItems: msg.senderId === user?.uid ? "flex-end" : "flex-start",
-              paddingHorizontal: SPACE.md,
-              marginBottom: msg.isLastInGroup ? SPACE.md : 2,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: TYPE.size.label,
-                color: "#444",
-                fontStyle: "italic",
-              }}
-            >
-              Message deleted
-            </Text>
-          </View>
-        );
-      }
-
-      const isCurrentUser = msg.senderId === user?.uid;
-      const sender = userMap[msg.senderId || ""] || {
-        name: msg.senderName || "Unknown",
-        avatar: msg.avatar || DEFAULT_AVATAR,
-      };
-      const { isFirstInGroup, isLastInGroup } = msg;
-
-      // Border radii — iMessage-style chain rounding
       const R = 18;
       const r = 5;
       const bubbleStyle = isCurrentUser
@@ -893,9 +990,365 @@ export default function RideChatScreen() {
             borderBottomRightRadius: R,
           };
 
-      const AVATAR_COL = 32 + SPACE.sm;
+      return (
+        <View
+          ref={opts?.setRef}
+          collapsable={false}
+          style={
+            bareBubble
+              ? undefined
+              : [
+                  {
+                    backgroundColor: isCurrentUser ? ACCENT : darkTheme.surfaceAlt,
+                    paddingHorizontal: SPACE.md,
+                    paddingVertical: SPACE.sm,
+                  },
+                  bubbleStyle,
+                ]
+          }
+        >
+          {/* Quoted reply preview */}
+          {msg.replyTo && (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                borderLeftWidth: 3,
+                borderLeftColor: isCurrentUser ? "rgba(18,18,18,0.45)" : ACCENT,
+                backgroundColor: isCurrentUser
+                  ? "rgba(18,18,18,0.12)"
+                  : "rgba(255,255,255,0.06)",
+                borderRadius: 6,
+                paddingHorizontal: 8,
+                paddingVertical: 5,
+                marginBottom: 5,
+              }}
+            >
+              {msg.replyTo.imageUrl ? (
+                <Image
+                  source={{ uri: msg.replyTo.imageUrl }}
+                  style={{ width: 34, height: 34, borderRadius: 5, backgroundColor: darkTheme.raised }}
+                  contentFit="cover"
+                />
+              ) : null}
+              <View style={{ flex: 1 }}>
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    fontSize: TYPE.size.label,
+                    fontWeight: "600",
+                    color: isCurrentUser ? "rgba(18,18,18,0.8)" : ACCENT,
+                    marginBottom: 1,
+                  }}
+                >
+                  {msg.replyTo.senderName}
+                </Text>
+                <Text
+                  numberOfLines={2}
+                  style={{
+                    fontSize: TYPE.size.label,
+                    color: isCurrentUser ? "rgba(18,18,18,0.65)" : "#aaa",
+                  }}
+                >
+                  {msg.replyTo.imageUrl && !msg.replyTo.text?.trim()
+                    ? "📷 Photo"
+                    : msg.replyTo.text}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {hasImage ? (
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={interactive ? () => setLightboxUri(msg.imageUrl!) : undefined}
+              onLongPress={opts?.onLongPress}
+              delayLongPress={200}
+            >
+              <Image
+                source={{ uri: msg.imageUrl }}
+                style={{ width: imgW, height: imgH, borderRadius: 14, backgroundColor: darkTheme.raised }}
+                contentFit="cover"
+                transition={150}
+              />
+            </TouchableOpacity>
+          ) : isOnlyPhone ? (
+            <PhonePreview phone={firstPhone!.value} alignRight={isCurrentUser} />
+          ) : isOnlyUrl ? (
+            <LinkPreview url={firstUrl!.value} onlyLink linkColor="#5ab0ff" />
+          ) : (
+            <LinkedText
+              text={msg.text}
+              linkColor={linkColor}
+              style={{
+                color: isCurrentUser ? darkTheme.bg : darkTheme.textBright,
+                fontSize: TYPE.size.body,
+                lineHeight: TYPE.size.body * 1.45,
+              }}
+            />
+          )}
+        </View>
+      );
+    },
+    [setLightboxUri],
+  );
+
+  const deleteMessage = useCallback(
+    (msg: Message) => {
+      updateDoc(doc(db, "rides", String(rideId), "messages", msg.id), { deleted: true });
+    },
+    [rideId],
+  );
+
+  const reportMessage = useCallback(
+    (msg: Message) => {
+      if (msg.senderId)
+        router.push({
+          pathname: "/(stack)/settings/report-user",
+          params: { userId: msg.senderId, rideId: rideId as string },
+        });
+    },
+    [rideId],
+  );
+
+  const activeReactionsFor = useCallback(
+    (msg: Message) =>
+      REACTION_EMOJIS.filter((e) =>
+        msg.reactions?.find((rx) => rx.emoji === e)?.userIds.includes(user?.uid || ""),
+      ),
+    [user?.uid],
+  );
+
+  // Android fallback: long-press → measure the bubble, then open the custom
+  // overlay menu. iOS uses the native UIMenu (ChatMessageMenu) instead.
+  const handleLongPress = useCallback(
+    (msg: Message, isCurrentUser: boolean) => {
+      if (msg.deleted) return;
+      const node = bubbleRefs.current[msg.id];
+      if (!node) return;
+      node.measureInWindow((x, y, width, height) => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        const actions: MessageMenuAction[] = [
+          { key: "reply", label: "Reply", icon: "arrow-undo-outline", onPress: () => handleReply(msg) },
+          isCurrentUser
+            ? { key: "delete", label: "Delete", icon: "trash-outline", destructive: true, onPress: () => deleteMessage(msg) }
+            : { key: "report", label: "Report", icon: "flag-outline", destructive: true, onPress: () => reportMessage(msg) },
+        ];
+        setMenu({
+          frame: { x, y, width, height },
+          isCurrentUser,
+          reactionEmojis: REACTION_EMOJIS,
+          activeEmojis: activeReactionsFor(msg),
+          onReact: (emoji) => toggleReaction(msg.id, emoji),
+          actions,
+          renderBubble: () => renderMessageBubble(msg, isCurrentUser, true, true, false),
+        });
+      });
+    },
+    [handleReply, deleteMessage, reportMessage, activeReactionsFor, toggleReaction, renderMessageBubble],
+  );
+
+  // iOS native UIMenu actions for a message (reactions handled separately).
+  const nativeMenuActions = useCallback(
+    (msg: Message, isCurrentUser: boolean): MenuAction[] => [
+      { key: "reply", title: "Reply", systemIcon: "arrowshape.turn.up.left", onPress: () => handleReply(msg) },
+      isCurrentUser
+        ? { key: "delete", title: "Delete", systemIcon: "trash", destructive: true, onPress: () => deleteMessage(msg) }
+        : { key: "report", title: "Report", systemIcon: "flag", destructive: true, onPress: () => reportMessage(msg) },
+    ],
+    [handleReply, deleteMessage, reportMessage],
+  );
+
+  const sendMessage = async (messageText: string) => {
+    try {
+      const senderDoc = userMap[user?.uid || ""];
+      const senderName =
+        senderDoc?.name || user?.displayName || "Anonymous";
+      await addDoc(collection(db, "rides", String(rideId), "messages"), {
+        text: messageText,
+        senderId: user?.uid,
+        senderName,
+        timestamp: serverTimestamp(),
+        ...(replyTo ? { replyTo } : {}),
+      });
+      setInput("");
+      setReplyTo(null);
+    } catch (err) {
+      console.error("Failed to send message:", err);
+      toast("Failed to send message. Please try again.", { type: "error" });
+    }
+  };
+
+  const handleSend = async () => {
+    const trimmed = input.trim();
+    if (!trimmed || !rideId || !user?.uid || trimmed.length > MAX_CHARS) return;
+
+    const { filtered, containsProfanity } = filterContent(trimmed);
+    if (containsProfanity) {
+      toast("Your message contains inappropriate language and cannot be sent.", {
+        type: "error",
+      });
+      return;
+    }
+
+    clearTyping();
+    scrollToBottom(true);
+    await sendMessage(filtered);
+  };
+
+  // ── Attach a photo ───────────────────────────────────
+  const handleAttachImage = async () => {
+    if (!rideId || !user?.uid || uploadingImage) return;
+
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      toast("Allow photo library access to share images.", { type: "error" });
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      quality: 0.9,
+    });
+    if (result.canceled) return;
+
+    const asset = result.assets[0];
+    setUploadingImage(true);
+    try {
+      // Resize + compress.
+      const manip = await ImageManipulator.manipulateAsync(
+        asset.uri,
+        [{ resize: { width: 1280 } }],
+        { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG },
+      );
+      // Fetch the file into a native-backed Blob via XHR. (fetch().blob() and
+      // base64 uploadString both break Firebase Storage's Blob handling in RN.)
+      const blob: Blob = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.onload = () => resolve(xhr.response);
+        xhr.onerror = () => reject(new Error("Failed to read image"));
+        xhr.responseType = "blob";
+        xhr.open("GET", manip.uri, true);
+        xhr.send(null);
+      });
+      const fileName = `${Date.now()}-${user.uid}.jpg`;
+      const sRef = storageRef(storage, `rides/${String(rideId)}/chat/${fileName}`);
+      await uploadBytes(sRef, blob, { contentType: "image/jpeg" });
+      // @ts-ignore - RN Blob exposes close() to free memory
+      blob.close?.();
+      const imageUrl = await getDownloadURL(sRef);
+
+      const senderName =
+        userMap[user.uid]?.name || user.displayName || "Anonymous";
+      await addDoc(collection(db, "rides", String(rideId), "messages"), {
+        text: "",
+        senderId: user.uid,
+        senderName,
+        timestamp: serverTimestamp(),
+        imageUrl,
+        imageWidth: manip.width,
+        imageHeight: manip.height,
+        ...(replyTo ? { replyTo } : {}),
+      });
+      setReplyTo(null);
+      scrollToBottom(true);
+    } catch (err) {
+      console.error("Failed to upload image:", err);
+      toast("Could not send the photo. Please try again.", { type: "error" });
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  // ── Render item ──────────────────────────────────────
+  const renderItem = useCallback(
+    ({ item }: { item: ListItem }) => {
+      if (item.type === "divider") {
+        return (
+          <View style={{ alignItems: "center", paddingVertical: SPACE.md }}>
+            <Text
+              style={{ fontSize: TYPE.size.label, color: darkTheme.textGhost, fontWeight: "500" }}
+            >
+              {item.text}
+            </Text>
+          </View>
+        );
+      }
+
+      const msg = item.data;
+      const isSystem = msg.system === true;
+      const isArchivedNotice = !!msg.archivedNotice;
+
+      if (isSystem || isArchivedNotice) {
+        const text = msg.text ?? "";
+
+        return (
+          <View style={{ alignItems: "center", paddingVertical: SPACE.md }}>
+            <View
+              style={{
+                backgroundColor: isArchivedNotice ? "#2d2d00" : darkTheme.surface,
+                borderWidth: isArchivedNotice ? 1 : 0,
+                borderColor: "#555500",
+                borderRadius: 999,
+                paddingHorizontal: SPACE.md,
+                paddingVertical: 5,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: TYPE.size.label,
+                  color: isArchivedNotice ? "#ffff99" : darkTheme.textGhost,
+                  textAlign: "center",
+                }}
+              >
+                {text}
+              </Text>
+            </View>
+          </View>
+        );
+      }
+
+      if (msg.deleted) {
+        const deleter =
+          msg.senderId === user?.uid
+            ? "You"
+            : userMap[msg.senderId || ""]?.name || msg.senderName || "Someone";
+        return (
+          <View style={{ alignItems: "center", paddingVertical: SPACE.md, paddingHorizontal: SPACE.md }}>
+            <Text style={{ fontSize: TYPE.size.label, color: darkTheme.textMuted, fontStyle: "italic" }}>
+              {deleter} deleted a message
+            </Text>
+          </View>
+        );
+      }
+
+      const isCurrentUser = msg.senderId === user?.uid;
+      const sender = userMap[msg.senderId || ""] || {
+        // Never flash a raw email before the username resolves from userMap.
+        name:
+          msg.senderName && !msg.senderName.includes("@")
+            ? msg.senderName
+            : "…",
+        avatar: msg.avatar || DEFAULT_AVATAR,
+      };
+      const { isFirstInGroup, isLastInGroup } = msg;
+      const links = findLinks(msg.text);
+      const firstPhone = links.find((l) => l.type === "phone");
+      const firstUrl = links.find((l) => l.type === "url");
+      const trimmedText = msg.text.trim();
+      const isOnlyPhone = !!firstPhone && trimmedText === firstPhone.value;
+      const isOnlyUrl = !!firstUrl && trimmedText === firstUrl.value;
+      const linkColor = isCurrentUser ? "#0a3d91" : "#5ab0ff";
 
       return (
+        <SwipeableMessage
+          onReply={() => handleReply(msg)}
+          onLongPress={
+            nativeContextMenuAvailable ? undefined : () => handleLongPress(msg, isCurrentUser)
+          }
+          mirrored={isCurrentUser}
+        >
         <View
           style={{
             marginBottom: isLastInGroup ? SPACE.md : 2,
@@ -904,123 +1357,103 @@ export default function RideChatScreen() {
             paddingHorizontal: SPACE.md,
           }}
         >
-          {/* Avatar column — only for other users */}
-          {!isCurrentUser && (
-            <View style={{ width: AVATAR_COL, justifyContent: "flex-end", paddingBottom: 2 }}>
-              {isLastInGroup ? (
-                <TouchableOpacity
-                  onPress={() => handleUserPress(msg.senderId || "")}
-                  activeOpacity={0.7}
-                >
-                  <Avatar size="sm" bgColor="#252525">
-                    <Avatar.Image source={{ uri: sender.avatar }} alt="avatar" />
-                  </Avatar>
-                </TouchableOpacity>
-              ) : null}
-            </View>
-          )}
-
           {/* Bubble column */}
           <View
             style={{
-              maxWidth: "72%",
+              maxWidth: "78%",
               alignItems: isCurrentUser ? "flex-end" : "flex-start",
             }}
           >
-            {/* Sender name — first in group, other users only */}
+            {/* Inline pfp + username header - first in group, other users only */}
             {!isCurrentUser && isFirstInGroup && (
               <TouchableOpacity
                 onPress={() => handleUserPress(msg.senderId || "")}
                 activeOpacity={0.7}
+                style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4, marginLeft: 2 }}
               >
-                <Text
-                  style={{
-                    fontSize: TYPE.size.label,
-                    color: "#777",
-                    marginBottom: 3,
-                    marginLeft: 2,
-                    fontWeight: "500",
-                  }}
-                >
+                <Avatar size="xs" bgColor={darkTheme.surfaceAlt}>
+                  <Avatar.Image source={{ uri: sender.avatar }} alt="avatar" />
+                </Avatar>
+                <Text style={{ fontSize: TYPE.size.label, color: darkTheme.textFaint, fontWeight: "500" }}>
                   {sender.name}
                 </Text>
               </TouchableOpacity>
             )}
 
-            {/* Bubble */}
-            <TouchableOpacity
-              onLongPress={() => handleLongPress(msg)}
-              onPress={() => setSelectedMsgId((prev) => (prev === msg.id ? null : msg.id))}
-              activeOpacity={1}
-              delayLongPress={200}
+            {/* Bubble — iOS: native UIMenu (reactions row + actions). Android:
+                long-press handled by the row gesture (SwipeableMessage). */}
+            <ChatMessageMenu
+              reactionEmojis={REACTION_EMOJIS}
+              activeEmojis={activeReactionsFor(msg)}
+              onReact={(emoji) => toggleReaction(msg.id, emoji)}
+              actions={nativeMenuActions(msg, isCurrentUser)}
+              style={{ alignSelf: isCurrentUser ? "flex-end" : "flex-start" }}
             >
-              <View
-                style={[
-                  {
-                    backgroundColor: isCurrentUser ? ACCENT : "#252525",
-                    paddingHorizontal: 12,
-                    paddingTop: 8,
-                    paddingBottom: 7,
-                  },
-                  bubbleStyle,
-                ]}
-              >
-                <Text
-                  style={{
-                    color: isCurrentUser ? "#121212" : "#e8e8e8",
-                    fontSize: TYPE.size.body,
-                    lineHeight: TYPE.size.body * 1.45,
-                  }}
-                >
-                  {msg.text}
-                </Text>
+              {renderMessageBubble(msg, isCurrentUser, isFirstInGroup, isLastInGroup, true, {
+                setRef: (rf) => {
+                  bubbleRefs.current[msg.id] = rf;
+                },
+              })}
+            </ChatMessageMenu>
 
-                {/* Timestamp inside bubble — last message of group only */}
-                {isLastInGroup && msg.timestamp?.toDate && (
-                  <Text
-                    style={{
-                      fontSize: 10,
-                      color: isCurrentUser ? "rgba(18,18,18,0.5)" : "#555",
-                      textAlign: isCurrentUser ? "right" : "left",
-                      marginTop: 3,
-                    }}
-                  >
-                    {msg.timestamp
-                      .toDate()
-                      .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                  </Text>
-                )}
+            {/* Phone card when a number is part of a longer message */}
+            {firstPhone && !isOnlyPhone && (
+              <PhonePreview
+                phone={firstPhone.value}
+                alignRight={isCurrentUser}
+                style={{ marginTop: 4 }}
+              />
+            )}
+
+            {/* Link preview when a URL is part of a longer message */}
+            {firstUrl && !isOnlyUrl && (
+              <View style={{ marginTop: 4, alignSelf: isCurrentUser ? "flex-end" : "flex-start" }}>
+                <LinkPreview url={firstUrl.value} linkColor={linkColor} />
               </View>
-            </TouchableOpacity>
+            )}
 
-            {/* Tapped exact timestamp */}
-            {selectedMsgId === msg.id && msg.timestamp?.toDate && (
-              <Text
+            {/* Reactions */}
+            <MessageReactions
+              reactions={msg.reactions}
+              currentUserId={user?.uid}
+              onToggle={(emoji) => toggleReaction(msg.id, emoji)}
+              alignRight={isCurrentUser}
+            />
+
+            {/* Meta: time + read receipts, below the last bubble of a group */}
+            {isLastInGroup && msg.timestamp?.toDate && (
+              <View
                 style={{
-                  fontSize: TYPE.size.micro,
-                  color: "#555",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 3,
                   marginTop: 3,
+                  paddingHorizontal: 2,
                   alignSelf: isCurrentUser ? "flex-end" : "flex-start",
                 }}
               >
-                {msg.timestamp.toDate().toLocaleDateString([], {
-                  weekday: "short",
-                  month: "short",
-                  day: "numeric",
-                })}{" · "}{msg.timestamp.toDate().toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </Text>
+                <Text style={{ fontSize: 10, color: darkTheme.textFaint }}>
+                  {msg.timestamp
+                    .toDate()
+                    .toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                </Text>
+                {isCurrentUser &&
+                  (isSeenByAll(msg) ? (
+                    <Ionicons name="checkmark-done" size={13} color="#0a84ff" />
+                  ) : msg.sent ? (
+                    <Ionicons name="checkmark" size={12} color={darkTheme.textFaint} />
+                  ) : (
+                    <Ionicons name="time-outline" size={11} color={darkTheme.textFaint} />
+                  ))}
+              </View>
             )}
           </View>
 
-          {/* Mirror spacer so current-user bubbles don't kiss the right edge */}
-          {isCurrentUser && <View style={{ width: AVATAR_COL }} />}
         </View>
+        </SwipeableMessage>
       );
     },
-    [user?.uid, userMap, handleUserPress, handleLongPress, selectedMsgId, setSelectedMsgId],
+    [user?.uid, userMap, handleUserPress, handleLongPress, isSeenByAll, handleReply, toggleReaction, renderMessageBubble, activeReactionsFor, nativeMenuActions],
   );
 
   const keyExtractor = useCallback(
@@ -1030,96 +1463,59 @@ export default function RideChatScreen() {
 
   // ── Render ───────────────────────────────────────────
   return (
-    <View style={{ flex: 1, backgroundColor: "#121212" }}>
-      {/* ── Top chrome (outside KAV — stays put when keyboard opens) ── */}
-      <View style={{ paddingTop: insets.top, backgroundColor: "#121212" }}>
-        <HStack
-          alignItems="center"
-          px="$3"
-          py="$3"
-          borderBottomWidth="$1"
-          borderBottomColor="#2a2a2a"
-        >
-          <Pressable onPress={() => router.back()} p="$2" borderRadius="$full" mr="$1">
-            <Ionicons name="arrow-back" size={24} color="white" />
-          </Pressable>
-
-          {rideInfo ? (
-            <TouchableOpacity
-              style={{ flex: 1, paddingHorizontal: SPACE.sm }}
-              onPress={() =>
+    <View style={{ flex: 1, backgroundColor: darkTheme.bg }}>
+      {/* ── Top chrome (outside KAV - stays put when keyboard opens) ── */}
+      <NavHeader
+        title={rideInfo ? `${rideInfo.from} → ${rideInfo.to}` : undefined}
+        subtitle={
+          rideInfo
+            ? `${rideInfo.memberIds?.length || 0} members · ${rideInfo.date} · ${rideInfo.time}${isArchived ? " · Archived" : ""}`
+            : undefined
+        }
+        onTitlePress={
+          rideInfo
+            ? () =>
                 router.push({
                   pathname: "/(stack)/ride/[id]/group-settings",
                   params: { id: rideId as string },
                 })
-              }
-              activeOpacity={0.7}
-            >
-              <Text
-                style={{
-                  color: "white",
-                  fontSize: TYPE.size.subheading,
-                  fontWeight: TYPE.weight.semibold,
-                  marginBottom: 1,
-                }}
-                numberOfLines={1}
-              >
-                {rideInfo.from} → {rideInfo.to}
-              </Text>
-              <Text
-                style={{ color: "#666", fontSize: TYPE.size.label }}
-                numberOfLines={1}
-              >
-                {rideInfo.memberIds?.length || 0} members · {rideInfo.date} · {rideInfo.time}
-                {isArchived ? " · Archived" : ""}
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <View style={{ flex: 1 }} />
-          )}
+            : undefined
+        }
+        rightIcon="people-outline"
+        rightLabel="Group settings"
+        onRightPress={() =>
+          router.push({
+            pathname: "/(stack)/ride/[id]/group-settings",
+            params: { id: rideId as string },
+          })
+        }
+      />
 
-          <Pressable
-            onPress={() =>
-              router.push({
-                pathname: "/(stack)/ride/[id]/group-settings",
-                params: { id: rideId as string },
-              })
-            }
-            p="$2"
-          >
-            <Ionicons name="people-outline" size={22} color="#555" />
-          </Pressable>
-        </HStack>
-
-        {/* Archive countdown — single compact line */}
-        {shouldShowArchiveCountdown && timeUntilArchive && (
-          <View
+      {/* Archive countdown - single compact line */}
+      {shouldShowArchiveCountdown && timeUntilArchive && (
+        <View
+          style={{
+            backgroundColor: "#1a1a1a",
+            paddingVertical: 6,
+            alignItems: "center",
+            borderBottomWidth: 1,
+            borderBottomColor: darkTheme.raised,
+          }}
+        >
+          <Text
             style={{
-              backgroundColor: "#1a1a1a",
-              paddingVertical: 6,
-              alignItems: "center",
-              borderBottomWidth: 1,
-              borderBottomColor: "#2a2a2a",
+              fontSize: TYPE.size.micro,
+              fontWeight: "600",
+              color: timeUntilArchive.includes("Archives in") ? "#ffcc00" : darkTheme.textFaint,
             }}
           >
-            <Text
-              style={{
-                fontSize: TYPE.size.micro,
-                fontWeight: "600",
-                color: timeUntilArchive.includes("Archives in") ? "#ffcc00" : "#777",
-              }}
-            >
-              {timeUntilArchive} · Ride chats archive 6 hours after start time
-            </Text>
-          </View>
-        )}
-      </View>
+            {timeUntilArchive} · Ride chats archive 6 hours after start time
+          </Text>
+        </View>
+      )}
 
       {/* ── Keyboard-managed section ── */}
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         {/* Messages */}
         <FlatList
           ref={flatListRef}
@@ -1138,9 +1534,11 @@ export default function RideChatScreen() {
           }}
           scrollEventThrottle={16}
           onScroll={({ nativeEvent }) => {
+            // Inverted list: y≈0 is the latest message. Resume auto-scroll near
+            // the bottom; pause it once the user scrolls up to read history.
             const y = nativeEvent.contentOffset.y;
-            if (y < 60 && !autoScrollRef.current) setAutoScrollBoth(true);
-            else if (y > 120 && autoScrollRef.current) setAutoScrollBoth(false);
+            if (y < 60) autoScrollRef.current = true;
+            else if (y > 120) autoScrollRef.current = false;
           }}
           ListHeaderComponent={
             typingUsers.length > 0 ? (
@@ -1148,7 +1546,7 @@ export default function RideChatScreen() {
                 <View style={{ flexDirection: "row", alignItems: "flex-end", gap: SPACE.sm }}>
                   <View
                     style={{
-                      backgroundColor: "#252525",
+                      backgroundColor: darkTheme.surfaceAlt,
                       borderRadius: 18,
                       borderBottomLeftRadius: 5,
                       paddingHorizontal: 12,
@@ -1161,7 +1559,7 @@ export default function RideChatScreen() {
                 <Text
                   style={{
                     fontSize: TYPE.size.micro,
-                    color: "#555",
+                    color: darkTheme.textGhost,
                     marginTop: 4,
                     marginLeft: 2,
                   }}
@@ -1173,6 +1571,39 @@ export default function RideChatScreen() {
               </View>
             ) : null
           }
+          ListFooterComponent={
+            hasMoreMessages ? (
+              <View style={{ alignItems: "center", paddingVertical: SPACE.md }}>
+                <TouchableOpacity
+                  onPress={loadEarlier}
+                  disabled={loadingEarlier}
+                  activeOpacity={0.8}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: SPACE.sm,
+                    backgroundColor: darkTheme.surface,
+                    borderRadius: 999,
+                    paddingHorizontal: SPACE.lg,
+                    paddingVertical: SPACE.sm,
+                    borderWidth: 1,
+                    borderColor: darkTheme.raised,
+                  }}
+                >
+                  {loadingEarlier ? (
+                    <ActivityIndicator size="small" color={ACCENT} />
+                  ) : (
+                    <>
+                      <Ionicons name="chevron-up" size={14} color={ACCENT} />
+                      <Text style={{ color: ACCENT, fontSize: TYPE.size.label, fontWeight: TYPE.weight.semibold }}>
+                        Load earlier messages
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            ) : null
+          }
           ListEmptyComponent={
             <View style={{ flexGrow: 1, justifyContent: "center" }}>
               <ChatEmptyState />
@@ -1180,21 +1611,64 @@ export default function RideChatScreen() {
           }
         />
 
-        {/* Input bar */}
+        {/* Glass composer — in flow, so the list sits above it (nothing renders under) */}
         <View
-          style={{
-            paddingHorizontal: SPACE.md,
-            paddingTop: SPACE.sm,
-            paddingBottom: inputPadBottom,
-            backgroundColor: "#121212",
-            borderTopWidth: 1,
-            borderTopColor: "#2a2a2a",
-          }}
+          style={{ paddingHorizontal: SPACE.sm, paddingTop: SPACE.xs, paddingBottom: safeBottom }}
         >
+          <GlassSurface
+            effect="regular"
+            colorScheme="dark"
+            fallbackColor={darkTheme.surface}
+            style={{ borderRadius: 26, overflow: "hidden" }}
+          >
+            <View style={{ paddingHorizontal: SPACE.sm, paddingTop: SPACE.sm, paddingBottom: SPACE.sm }}>
+          {/* Reply preview */}
+          {replyTo && (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: darkTheme.surface,
+                borderRadius: 10,
+                borderLeftWidth: 3,
+                borderLeftColor: ACCENT,
+                paddingVertical: 6,
+                paddingLeft: 10,
+                paddingRight: 6,
+                marginBottom: SPACE.sm,
+              }}
+            >
+              <Ionicons
+                name="arrow-undo"
+                size={15}
+                color={ACCENT}
+                style={{ marginRight: 8 }}
+              />
+              {replyTo.imageUrl ? (
+                <Image
+                  source={{ uri: replyTo.imageUrl }}
+                  style={{ width: 34, height: 34, borderRadius: 5, backgroundColor: darkTheme.raised, marginRight: 8 }}
+                  contentFit="cover"
+                />
+              ) : null}
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: ACCENT, fontSize: TYPE.size.label, fontWeight: "600", marginBottom: 1 }}>
+                  Replying to {replyTo.senderName}
+                </Text>
+                <Text numberOfLines={1} style={{ color: darkTheme.textSecondary, fontSize: TYPE.size.label }}>
+                  {replyTo.imageUrl && !replyTo.text?.trim() ? "📷 Photo" : replyTo.text}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setReplyTo(null)} hitSlop={10} style={{ padding: 4 }}>
+                <Ionicons name="close" size={18} color={darkTheme.textFaint} />
+              </TouchableOpacity>
+            </View>
+          )}
+
           {input.length > MAX_CHARS * 0.8 && (
             <Text
               style={{
-                color: input.length >= MAX_CHARS ? "#ff5555" : "#a0a0a0",
+                color: input.length >= MAX_CHARS ? darkTheme.danger : darkTheme.textSecondary,
                 fontSize: TYPE.size.micro,
                 textAlign: "right",
                 marginBottom: 4,
@@ -1205,21 +1679,34 @@ export default function RideChatScreen() {
           )}
 
           <View style={{ flexDirection: "row", alignItems: "flex-end", gap: SPACE.sm }}>
+            <TouchableOpacity
+              onPress={handleAttachImage}
+              disabled={uploadingImage}
+              activeOpacity={0.7}
+              style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center" }}
+            >
+              {uploadingImage ? (
+                <ActivityIndicator size="small" color={ACCENT} />
+              ) : (
+                <Ionicons name="image-outline" size={24} color={darkTheme.textBright} />
+              )}
+            </TouchableOpacity>
             <Input
               flex={1}
               size="md"
               borderWidth={0}
               borderRadius="$2xl"
-              backgroundColor={isArchived ? "#1a1a1a" : "#2a2a2a"}
+              backgroundColor={isArchived ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.1)"}
             >
               <InputField
+                ref={inputRef}
                 placeholder={
                   isArchived
-                    ? "Chat archived — still open for messages"
+                    ? "Chat archived, still open for messages"
                     : "Message..."
                 }
-                placeholderTextColor={isArchived ? "#444" : "#666"}
-                color="white"
+                placeholderTextColor={isArchived ? darkTheme.borderStrong : darkTheme.textMuted}
+                color={darkTheme.textPrimary}
                 value={input}
                 onChangeText={(text) => {
                   if (text.length <= MAX_CHARS) setInput(text);
@@ -1262,52 +1749,21 @@ export default function RideChatScreen() {
                     opacity: !input.trim() ? 0.35 : 1,
                   }}
                 >
-                  <Ionicons name="arrow-up" size={20} color="#121212" />
+                  <Ionicons name="arrow-up" size={20} color={darkTheme.bg} />
                 </Animated.View>
               </ReAnimated.View>
             </Pressable>
           </View>
+            </View>
+          </GlassSurface>
         </View>
       </KeyboardAvoidingView>
 
-      {/* Scroll-to-bottom FAB — outside KAV, positioned above keyboard */}
-      {!autoScroll && (
-        <View
-          pointerEvents="box-none"
-          style={{
-            position: "absolute",
-            bottom: keyboardHeight > 0 ? keyboardHeight + 60 : safeBottom + 70,
-            alignSelf: "center",
-            zIndex: 100,
-          }}
-        >
-          <GHTouchableOpacity
-            onPress={() => scrollToBottom(true)}
-            activeOpacity={0.85}
-            style={{
-              backgroundColor: "#1e1e1e",
-              borderRadius: 999,
-              paddingHorizontal: 16,
-              paddingVertical: 7,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: SPACE.sm,
-              borderWidth: 1,
-              borderColor: "#333",
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.4,
-              shadowRadius: 4,
-              elevation: 4,
-            }}
-          >
-            <Ionicons name="chevron-down" size={14} color={ACCENT} />
-            <Text style={{ color: ACCENT, fontSize: TYPE.size.label, fontWeight: TYPE.weight.semibold }}>
-              Latest messages
-            </Text>
-          </GHTouchableOpacity>
-        </View>
-      )}
+      {/* Long-press context menu: lifted bubble + reactions + actions */}
+      <MessageMenu state={menu} onClose={() => setMenu(null)} />
+
+      {/* Full-screen image viewer */}
+      <ImageLightbox uri={lightboxUri} onClose={() => setLightboxUri(null)} />
     </View>
   );
 }

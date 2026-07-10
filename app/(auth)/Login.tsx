@@ -1,10 +1,12 @@
+import { darkTheme } from "@/constants/theme";
 // ─────────────────────────────────────────────
 //  Login.tsx  ·  Firebase Auth
 // ─────────────────────────────────────────────
 
 import { ACCENT } from "@/constants/Colors";
 import { auth, db } from "@/services/firebaseConfig";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { confirm, prompt, toast } from "@/components/ui/Dialog";
+import { Ionicons } from "@expo/vector-icons";
 import {
   GoogleSignin,
   statusCodes,
@@ -25,7 +27,6 @@ import { addDoc, collection, doc, getDoc, serverTimestamp } from "firebase/fires
 import React from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Keyboard,
   KeyboardAvoidingView,
@@ -42,18 +43,19 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AppSheet, type AppSheetRef } from "@/components/ui/AppSheet";
 
 // ─────────────────────────────────────────────
 //  DESIGN TOKENS
 // ─────────────────────────────────────────────
 const palette = {
-  bg: "#121212",
-  surface: "#1e1e1e",
-  rim: "#252525",
+  bg: darkTheme.bg,
+  surface: darkTheme.surface,
+  rim: darkTheme.surfaceAlt,
   accent: ACCENT,
-  ink: "#ffffff",
-  muted: "#a1a1a6",
-  ghost: "#545456",
+  ink: darkTheme.textPrimary,
+  muted: darkTheme.textSecondary,
+  ghost: darkTheme.textGhost,
 };
 
 const SPACING = { xs: 8, sm: 16, md: 24, lg: 32, xl: 48 };
@@ -99,7 +101,7 @@ const StyledInput = React.forwardRef<
           style={p.visibilityToggle}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <MaterialCommunityIcons
+          <Ionicons
             name={isPasswordVisible ? "eye-outline" : "eye-off-outline"}
             size={22 * SCALE}
             color={palette.muted}
@@ -174,17 +176,17 @@ export default function Login() {
   const [appleLoading, setAppleLoading] = React.useState(false);
   const [error, setError] = React.useState("");
 
-  const [showBugReport, setShowBugReport] = React.useState(false);
   const [bugEmail, setBugEmail] = React.useState("");
   const [bugDescription, setBugDescription] = React.useState("");
   const [bugSubmitting, setBugSubmitting] = React.useState(false);
 
   const passwordRef = React.useRef<TextInput>(null);
+  const bugSheetRef = React.useRef<AppSheetRef>(null);
 
   // ── Bug report submit ──
   const onSubmitBugReport = async () => {
     if (!bugEmail.trim() || !bugDescription.trim()) {
-      Alert.alert("Missing Info", "Please enter your email and describe the issue.");
+      toast("Please enter your email and describe the issue.", { type: "error" });
       return;
     }
     setBugSubmitting(true);
@@ -207,12 +209,13 @@ export default function Login() {
         source: "login-screen",
         createdAt: serverTimestamp(),
       });
-      Alert.alert("Report Sent", "Thanks — we'll look into it shortly.", [
-        { text: "OK", onPress: () => { setShowBugReport(false); setBugEmail(""); setBugDescription(""); } },
-      ]);
+      toast("Thanks, we'll look into it shortly.", { type: "success" });
+      bugSheetRef.current?.dismiss();
+      setBugEmail("");
+      setBugDescription("");
     } catch (err) {
       console.error("Bug report failed:", err);
-      Alert.alert("Error", "Could not send your report. Please try again.");
+      toast("Could not send your report. Please try again.", { type: "error" });
     } finally {
       setBugSubmitting(false);
     }
@@ -232,14 +235,16 @@ export default function Login() {
         code === "auth/wrong-password" ||
         code === "auth/user-not-found"
       ) {
-        Alert.alert(
-          "Sign In Failed",
-          "Incorrect email or password. If you're an existing user, you may need to reset your password.",
-          [
-            { text: "Cancel", style: "cancel" },
-            { text: "Reset Password", onPress: () => router.push("/(auth)/Reset") },
-          ],
-        );
+        if (
+          await confirm({
+            title: "Sign In Failed",
+            message:
+              "Incorrect email or password. If you're an existing user, you may need to reset your password.",
+            confirmText: "Reset Password",
+          })
+        ) {
+          router.push("/(auth)/Reset");
+        }
       } else if (code === "auth/too-many-requests") {
         setError("Too many attempts. Please wait or reset your password.");
       } else {
@@ -280,43 +285,39 @@ export default function Login() {
       }
     } catch (err: any) {
       if (err.code === statusCodes.SIGN_IN_CANCELLED) {
-        // user cancelled — no error shown
+        // user cancelled - no error shown
       } else if (err.code === statusCodes.IN_PROGRESS) {
-        // already in progress — ignore
+        // already in progress - ignore
       } else if (err.code === "auth/account-exists-with-different-credential") {
-        // User already has an email/password account — offer to link Google to it
+        // User already has an email/password account - offer to link Google to it
         const pendingCredential = GoogleAuthProvider.credentialFromError(err);
-        Alert.alert(
-          "Account Already Exists",
-          "You already have an account with this email. Enter your password to link Google Sign-In to your account.",
-          [
-            { text: "Cancel", style: "cancel" },
-            {
-              text: "Link Account",
-              onPress: () => {
-                Alert.prompt(
-                  "Enter Password",
-                  "Your current BearPool password:",
-                  async (password) => {
-                    if (!password) return;
-                    try {
-                      const emailUser = await GoogleSignin.getCurrentUser();
-                      const email = emailUser?.user?.email ?? "";
-                      const userCred = await signInWithEmailAndPassword(auth, email, password);
-                      if (pendingCredential) {
-                        await linkWithCredential(userCred.user, pendingCredential);
-                      }
-                      router.replace("/");
-                    } catch (linkErr: any) {
-                      setError(linkErr?.message || "Failed to link accounts.");
-                    }
-                  },
-                  "secure-text"
-                );
-              },
-            },
-          ]
-        );
+        if (
+          await confirm({
+            title: "Account Already Exists",
+            message:
+              "You already have an account with this email. Enter your password to link Google Sign-In to your account.",
+            confirmText: "Link Account",
+          })
+        ) {
+          const password = await prompt({
+            title: "Enter Password",
+            message: "Your current BearPool password:",
+            secure: true,
+          });
+          if (password) {
+            try {
+              const emailUser = await GoogleSignin.getCurrentUser();
+              const email = emailUser?.user?.email ?? "";
+              const userCred = await signInWithEmailAndPassword(auth, email, password);
+              if (pendingCredential) {
+                await linkWithCredential(userCred.user, pendingCredential);
+              }
+              router.replace("/");
+            } catch (linkErr: any) {
+              setError(linkErr?.message || "Failed to link accounts.");
+            }
+          }
+        }
       } else {
         setError("Google sign-in failed. Please try again.");
       }
@@ -354,7 +355,7 @@ export default function Login() {
 
       const result = await signInWithCredential(auth, firebaseCredential);
 
-      // Enforce @berkeley.edu — delete the created account and reject if not berkeley
+      // Enforce @berkeley.edu - delete the created account and reject if not berkeley
       const appleEmail = result.user.email;
       if (!appleEmail || !isBerkeleyEmail(appleEmail)) {
         await deleteUser(result.user);
@@ -417,7 +418,7 @@ export default function Login() {
                 activeOpacity={0.8}
               >
                 {googleLoading ? (
-                  <ActivityIndicator size="small" color="#333" />
+                  <ActivityIndicator size="small" color={darkTheme.border} />
                 ) : (
                   <>
                     <Text style={s.googleIcon}>G</Text>
@@ -464,6 +465,10 @@ export default function Login() {
                 onSubmitEditing={() => passwordRef.current?.focus()}
                 blurOnSubmit={false}
               />
+
+              {email.includes("@") && !isBerkeleyEmail(email.trim()) ? (
+                <Text style={s.inlineHint}>Use your @berkeley.edu email.</Text>
+              ) : null}
 
               <FormField
                 label="Password"
@@ -532,7 +537,7 @@ export default function Login() {
               </TouchableOpacity>
               <View style={s.dot} />
               <TouchableOpacity
-                onPress={() => setShowBugReport(true)}
+                onPress={() => bugSheetRef.current?.present()}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Text style={s.legalLink}>Report a bug</Text>
@@ -543,76 +548,62 @@ export default function Login() {
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
 
-      {/* ── Bug Report Modal ── */}
-      <Modal
-        visible={showBugReport}
-        transparent
-        animationType="slide"
-        onRequestClose={() => !bugSubmitting && setShowBugReport(false)}
-      >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={s.modalOverlay}>
-            <KeyboardAvoidingView
-              behavior={Platform.OS === "ios" ? "padding" : "height"}
-              style={{ width: "100%" }}
-            >
-              <View style={s.modalSheet}>
-                <Text style={s.modalTitle}>Report a Bug</Text>
-                <Text style={s.modalSubtitle}>
-                  Having trouble logging in? Let us know and we'll fix it.
-                </Text>
+      {/* ── Bug Report Sheet ── */}
+      <AppSheet ref={bugSheetRef} detents={["auto"]} dismissible={!bugSubmitting}>
+        <View style={s.sheetContent}>
+          <Text style={s.modalTitle}>Report a Bug</Text>
+          <Text style={s.modalSubtitle}>
+            Having trouble logging in? Let us know and we&apos;ll fix it.
+          </Text>
 
-                <Text style={s.modalLabel}>Your email</Text>
-                <TextInput
-                  style={s.modalInput}
-                  placeholder="johndoe@berkeley.edu"
-                  placeholderTextColor={palette.ghost}
-                  value={bugEmail}
-                  onChangeText={setBugEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!bugSubmitting}
-                />
+          <Text style={s.modalLabel}>Your email</Text>
+          <TextInput
+            style={s.modalInput}
+            placeholder="johndoe@berkeley.edu"
+            placeholderTextColor={palette.ghost}
+            value={bugEmail}
+            onChangeText={setBugEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!bugSubmitting}
+          />
 
-                <Text style={s.modalLabel}>What's happening?</Text>
-                <TextInput
-                  style={[s.modalInput, s.modalTextarea]}
-                  placeholder="Describe the issue..."
-                  placeholderTextColor={palette.ghost}
-                  value={bugDescription}
-                  onChangeText={setBugDescription}
-                  multiline
-                  numberOfLines={5}
-                  textAlignVertical="top"
-                  editable={!bugSubmitting}
-                />
+          <Text style={s.modalLabel}>What&apos;s happening?</Text>
+          <TextInput
+            style={[s.modalInput, s.modalTextarea]}
+            placeholder="Describe the issue..."
+            placeholderTextColor={palette.ghost}
+            value={bugDescription}
+            onChangeText={setBugDescription}
+            multiline
+            numberOfLines={5}
+            textAlignVertical="top"
+            editable={!bugSubmitting}
+          />
 
-                <TouchableOpacity
-                  onPress={onSubmitBugReport}
-                  activeOpacity={0.8}
-                  disabled={bugSubmitting}
-                  style={[s.modalSubmit, bugSubmitting && { opacity: 0.7 }]}
-                >
-                  {bugSubmitting ? (
-                    <ActivityIndicator color={palette.bg} size="small" />
-                  ) : (
-                    <Text style={s.modalSubmitText}>Submit Report</Text>
-                  )}
-                </TouchableOpacity>
+          <TouchableOpacity
+            onPress={onSubmitBugReport}
+            activeOpacity={0.8}
+            disabled={bugSubmitting}
+            style={[s.modalSubmit, bugSubmitting && { opacity: 0.7 }]}
+          >
+            {bugSubmitting ? (
+              <ActivityIndicator color={palette.bg} size="small" />
+            ) : (
+              <Text style={s.modalSubmitText}>Submit Report</Text>
+            )}
+          </TouchableOpacity>
 
-                <TouchableOpacity
-                  onPress={() => { if (!bugSubmitting) { setShowBugReport(false); setBugEmail(""); setBugDescription(""); } }}
-                  activeOpacity={0.7}
-                  style={s.modalCancel}
-                >
-                  <Text style={s.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </KeyboardAvoidingView>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
+          <TouchableOpacity
+            onPress={() => { if (!bugSubmitting) { bugSheetRef.current?.dismiss(); setBugEmail(""); setBugDescription(""); } }}
+            activeOpacity={0.7}
+            style={s.modalCancel}
+          >
+            <Text style={s.modalCancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </AppSheet>
     </>
   );
 }
@@ -638,13 +629,13 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#ffffff",
+    backgroundColor: darkTheme.textPrimary,
     borderRadius: BORDER_RADIUS.md,
     height: 54 * SCALE,
     gap: 10 * SCALE,
   },
   googleIcon: { fontSize: 18 * SCALE, fontWeight: "700", color: "#4285F4" },
-  googleBtnText: { color: "#333333", fontSize: 16 * SCALE, fontWeight: "600" },
+  googleBtnText: { color: darkTheme.border, fontSize: 16 * SCALE, fontWeight: "600" },
   appleBtn: { height: 54 * SCALE, width: "100%" },
   divider: {
     flexDirection: "row",
@@ -652,18 +643,25 @@ const s = StyleSheet.create({
     marginBottom: SPACING.md * SCALE,
     gap: 10 * SCALE,
   },
-  dividerLine: { flex: 1, height: 1, backgroundColor: "#333" },
+  dividerLine: { flex: 1, height: 1, backgroundColor: darkTheme.border },
   dividerText: { color: palette.ghost, fontSize: 13 * SCALE },
   formArea: { width: "100%" },
   errorContainer: {
-    backgroundColor: "#2a0e0e",
+    backgroundColor: darkTheme.errorBg,
     padding: SPACING.sm * SCALE,
     borderRadius: BORDER_RADIUS.sm,
     marginBottom: SPACING.md * SCALE,
     borderWidth: 1,
-    borderColor: "#4a1e1e",
+    borderColor: darkTheme.errorBorder,
   },
-  errorText: { color: "#ff7d7d", textAlign: "center" },
+  errorText: { color: darkTheme.errorText, textAlign: "center" },
+  inlineHint: {
+    color: darkTheme.errorText,
+    fontSize: 13 * SCALE,
+    marginTop: -SPACING.sm * SCALE,
+    marginBottom: SPACING.sm * SCALE,
+    marginLeft: 2 * SCALE,
+  },
   forgotButton: {
     alignSelf: "flex-end",
     marginBottom: SPACING.lg * SCALE,
@@ -710,9 +708,13 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.6)",
   },
   modalSheet: {
-    backgroundColor: "#1e1e1e",
+    backgroundColor: darkTheme.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
+    padding: SPACING.md,
+    paddingBottom: SPACING.lg + SPACING.md,
+  },
+  sheetContent: {
     padding: SPACING.md,
     paddingBottom: SPACING.lg + SPACING.md,
   },
@@ -735,14 +737,14 @@ const s = StyleSheet.create({
     marginBottom: 6 * SCALE,
   },
   modalInput: {
-    backgroundColor: "#2a2a2a",
+    backgroundColor: darkTheme.raised,
     borderRadius: BORDER_RADIUS.sm,
     color: palette.ink,
     fontSize: 15 * SCALE,
     paddingHorizontal: 14 * SCALE,
     paddingVertical: 12 * SCALE,
     borderWidth: 1,
-    borderColor: "#333",
+    borderColor: darkTheme.border,
     marginBottom: SPACING.sm * SCALE,
   },
   modalTextarea: {
