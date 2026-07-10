@@ -38,7 +38,7 @@ type FeedbackModalProps = {
   onFeedbackSubmit?: () => void;
 };
 
-const MAX_NOTES_LENGTH = 300;
+const MAX_FEEDBACK_LENGTH = 300;
 
 export default function RideFeedbackModal({
   visible,
@@ -52,7 +52,7 @@ export default function RideFeedbackModal({
 
   const [rating, setRating] = useState(0);
   const [completed, setCompleted] = useState<boolean | null>(null);
-  const [notes, setNotes] = useState("");
+  const [feedback, setFeedback] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   // Start each prompt from a blank slate.
@@ -60,7 +60,7 @@ export default function RideFeedbackModal({
     if (visible) {
       setRating(0);
       setCompleted(null);
-      setNotes("");
+      setFeedback("");
       setSubmitting(false);
     }
   }, [visible]);
@@ -74,7 +74,7 @@ export default function RideFeedbackModal({
       await submitRideReview(rideInfo.id, userId, {
         rating,
         completed: completed!,
-        notes,
+        feedback,
       });
       toast("Thanks for the feedback");
       onFeedbackSubmit?.();
@@ -179,14 +179,14 @@ export default function RideFeedbackModal({
                     />
                   </View>
 
-                  {/* Notes */}
+                  {/* Feedback */}
                   <Text style={[styles.label, { color: t.textSecondary }]}>
-                    Notes <Text style={{ color: t.textMuted }}>(optional)</Text>
+                    Feedback <Text style={{ color: t.textMuted }}>(optional)</Text>
                   </Text>
                   <TextInput
-                    value={notes}
+                    value={feedback}
                     onChangeText={(text) =>
-                      text.length <= MAX_NOTES_LENGTH && setNotes(text)
+                      text.length <= MAX_FEEDBACK_LENGTH && setFeedback(text)
                     }
                     placeholder="Anything worth sharing about this ride?"
                     placeholderTextColor={t.placeholder}
@@ -211,7 +211,7 @@ export default function RideFeedbackModal({
                       marginTop: SPACE.xs,
                     }}
                   >
-                    {notes.length} / {MAX_NOTES_LENGTH}
+                    {feedback.length} / {MAX_FEEDBACK_LENGTH}
                   </Text>
 
                   {/* Actions */}
