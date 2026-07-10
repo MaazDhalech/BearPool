@@ -8,14 +8,23 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------------
-    // READS: any signed-in user may read any document. This matches the
-    // app's existing behavior — profiles, rides, and chats are all read
-    // broadly. Note: Firestore rules are ADDITIVE (an operation is allowed
-    // if ANY match grants it), so writes are handled per-collection below
-    // rather than with a broad write rule.
+    // READS: any signed-in user may read any document EXCEPT adminActions
+    // (the admin audit log, restricted below). This matches the app's
+    // existing behavior — profiles, rides, and chats are all read broadly.
+    // Note: Firestore rules are ADDITIVE (an operation is allowed if ANY
+    // match grants it), so writes are handled per-collection below rather
+    // than with a broad write rule.
     // ---------------------------------------------------------------------
     match /{document=**} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null && document[0] != 'adminActions';
+    }
+
+    // Admin audit log: written only by the admin web app (via the Admin SDK,
+    // which bypasses these rules) and readable only by admins — never by the
+    // mobile app's regular signed-in users.
+    match /adminActions/{actionId} {
+      allow read: if request.auth != null && request.auth.token.admin == true;
+      allow write: if false;
     }
 
     // ---------------------------------------------------------------------

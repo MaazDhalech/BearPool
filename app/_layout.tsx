@@ -429,6 +429,8 @@ function RootLayoutContent() {
           <Stack.Screen name="(stack)/ride/[id]/group-settings" options={{ presentation: "modal" }} />
           <Stack.Screen name="(stack)/ride/[id]/viewProfile" options={{ presentation: "modal" }} />
           <Stack.Screen name="(stack)/settings/settings" options={{ presentation: "modal" }} />
+          <Stack.Screen name="(stack)/settings/blocked-users" options={{ presentation: "modal" }} />
+          <Stack.Screen name="(stack)/settings/notifications" options={{ presentation: "modal" }} />
           <Stack.Screen name="(stack)/settings/report-user" options={{ presentation: "modal" }} />
           <Stack.Screen name="(stack)/settings/contact-support" options={{ presentation: "modal" }} />
           <Stack.Screen name="(stack)/settings/privacy-policy" options={{ presentation: "modal" }} />
