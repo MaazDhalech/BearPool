@@ -192,7 +192,7 @@ export default function CompleteProfile() {
         tosVersion: "2025-11-15",
       });
 
-      router.replace("/(auth)/Welcome");
+      router.replace("/(auth)/Onboarding" as any);
     } catch (err: any) {
       setError(err?.message || "Failed to save profile. Please try again.");
     } finally {

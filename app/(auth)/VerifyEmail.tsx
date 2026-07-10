@@ -56,7 +56,7 @@ export default function VerifyEmail() {
     try {
       await reload(currentUser);
       if (auth.currentUser?.emailVerified) {
-        router.replace("/(auth)/Welcome");
+        router.replace("/(auth)/Onboarding" as any);
       } else {
         setError("Email not verified yet. Check your inbox and click the link.");
       }

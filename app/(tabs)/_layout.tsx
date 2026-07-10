@@ -18,7 +18,7 @@ export default function TabLayout() {
   // Redirect to login if not signed in
   useEffect(() => {
     if (isLoaded && !isSignedIn) {
-      router.replace("/(auth)/Login");
+      router.replace("/(auth)/Welcome");
     }
   }, [isLoaded, isSignedIn]);
 

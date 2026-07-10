@@ -67,6 +67,7 @@ export default {
       "expo-font",
       "expo-localization",
       "expo-web-browser",
+      "expo-video",
       [
         "@react-native-google-signin/google-signin",
         {

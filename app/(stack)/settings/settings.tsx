@@ -218,7 +218,7 @@ const performAccountDeletion = async () => {
     await deleteDoc(doc(db, "users", userId));
     await deleteUser(currentUser);
 
-    router.replace("/(auth)/Login");
+    router.replace("/(auth)/Welcome");
     toast("Your account has been deleted.", { type: "info" });
   } catch (error: any) {
     if (error?.code === "auth/requires-recent-login") {
@@ -324,7 +324,7 @@ const handleReauthAndDelete = async () => {
           onPress: async () => {
             try {
               await firebaseSignOut(auth);
-              router.replace("/(auth)/Login");
+              router.replace("/(auth)/Welcome");
             } catch (err) {
               console.error("Error signing out:", err);
               toast("Failed to sign out. Please try again.", { type: "error" });
