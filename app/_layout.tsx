@@ -22,7 +22,6 @@ import {
   doc,
   getDoc,
   onSnapshot,
-  orderBy,
   query,
   where,
 } from "firebase/firestore";
@@ -179,11 +178,14 @@ function RootLayoutContent() {
         if (Date.now() - timestamp < 24 * 60 * 60 * 1000) return;
       }
 
+      // Every ride this user is on. Deliberately no orderBy("startTime") — that
+      // silently drops rides created before startTime existed — and no
+      // archived==false filter, since rides auto-archive 6h after start and
+      // riders should still be able to rate them. The time window is applied
+      // client-side below.
       const ridesQuery = query(
         collection(db, "rides"),
         where("memberIds", "array-contains", userId),
-        where("archived", "==", false),
-        orderBy("startTime", "desc"),
       );
 
       const unsubscribe = onSnapshot(
@@ -205,11 +207,14 @@ function RootLayoutContent() {
 
               if (!startTime) return;
 
+              // Prompt once the ride is 30 minutes past its start time, and keep
+              // the offer open for a week so a rider who doesn't open the app
+              // that day still gets asked.
               const timeSinceStart = Date.now() - startTime.getTime();
-              const thirtyMinutes = 1 * 60 * 1000;
-              const twentyFourHours = 24 * 60 * 60 * 1000;
+              const THIRTY_MINUTES = 30 * 60 * 1000;
+              const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
 
-              if (timeSinceStart >= thirtyMinutes && timeSinceStart <= twentyFourHours) {
+              if (timeSinceStart >= THIRTY_MINUTES && timeSinceStart <= SEVEN_DAYS) {
                 if (!showFeedback) {
                   setCurrentRide({
                     id: rideId,

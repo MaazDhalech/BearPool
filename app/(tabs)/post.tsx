@@ -3,6 +3,7 @@ import { ACCENT } from "@/constants/Colors";
 import { TYPE } from "@/constants/Typography";
 import { SPACE } from "@/constants/Spacing";
 import { NotificationOptInModal } from "@/components/NotificationOptInModal";
+import RideFeedbackModal, { type RideFeedbackRide } from "@/components/RideFeedbackModal";
 import { toast } from "@/components/ui/Dialog";
 import { useNotificationOptInPrompt } from "@/hooks/useNotificationOptInPrompt";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -55,6 +56,12 @@ filter.add(["ridehate", "berkeleybully"]);
 
 const MAX_NOTES_LENGTH = 200;
 
+// TEMP (testing): when true, posting a ride immediately opens the post-ride
+// rating prompt so the UI can be exercised without waiting 30 minutes past the
+// ride's start time. Set to false to restore the real flow (success popup +
+// notification opt-in), which is what ships.
+const TEST_SHOW_FEEDBACK_ON_CREATE = true;
+
 export default function PostScreen() {
   const { userId } = useFirebaseAuth();
   const router = useRouter();
@@ -83,6 +90,10 @@ export default function PostScreen() {
 
   // Success popup state
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+
+  // TEMP (testing): drives the immediate post-create rating prompt.
+  const [showTestFeedback, setShowTestFeedback] = useState(false);
+  const [testFeedbackRide, setTestFeedbackRide] = useState<RideFeedbackRide | null>(null);
   const [lastRideId, setLastRideId] = useState<string | null>(null);
 
   const { shouldPrompt, requestPermission, openSettings, markDismissed } =
@@ -322,6 +333,10 @@ export default function PostScreen() {
         to: cleanedTo,
         date: format(date, "MMMM d"),
         time: format(date, "h:mm a"),
+        // Machine-readable scheduled time. `date`/`time` above are display-only
+        // strings (no year), so they can't be compared reliably. startTime is
+        // what decides when the post-ride rating prompt fires.
+        startTime: Timestamp.fromDate(date),
         seats: Number(getSafeSeats()),
         notes: cleanedNotes,
         createdAt: Timestamp.now(),
@@ -336,6 +351,22 @@ export default function PostScreen() {
 
       // Save the ride document ID to state
       setLastRideId(rideDocRef.id);
+
+      // TEMP (testing): preview the rating prompt immediately after posting,
+      // instead of waiting 30 minutes past the ride's start time. Flip
+      // TEST_SHOW_FEEDBACK_ON_CREATE to false to restore the normal flow.
+      if (TEST_SHOW_FEEDBACK_ON_CREATE) {
+        setTestFeedbackRide({
+          id: rideDocRef.id,
+          from: cleanedFrom,
+          to: cleanedTo,
+          date: format(date, "MMMM d"),
+          time: format(date, "h:mm a"),
+        });
+        clearForm();
+        setShowTestFeedback(true);
+        return;
+      }
 
       clearForm();
       // Queue success popup, then run notification prompt. The popup appears after prompt completes.
@@ -862,6 +893,15 @@ export default function PostScreen() {
         isDenied={notifDenied}
         onEnable={handleEnableNotifications}
         onClose={handleDismissNotifications}
+      />
+
+      {/* TEMP (testing): rating prompt shown right after posting a ride. */}
+      <RideFeedbackModal
+        visible={showTestFeedback}
+        rideInfo={testFeedbackRide}
+        onClose={() => setShowTestFeedback(false)}
+        onRateLater={() => setShowTestFeedback(false)}
+        onFeedbackSubmit={() => setShowTestFeedback(false)}
       />
 
       {/* Android Date Picker Modal */}
