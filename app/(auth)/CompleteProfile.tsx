@@ -1,6 +1,6 @@
-import { darkTheme } from "@/constants/theme";
 import TOSOverlay from "@/components/TOSOverlay";
 import { ACCENT } from "@/constants/Colors";
+import { darkTheme } from "@/constants/theme";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { db } from "@/services/firebaseConfig";
 import { initialsAvatarUrl } from "@/utils/avatar";

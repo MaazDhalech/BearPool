@@ -1,6 +1,5 @@
 import { TYPE } from "@/constants/Typography";
 import { useTheme } from "@/hooks/useTheme";
-import { isLiquidGlassSupported, LiquidGlassView } from "@callstack/liquid-glass";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React from "react";
@@ -39,13 +38,7 @@ function CircleButton({
 }) {
   const t = useTheme();
   return (
-    <View style={[s.circle, !isLiquidGlassSupported && glassFallback]}>
-      {isLiquidGlassSupported && (
-        <LiquidGlassView
-          colorScheme="dark"
-          style={[StyleSheet.absoluteFill, { borderRadius: CIRCLE / 2 }]}
-        />
-      )}
+    <View style={[s.circle, glassFallback]}>
       <TouchableOpacity
         onPress={onPress}
         hitSlop={10}

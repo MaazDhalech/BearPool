@@ -1,15 +1,12 @@
 import { useTheme } from "@/hooks/useTheme";
-import React from "react";
-// NOTE: @lodev09/react-native-true-sheet ships bundler-style type entrypoints.
-// This project's tsconfig uses moduleResolution "nodenext", which can't follow
-// the package's extensionless type re-exports, so a named `import { TrueSheet }`
-// fails typecheck even though Metro resolves the runtime correctly. We import the
-// namespace (which always resolves) and read the component off it.
-import * as TrueSheetModule from "@lodev09/react-native-true-sheet";
-
-const TrueSheet = (
-  TrueSheetModule as unknown as { TrueSheet: React.ComponentType<any> }
-).TrueSheet;
+import React, { useCallback, useImperativeHandle, useState } from "react";
+import {
+  Modal,
+  Pressable,
+  StyleSheet,
+  TouchableWithoutFeedback,
+  View,
+} from "react-native";
 
 /** Imperative handle for AppSheet: `ref.current?.present()` / `.dismiss()`. */
 export type AppSheetRef = {
@@ -18,30 +15,91 @@ export type AppSheetRef = {
   resize: (index: number) => Promise<void>;
 };
 
-type AppSheetProps = React.ComponentProps<typeof TrueSheet> & {
+type AppSheetProps = {
   children?: React.ReactNode;
+  detents?: (string | number)[];
+  backgroundColor?: string;
+  cornerRadius?: number;
+  grabber?: boolean;
+  onDismiss?: () => void;
 };
 
 /**
- * Themed native bottom sheet (callit-style). Thin wrapper over TrueSheet that
- * applies BearPool's dark surface, rounded corners and a grabber by default.
- *
- * Usage:
- *   const ref = useRef<AppSheetRef>(null);
- *   <AppSheet ref={ref} detents={["auto"]}> ...content... </AppSheet>
- *   ref.current?.present();  // and ref.current?.dismiss();
+ * Themed native bottom sheet. Currently implemented as a Modal fallback
+ * because @lodev09/react-native-true-sheet is not linked in the native binary.
+ * Swap back to TrueSheet once `pod install` + a native rebuild is done.
  */
 export const AppSheet = React.forwardRef<AppSheetRef, AppSheetProps>(
-  function AppSheet(props, ref) {
+  function AppSheet({ children, onDismiss, cornerRadius = 20 }, ref) {
     const t = useTheme();
+    const [visible, setVisible] = useState(false);
+
+    const present = useCallback(async () => {
+      setVisible(true);
+    }, []);
+
+    const dismiss = useCallback(async () => {
+      setVisible(false);
+      onDismiss?.();
+    }, [onDismiss]);
+
+    useImperativeHandle(ref, () => ({
+      present,
+      dismiss,
+      resize: async () => {},
+    }));
+
     return (
-      <TrueSheet
-        ref={ref as any}
-        cornerRadius={20}
-        grabber
-        backgroundColor={t.surface}
-        {...props}
-      />
+      <Modal
+        visible={visible}
+        transparent
+        animationType="slide"
+        onRequestClose={dismiss}
+      >
+        <TouchableWithoutFeedback onPress={dismiss}>
+          <View style={s.overlay} />
+        </TouchableWithoutFeedback>
+        <View
+          style={[
+            s.sheet,
+            {
+              backgroundColor: t.surface,
+              borderTopLeftRadius: cornerRadius,
+              borderTopRightRadius: cornerRadius,
+            },
+          ]}
+        >
+          {/* grabber */}
+          <Pressable onPress={dismiss} style={s.grabberRow}>
+            <View style={[s.grabber, { backgroundColor: t.textSecondary }]} />
+          </Pressable>
+          {children}
+        </View>
+      </Modal>
     );
   },
 );
+
+const s = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+  },
+  sheet: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingBottom: 34,
+  },
+  grabberRow: {
+    alignItems: "center",
+    paddingVertical: 12,
+  },
+  grabber: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    opacity: 0.4,
+  },
+});
