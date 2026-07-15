@@ -21,11 +21,14 @@ export type RideReviewInput = {
  * re-submitting updates their vote rather than double-counting it. The running
  * totals live on the ride doc itself:
  *
- *   ratingSum, ratingCount, ratingAvg, completedCount
+ *   ratingSum, ratingCount, ratingAvg, completedCount, rideCompleted
  *
  * `ratingCount` is the total number of reviews, so the number of riders who said
  * the ride did NOT happen is simply `ratingCount - completedCount`. It isn't
  * stored, since a derived field can only drift out of sync with its source.
+ *
+ * `rideCompleted` is a convenience boolean: true once more than half the ride's
+ * members have confirmed it happened (see the computation below).
  *
  * Both the vote and the aggregate are written in a single transaction, so the
  * average can never drift out of sync with the underlying votes.
@@ -76,6 +79,13 @@ export async function submitRideReview(
     ratingCount = Math.max(0, ratingCount);
     completedCount = Math.max(0, completedCount);
 
+    // A ride counts as completed once MORE THAN HALF of everyone on it confirms
+    // it happened. The denominator is the full roster (memberIds), so riders who
+    // never rate count as non-confirmations — a strict bar. To instead require a
+    // majority of only those who *rated*, swap memberCount for ratingCount below.
+    const memberCount = Array.isArray(ride.memberIds) ? ride.memberIds.length : 0;
+    const rideCompleted = memberCount > 0 && completedCount > memberCount / 2;
+
     txn.set(reviewRef, {
       userId,
       rating,
@@ -90,6 +100,7 @@ export async function submitRideReview(
       ratingAvg:
         ratingCount > 0 ? Math.round((ratingSum / ratingCount) * 100) / 100 : 0,
       completedCount,
+      rideCompleted,
       lastReviewedAt: serverTimestamp(),
     });
   });
