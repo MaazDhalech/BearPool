@@ -155,6 +155,8 @@ export function DialogHost() {
         visible={!!s.confirm}
         transparent
         animationType="fade"
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
         onRequestClose={() => closeConfirm(false)}
       >
         <View style={styles.backdrop}>
@@ -184,7 +186,14 @@ export function DialogHost() {
       </Modal>
 
       {/* Action menu (bottom sheet) */}
-      <Modal visible={!!s.menu} transparent animationType="slide" onRequestClose={dismissMenu}>
+      <Modal
+        visible={!!s.menu}
+        transparent
+        animationType="slide"
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
+        onRequestClose={dismissMenu}
+      >
         <TouchableWithoutFeedback onPress={dismissMenu}>
           <View style={styles.menuBackdrop}>
             <TouchableWithoutFeedback onPress={() => {}}>
@@ -217,7 +226,14 @@ export function DialogHost() {
       </Modal>
 
       {/* Prompt (text input) */}
-      <Modal visible={!!s.prompt} transparent animationType="fade" onRequestClose={() => closePrompt(null)}>
+      <Modal
+        visible={!!s.prompt}
+        transparent
+        animationType="fade"
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
+        onRequestClose={() => closePrompt(null)}
+      >
         <View style={styles.backdrop}>
           <View style={styles.card}>
             {s.prompt?.title ? <Text style={styles.title}>{s.prompt.title}</Text> : null}
