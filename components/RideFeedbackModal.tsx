@@ -242,14 +242,6 @@ export default function RideFeedbackModal({
     try {
       const web3formsApiKey = Constants.expoConfig?.extra?.web3formsApiKey;
 
-      if (!web3formsApiKey) {
-        Alert.alert(
-          "Error",
-          "Feedback service is not configured. Please contact support.",
-        );
-        return;
-      }
-
       // Prepare comprehensive ride data for the form
       const formData = new FormData();
       formData.append("access_key", web3formsApiKey);
@@ -368,113 +360,118 @@ ${feedbackForm.issueDetails}
       formData.append("feedback_type", "post_ride_feedback");
       formData.append("category", "Ride Feedback");
 
-      const response = await fetch("https://api.web3forms.com/submit", {
-        method: "POST",
-        body: formData,
-        headers: {
-          Accept: "application/json",
-        },
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        // Save feedback to Firestore for analytics
+      // web3forms: best-effort, never blocks submission
+      let web3formsId: string | null = null;
+      if (web3formsApiKey) {
         try {
-          await addDoc(collection(db, "rideFeedback"), {
-            userId: userId,
-            rideId: rideInfo.id,
-            from: rideInfo.from,
-            to: rideInfo.to,
-            date: rideInfo.date,
-            time: rideInfo.time,
-            hostId: rideInfo.hostId,
-            hostName: hostUserData?.name || "Unknown",
-
-            // Ratings
-            overallRating: feedbackForm.rating,
-            driverRating: feedbackForm.driverRating,
-            communicationRating: feedbackForm.communicationRating,
-            safetyRating: feedbackForm.safetyRating,
-            punctualityRating: feedbackForm.punctualityRating,
-
-            // Additional feedback
-            wouldRideAgain: feedbackForm.wouldRideAgain,
-            reportIssue: feedbackForm.reportIssue,
-            issueDetails: feedbackForm.reportIssue
-              ? feedbackForm.issueDetails
-              : null,
-            comments: feedbackForm.comments,
-            suggestions: feedbackForm.suggestions,
-
-            // Metadata
-            submittedAt: serverTimestamp(),
-            web3formsId: result.messageId || null,
-            submissionTimestamp: Date.now(),
-            userEmail: userData.email,
-            userName: userData.name,
-
-            // Ride status at time of feedback
-            rideStatus: status,
-            memberCount: rideInfo.memberIds?.length || 0,
-            seatsAvailable: rideInfo.seats,
-            rideFull: rideInfo.rideFull,
-            archived: rideInfo.archived,
+          const response = await fetch("https://api.web3forms.com/submit", {
+            method: "POST",
+            body: formData,
+            headers: {
+              Accept: "application/json",
+            },
           });
-
-          // Update user's last rated ride
-          try {
-            await updateDoc(doc(db, "users", userId), {
-              lastRatedRide: rideInfo.id,
-              lastRatedAt: serverTimestamp(),
-              totalRidesRated: increment(1),
-            });
-          } catch (userUpdateError) {
-            console.error(
-              "Failed to update user rating stats:",
-              userUpdateError,
-            );
+          const result = await response.json();
+          if (result.success) {
+            web3formsId = result.messageId || null;
+          } else {
+            console.warn("web3forms submission failed:", result.message);
           }
+        } catch (web3formsError) {
+          console.warn("web3forms request failed:", web3formsError);
+        }
+      }
 
-          // Call the feedback submit callback if provided
-          if (onFeedbackSubmit) {
-            onFeedbackSubmit();
-          }
-        } catch (dbError) {
-          console.error("Failed to log feedback to database:", dbError);
-          // Still show success to user since Web3Forms worked
+      // Save feedback to Firestore for analytics
+      try {
+        await addDoc(collection(db, "rideFeedback"), {
+          userId: userId,
+          rideId: rideInfo.id,
+          from: rideInfo.from,
+          to: rideInfo.to,
+          date: rideInfo.date,
+          time: rideInfo.time,
+          hostId: rideInfo.hostId,
+          hostName: hostUserData?.name || "Unknown",
+
+          // Ratings
+          overallRating: feedbackForm.rating,
+          driverRating: feedbackForm.driverRating,
+          communicationRating: feedbackForm.communicationRating,
+          safetyRating: feedbackForm.safetyRating,
+          punctualityRating: feedbackForm.punctualityRating,
+
+          // Additional feedback
+          wouldRideAgain: feedbackForm.wouldRideAgain,
+          reportIssue: feedbackForm.reportIssue,
+          issueDetails: feedbackForm.reportIssue
+            ? feedbackForm.issueDetails
+            : null,
+          comments: feedbackForm.comments,
+          suggestions: feedbackForm.suggestions,
+
+          // Metadata
+          submittedAt: serverTimestamp(),
+          web3formsId,
+          submissionTimestamp: Date.now(),
+          userEmail: userData.email,
+          userName: userData.name,
+
+          // Ride status at time of feedback
+          rideStatus: status,
+          memberCount: rideInfo.memberIds?.length || 0,
+          seatsAvailable: rideInfo.seats,
+          rideFull: rideInfo.rideFull,
+          archived: rideInfo.archived,
+        });
+
+        // Update user's last rated ride
+        try {
+          await updateDoc(doc(db, "users", userId), {
+            lastRatedRide: rideInfo.id,
+            lastRatedAt: serverTimestamp(),
+            totalRidesRated: increment(1),
+          });
+        } catch (userUpdateError) {
+          console.error(
+            "Failed to update user rating stats:",
+            userUpdateError,
+          );
         }
 
-        Alert.alert(
-          "Thank You! ✨",
-          "Your feedback has been submitted successfully. We appreciate you helping us improve our service!\n\nYour feedback makes our community better for everyone.",
-          [
-            {
-              text: "OK",
-              onPress: () => {
-                onClose();
-                // Reset form
-                setFeedbackForm({
-                  rating: 0,
-                  driverRating: 0,
-                  communicationRating: 0,
-                  safetyRating: 0,
-                  punctualityRating: 0,
-                  comments: "",
-                  suggestions: "",
-                  wouldRideAgain: null,
-                  reportIssue: false,
-                  issueDetails: "",
-                });
-              },
-            },
-          ],
-        );
-      } else {
-        throw new Error(
-          result.message || "Failed to submit feedback. Please try again.",
-        );
+        // Call the feedback submit callback if provided
+        if (onFeedbackSubmit) {
+          onFeedbackSubmit();
+        }
+      } catch (dbError) {
+        console.error("Failed to log feedback to database:", dbError);
       }
+
+      Alert.alert(
+        "Thank You! ✨",
+        "Your feedback has been submitted successfully. We appreciate you helping us improve our service!\n\nYour feedback makes our community better for everyone.",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              onClose();
+              // Reset form
+              setFeedbackForm({
+                rating: 0,
+                driverRating: 0,
+                communicationRating: 0,
+                safetyRating: 0,
+                punctualityRating: 0,
+                comments: "",
+                suggestions: "",
+                wouldRideAgain: null,
+                reportIssue: false,
+                issueDetails: "",
+              });
+            },
+          },
+        ],
+      );
     } catch (error) {
       console.error("Error submitting feedback:", error);
       Alert.alert(
@@ -565,7 +562,7 @@ ${feedbackForm.issueDetails}
     label,
     type = "yes",
   }: {
-    selected: boolean | null;
+    selected: boolean;
     onSelect: (value: boolean) => void;
     label: string;
     type: "yes" | "no" | "issue";
@@ -573,18 +570,16 @@ ${feedbackForm.issueDetails}
     const isYes = type === "yes";
     const isIssue = type === "issue";
 
-    const bgColor =
-      selected === (isYes || isIssue)
-        ? isYes
-          ? darkTheme.success
-          : darkTheme.danger
-        : darkTheme.raised;
-    const borderColor =
-      selected === (isYes || isIssue)
-        ? isYes
-          ? "#388E3C"
-          : "#D32F2F"
-        : darkTheme.borderStrong;
+    const bgColor = selected
+      ? isYes
+        ? darkTheme.success
+        : darkTheme.danger
+      : darkTheme.raised;
+    const borderColor = selected
+      ? isYes
+        ? "#388E3C"
+        : "#D32F2F"
+      : darkTheme.borderStrong;
 
     return (
       <Pressable
@@ -603,7 +598,7 @@ ${feedbackForm.issueDetails}
         }}
       >
         <Text
-          color={selected === (isYes || isIssue) ? "white" : darkTheme.textSecondary}
+          color={selected ? "white" : darkTheme.textSecondary}
           fontWeight="600"
           fontSize="$sm"
         >
@@ -644,10 +639,11 @@ ${feedbackForm.issueDetails}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
       >
-        <TouchableWithoutFeedback onPress={onClose}>
           <View style={styles.overlay}>
-            <TouchableWithoutFeedback>
-              <Box style={styles.modalContent}>
+            <TouchableWithoutFeedback onPress={onClose}>
+              <View style={StyleSheet.absoluteFill} />
+            </TouchableWithoutFeedback>
+            <Box style={styles.modalContent}>
                 <ScrollView
                   showsVerticalScrollIndicator={false}
                   contentContainerStyle={{ paddingBottom: 30 }}
@@ -820,7 +816,7 @@ ${feedbackForm.issueDetails}
                     </Text>
                     <HStack space="sm" mt="$2">
                       <YesNoButton
-                        selected={feedbackForm.wouldRideAgain}
+                        selected={feedbackForm.wouldRideAgain === true}
                         onSelect={handleWouldRideAgain}
                         label="Yes, definitely!"
                         type="yes"
@@ -841,7 +837,7 @@ ${feedbackForm.issueDetails}
                     </Text>
                     <HStack space="sm" mt="$2">
                       <YesNoButton
-                        selected={feedbackForm.reportIssue}
+                        selected={feedbackForm.reportIssue === true}
                         onSelect={handleReportIssue}
                         label="Yes, report issue"
                         type="issue"
@@ -1007,10 +1003,8 @@ ${feedbackForm.issueDetails}
                     </Text>
                   </VStack>
                 </ScrollView>
-              </Box>
-            </TouchableWithoutFeedback>
+            </Box>
           </View>
-        </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
     </Modal>
   );
