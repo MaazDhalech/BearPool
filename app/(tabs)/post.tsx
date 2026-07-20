@@ -352,7 +352,7 @@ export default function PostScreen() {
   // Handle navigation after success
   const handleGoToHome = () => {
     setShowSuccessPopup(false);
-    router.replace("/");
+    router.replace("/(tabs)");
   };
 
   const handleGoToChat = () => {

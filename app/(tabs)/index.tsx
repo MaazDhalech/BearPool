@@ -8,7 +8,7 @@ import { NavHeader } from "@/components/ui/NavHeader";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { FilterDropdown } from "@/components/ui/ContextMenu";
 import { LoadingState } from "@/components/ui/LoadingState";
-import { db } from "@/services/firebaseConfig";
+import { auth, db } from "@/services/firebaseConfig";
 import { checkIsAdmin } from "@/utils/admin";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import {
@@ -373,8 +373,13 @@ export default function HomeScreen() {
           fetchRidesManually();
         }
       },
-      (error) => {
-        console.error("Real-time listener error:", error);
+      (error: any) => {
+        // TEMP DEBUG
+        console.error(
+          "[rides debug] Real-time listener error - code:", error?.code,
+          "message:", error?.message,
+          "authUid:", auth.currentUser?.uid ?? "NONE",
+        );
         fetchRidesManually();
       },
     );

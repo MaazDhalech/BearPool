@@ -16,7 +16,11 @@ export function useFirebaseAuth() {
       // Refresh the ID token once on sign-in so custom claims (e.g. `admin`)
       // are current without waiting for the ~1h auto-refresh. Fire-and-forget.
       if (firebaseUser) {
-        firebaseUser.getIdToken(true).catch(() => {});
+        // TEMP DEBUG: surface token refresh failures instead of swallowing them.
+        firebaseUser.getIdToken(true).then(
+          (token) => console.log("[auth debug] token refresh OK, uid:", firebaseUser.uid, "len:", token.length),
+          (err) => console.error("[auth debug] token refresh FAILED:", err?.code, err?.message),
+        );
       }
     });
   }, []);
