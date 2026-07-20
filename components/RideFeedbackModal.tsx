@@ -100,10 +100,14 @@ export default function RideFeedbackModal({
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <TouchableWithoutFeedback onPress={onClose}>
-          <View style={[styles.overlay, { backgroundColor: t.overlay }]}>
-            <TouchableWithoutFeedback>
-              <View style={[styles.sheet, { backgroundColor: t.bg }]}>
+        <View style={[styles.overlay, { backgroundColor: t.overlay }]}>
+          {/* Backdrop as its own layer. Wrapping the sheet's ScrollView in a
+              TouchableWithoutFeedback breaks scrolling on the new RN
+              architecture, so tap-to-dismiss lives behind the sheet instead. */}
+          <TouchableWithoutFeedback onPress={onClose}>
+            <View style={StyleSheet.absoluteFill} />
+          </TouchableWithoutFeedback>
+          <View style={[styles.sheet, { backgroundColor: t.bg }]}>
                 <ScrollView
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
@@ -230,10 +234,8 @@ export default function RideFeedbackModal({
                     />
                   </View>
                 </ScrollView>
-              </View>
-            </TouchableWithoutFeedback>
           </View>
-        </TouchableWithoutFeedback>
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );

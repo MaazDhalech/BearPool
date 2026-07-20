@@ -3,27 +3,18 @@ import { ACCENT } from "@/constants/Colors";
 import { db, auth } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { NavHeader } from "@/components/ui/NavHeader";
-import { Sheet } from "@/components/ui/Sheet";
-import { confirm, toast } from "@/components/ui/Dialog";
+import { toast } from "@/components/ui/Dialog";
 import { deleteUser, EmailAuthProvider, GoogleAuthProvider, OAuthProvider, reauthenticateWithCredential, signOut as firebaseSignOut } from "firebase/auth";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Crypto from "expo-crypto";
 import {
-  Avatar,
-  AvatarImage,
   Box,
-  Button,
-  ButtonText,
   HStack,
   ScrollView,
   Text,
   VStack,
 } from "@gluestack-ui/themed";
-import Constants from "expo-constants";
-import * as Device from "expo-device";
-import * as Linking from "expo-linking";
-import * as Notifications from "expo-notifications";
 import { useRouter } from "expo-router";
 import {
   arrayRemove,
@@ -34,7 +25,6 @@ import {
   getDocs,
   increment,
   query,
-  setDoc,
   updateDoc,
   where
 } from "firebase/firestore";
@@ -42,29 +32,16 @@ import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Modal as RNModal,
   Platform,
   StyleSheet,
-  Switch,
   TextInput,
   TouchableOpacity,
   TouchableWithoutFeedback,
   View as RNView,
 } from "react-native";
-
-// Default avatar image
-const DEFAULT_AVATAR =
-  "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
-
-
-interface BlockedUser {
-  id: string;
-  username: string;
-  first_name: string;
-  last_name: string;
-  avatar: string;
-}
 
 interface SettingsItemProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -130,20 +107,11 @@ export default function SettingsScreen() {
 
   const [profileData, setProfileData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [showBlockedUsers, setShowBlockedUsers] = useState(false);
-  const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
-  const [loadingBlockedUsers, setLoadingBlockedUsers] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [showReauthModal, setShowReauthModal] = useState(false);
   const [reauthPassword, setReauthPassword] = useState("");
   const [reauthError, setReauthError] = useState("");
   const [reauthLoading, setReauthLoading] = useState(false);
-
-  // Notification settings
-  const [showNotifSettings, setShowNotifSettings] = useState(false);
-  const [notifEnabled, setNotifEnabled] = useState(false);
-  const [notifPermissionStatus, setNotifPermissionStatus] = useState<"granted" | "denied" | "undetermined">("undetermined");
-  const [savingNotif, setSavingNotif] = useState(false);
 
   // Fetch user data
   useEffect(() => {
@@ -160,8 +128,6 @@ export default function SettingsScreen() {
             ...userData,
             blockedUsers: userData.blockedUsers || [],
           });
-          setNotifEnabled(userData.notifPrefs?.enabled === true);
-          setNotifPermissionStatus(userData.notifPrefs?.permissionStatus || "undetermined");
         }
       } catch (error) {
         console.error("Error fetching user data:", error);
@@ -173,106 +139,37 @@ export default function SettingsScreen() {
     fetchUserData();
   }, [userId]);
 
-  // Fetch blocked users data
-  const fetchBlockedUsers = async () => {
-    if (!userId || !profileData?.blockedUsers) return;
-
-    setLoadingBlockedUsers(true);
-    try {
-      const blockedUserIds = profileData.blockedUsers;
-      if (blockedUserIds.length === 0) {
-        setBlockedUsers([]);
-        return;
-      }
-
-      // Fetch blocked users data in batches (Firestore 'in' query limit is 10)
-      const blockedUsersData: BlockedUser[] = [];
-      const batchSize = 10;
-
-      for (let i = 0; i < blockedUserIds.length; i += batchSize) {
-        const batch = blockedUserIds.slice(i, i + batchSize);
-        const q = query(
-          collection(db, "users"),
-          where("__name__", "in", batch)
-        );
-
-        const querySnapshot = await getDocs(q);
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          blockedUsersData.push({
-            id: doc.id,
-            username: data.username || "Unknown",
-            first_name: data.first_name || "",
-            last_name: data.last_name || "",
-            avatar: data.avatar || DEFAULT_AVATAR,
-          });
-        });
-      }
-
-      setBlockedUsers(blockedUsersData);
-    } catch (error) {
-      console.error("Error fetching blocked users:", error);
-      toast("Failed to load blocked users.", { type: "error" });
-    } finally {
-      setLoadingBlockedUsers(false);
-    }
-  };
-
-  // Unblock a user
-  const handleUnblockUser = async (blockedUserId: string, username: string) => {
-    if (!userId) return;
-
-    const ok = await confirm({
-      title: "Unblock User",
-      message: `Are you sure you want to unblock ${username}?`,
-      confirmText: "Unblock",
-      destructive: true,
-    });
-    if (!ok) return;
-
-    try {
-      await updateDoc(doc(db, "users", userId), {
-        blockedUsers: arrayRemove(blockedUserId),
-      });
-
-      setBlockedUsers((prev) =>
-        prev.filter((user) => user.id !== blockedUserId)
-      );
-      setProfileData((prev: any) => ({
-        ...prev,
-        blockedUsers:
-          prev.blockedUsers?.filter((id: string) => id !== blockedUserId) ||
-          [],
-      }));
-
-      toast(`${username} has been unblocked.`, { type: "success" });
-    } catch (error) {
-      console.error("Error unblocking user:", error);
-      toast("Failed to unblock user. Please try again.", { type: "error" });
-    }
-  };
-
   // Delete account handler
-  const handleDeleteAccount = async () => {
+  const handleDeleteAccount = () => {
     if (!userId) return;
 
-    const first = await confirm({
-      title: "Delete Account",
-      message:
-        "Are you sure you want to delete your account? This action cannot be undone. All your data will be permanently deleted.",
-      confirmText: "Delete",
-      destructive: true,
-    });
-    if (!first) return;
-
-    const second = await confirm({
-      title: "Final Confirmation",
-      message:
-        "This will permanently delete your account and all associated data. Are you absolutely sure?",
-      confirmText: "Yes, Delete My Account",
-      destructive: true,
-    });
-    if (second) performAccountDeletion();
+    Alert.alert(
+      "Delete Account",
+      "Are you sure you want to delete your account? This action cannot be undone. All your data will be permanently deleted.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            Alert.alert(
+              "Final Confirmation",
+              "This will permanently delete your account and all associated data. Are you absolutely sure?",
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Yes, Delete My Account",
+                  style: "destructive",
+                  onPress: () => performAccountDeletion(),
+                },
+              ],
+              { cancelable: true }
+            );
+          },
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
 const cleanupUserRides = async (userId: string) => {
@@ -409,128 +306,38 @@ const handleReauthAndDelete = async () => {
   }
 };
 
-  // Fetch blocked users when modal opens
-  useEffect(() => {
-    if (showBlockedUsers && profileData) {
-      fetchBlockedUsers();
-    }
-  }, [showBlockedUsers, profileData]);
-
   const handleGoBack = () => {
     router.back();
   };
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     if (!isLoaded) return;
 
-    const ok = await confirm({
-      title: "Log Out",
-      message: "Are you sure you want to log out?",
-      confirmText: "Log Out",
-      destructive: true,
-    });
-    if (!ok) return;
-
-    try {
-      await firebaseSignOut(auth);
-      router.replace("/(auth)/Login");
-    } catch (err) {
-      console.error("Error signing out:", err);
-      toast("Failed to sign out. Please try again.", { type: "error" });
-    }
+    Alert.alert(
+      "Log Out",
+      "Are you sure you want to log out?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Log Out",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await firebaseSignOut(auth);
+              router.replace("/(auth)/Login");
+            } catch (err) {
+              console.error("Error signing out:", err);
+              toast("Failed to sign out. Please try again.", { type: "error" });
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   const handlePrivacySettings = () => {
     router.push("/(stack)/settings/privacy-policy");
-  };
-
-  const handleNotificationSettings = async () => {
-    // Sync live permission status before showing the modal
-    const { status } = await Notifications.getPermissionsAsync();
-    const normalized = status === "granted" ? "granted" : status === "denied" ? "denied" : "undetermined";
-    setNotifPermissionStatus(normalized);
-    // If permission is gone (revoked in system settings), reflect that
-    if (normalized !== "granted" && notifEnabled) {
-      setNotifEnabled(false);
-    }
-    setShowNotifSettings(true);
-  };
-
-  const handleNotifToggle = async (value: boolean) => {
-    if (!userId) return;
-    setSavingNotif(true);
-
-    try {
-      if (value) {
-        // Enabling - check/request permission
-        const { status } = await Notifications.getPermissionsAsync();
-
-        if (status === "denied") {
-          // Can't request again; send user to system settings
-          if (
-            await confirm({
-              title: "Notifications Blocked",
-              message:
-                "You've previously denied notifications. Please enable them in your device Settings.",
-              confirmText: "Open Settings",
-            })
-          ) {
-            Linking.openSettings();
-          }
-          return;
-        }
-
-        let finalStatus = status;
-        if (status !== "granted") {
-          const { status: newStatus } = await Notifications.requestPermissionsAsync();
-          finalStatus = newStatus;
-        }
-
-        if (finalStatus !== "granted") {
-          setSavingNotif(false);
-          return;
-        }
-
-        // Register token
-        const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-        const token = await Notifications.getExpoPushTokenAsync(
-          projectId ? { projectId } : undefined
-        );
-
-        const deviceKey =
-          Device.osInternalBuildId ||
-          Device.osBuildFingerprint ||
-          Device.modelId ||
-          Device.modelName ||
-          "unknown-device";
-
-        await setDoc(
-          doc(db, "users", userId),
-          {
-            expoPushToken: token.data,
-            pushTokens: { [deviceKey]: token.data },
-            notifPrefs: { enabled: true, permissionStatus: "granted" },
-          },
-          { merge: true }
-        );
-
-        setNotifEnabled(true);
-        setNotifPermissionStatus("granted");
-      } else {
-        // Disabling
-        await setDoc(
-          doc(db, "users", userId),
-          { notifPrefs: { enabled: false } },
-          { merge: true }
-        );
-        setNotifEnabled(false);
-      }
-    } catch (error) {
-      console.error("Failed to update notification preference", error);
-      toast("Failed to update notification settings.", { type: "error" });
-    } finally {
-      setSavingNotif(false);
-    }
   };
 
   const handleHelpSupport = () => {
@@ -562,7 +369,7 @@ const handleReauthAndDelete = async () => {
                 icon="person-remove-outline"
                 title="Blocked Users"
                 subtitle="Manage users you've blocked"
-                onPress={() => setShowBlockedUsers(true)}
+                onPress={() => router.push("/(stack)/settings/blocked-users")}
                 color={darkTheme.danger}
                 badge={
                   profileData?.blockedUsers?.length > 0
@@ -591,7 +398,7 @@ const handleReauthAndDelete = async () => {
                 icon="notifications-outline"
                 title="Notifications"
                 subtitle="Manage your notification preferences"
-                onPress={handleNotificationSettings}
+                onPress={() => router.push("/(stack)/settings/notifications")}
                 color="#FF9800"
               />
 
@@ -633,116 +440,13 @@ const handleReauthAndDelete = async () => {
           </Box>
         </ScrollView>
 
-        {/* Blocked Users - bottom sheet */}
-        <Sheet
-          visible={showBlockedUsers}
-          onClose={() => setShowBlockedUsers(false)}
-          title="Blocked Users"
-        >
-          <RNView style={{ paddingHorizontal: 24, maxHeight: 400 }}>
-            {loadingBlockedUsers ? (
-              <Box py="$4" alignItems="center">
-                <Text color={darkTheme.textSecondary}>Loading blocked users...</Text>
-              </Box>
-            ) : blockedUsers.length === 0 ? (
-              <Box py="$4" alignItems="center">
-                <Text color={darkTheme.textSecondary}>No blocked users</Text>
-              </Box>
-            ) : (
-              <ScrollView showsVerticalScrollIndicator={false}>
-                <VStack space="md" py="$2">
-                  {blockedUsers.map((blockedUser) => (
-                    <HStack
-                      key={blockedUser.id}
-                      space="md"
-                      alignItems="center"
-                      bg={darkTheme.raised}
-                      p="$3"
-                      borderRadius="$md"
-                    >
-                      <Avatar size="md" bg={darkTheme.border}>
-                        {blockedUser.avatar ? (
-                          <AvatarImage
-                            source={{ uri: blockedUser.avatar }}
-                            alt="Avatar"
-                          />
-                        ) : (
-                          <Avatar.FallbackText color={darkTheme.textPrimary}>
-                            {(blockedUser.first_name?.[0] || "") +
-                              (blockedUser.last_name?.[0] || "") || "U"}
-                          </Avatar.FallbackText>
-                        )}
-                      </Avatar>
-
-                      <VStack flex={1}>
-                        <Text color={darkTheme.textPrimary} fontWeight="$semibold">
-                          {blockedUser.username}
-                        </Text>
-                        <Text color={darkTheme.textSecondary} fontSize="$sm">
-                          {blockedUser.first_name} {blockedUser.last_name}
-                        </Text>
-                      </VStack>
-
-                      <Button
-                        size="sm"
-                        bg={darkTheme.danger}
-                        onPress={() =>
-                          handleUnblockUser(blockedUser.id, blockedUser.username)
-                        }
-                      >
-                        <ButtonText color={darkTheme.textPrimary} fontSize="$sm">
-                          Unblock
-                        </ButtonText>
-                      </Button>
-                    </HStack>
-                  ))}
-                </VStack>
-              </ScrollView>
-            )}
-          </RNView>
-        </Sheet>
-
-        {/* Notification Settings - bottom sheet */}
-        <Sheet
-          visible={showNotifSettings}
-          onClose={() => setShowNotifSettings(false)}
-          title="Notifications"
-        >
-          <RNView style={{ paddingHorizontal: 24 }}>
-            <RNView style={styles.notifRow}>
-              <RNView style={{ flex: 1, marginRight: 16 }}>
-                <Text color={darkTheme.textPrimary} fontWeight="$semibold" fontSize="$md">Push Notifications</Text>
-                <Text color={darkTheme.textSecondary} fontSize="$sm" mt="$1">
-                  Ride updates, chat messages, member activity
-                </Text>
-              </RNView>
-              <Switch
-                value={notifEnabled}
-                onValueChange={handleNotifToggle}
-                disabled={savingNotif}
-                trackColor={{ false: darkTheme.borderStrong, true: ACCENT }}
-                thumbColor={darkTheme.textPrimary}
-              />
-            </RNView>
-
-            {notifPermissionStatus === "denied" && !notifEnabled && (
-              <RNView style={styles.notifWarning}>
-                <Text color="#ffcc00" fontSize="$sm" mb="$3">
-                  Notifications are blocked in your device settings.
-                </Text>
-                <Button size="sm" bg={ACCENT} onPress={() => Linking.openSettings()}>
-                  <ButtonText color={darkTheme.bg}>Open Device Settings</ButtonText>
-                </Button>
-              </RNView>
-            )}
-          </RNView>
-        </Sheet>
-
         {/* Re-auth modal for account deletion */}
         <RNModal
           visible={showReauthModal}
           transparent
           animationType="fade"
+          presentationStyle="overFullScreen"
+          statusBarTranslucent
           onRequestClose={() => { setShowReauthModal(false); setReauthPassword(""); setReauthError(""); }}
         >
           <TouchableWithoutFeedback onPress={() => { setShowReauthModal(false); setReauthPassword(""); setReauthError(""); }}>
@@ -794,39 +498,6 @@ const handleReauthAndDelete = async () => {
 }
 
 const styles = StyleSheet.create({
-  notifBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-  },
-  notifSheet: {
-    backgroundColor: darkTheme.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 40,
-  },
-  notifHandle: {
-    width: 36,
-    height: 4,
-    backgroundColor: darkTheme.textGhost,
-    borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: 20,
-  },
-  notifRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: darkTheme.raised,
-    borderRadius: 12,
-    padding: 16,
-  },
-  notifWarning: {
-    backgroundColor: darkTheme.raised,
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 12,
-  },
   reauthBackdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.7)",

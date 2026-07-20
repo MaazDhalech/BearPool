@@ -2,6 +2,7 @@ import { darkTheme } from "@/constants/theme";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
+import { getUserRatingSummary, RatingSummary } from "@/utils/userRatings";
 import {
     Avatar,
     AvatarImage,
@@ -41,6 +42,15 @@ export default function UserProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [isBlocked, setIsBlocked] = useState(false);
   const [isBlocking, setIsBlocking] = useState(false);
+  const [ratingSummary, setRatingSummary] = useState<RatingSummary | null>(null);
+
+  // Load this user's average member rating (from the userRatings collection)
+  useEffect(() => {
+    if (!userId) return;
+    getUserRatingSummary(String(userId))
+      .then(setRatingSummary)
+      .catch((e) => console.error("Failed to load rating summary:", e));
+  }, [userId]);
 
   useEffect(() => {
     if (!isLoaded || !currentUserId || !userId) return;
@@ -316,6 +326,19 @@ export default function UserProfileScreen() {
               <Text color={darkTheme.textPrimary} fontWeight="$bold" fontSize="$xl">
                 {userProfile.ridesHosted || 0}
               </Text>
+            </VStack>
+            <VStack alignItems="center">
+              <Text color={darkTheme.textSecondary}>Rating</Text>
+              <Text color={darkTheme.textPrimary} fontWeight="$bold" fontSize="$xl">
+                {ratingSummary && ratingSummary.count > 0
+                  ? `★ ${ratingSummary.average.toFixed(1)}`
+                  : "—"}
+              </Text>
+              {ratingSummary && ratingSummary.count > 0 && (
+                <Text color={darkTheme.textSecondary} fontSize="$xs">
+                  {ratingSummary.count} rating{ratingSummary.count > 1 ? "s" : ""}
+                </Text>
+              )}
             </VStack>
           </HStack>
 
