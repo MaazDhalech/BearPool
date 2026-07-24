@@ -16,7 +16,7 @@ export default {
     newArchEnabled: true,
     ios: {
       bundleIdentifier: "com.rebu.bearpool",
-      buildNumber: "8",
+      buildNumber: "9",
       supportsTablet: true,
       entitlements: {
         "com.apple.developer.applesignin": ["Default"],
