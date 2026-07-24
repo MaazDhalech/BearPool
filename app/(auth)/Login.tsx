@@ -401,7 +401,7 @@ export default function Login() {
             {/* ── Header ── */}
             <View style={s.header}>
               <Image
-                source={require("../../assets/images/newicon.png")}
+                source={require("../../assets/images/icon.png")}
                 resizeMode="contain"
                 style={{ ...s.logo, marginTop: 25 * SCALE, borderRadius: 20 * SCALE }}
               />

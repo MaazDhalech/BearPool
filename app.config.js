@@ -10,7 +10,7 @@ export default {
       url: "https://u.expo.dev/e469f4b5-1dbf-4a1d-aa5e-0417dee7cf2c",
     },
     orientation: "portrait",
-    icon: "./assets/images/newicon.png",
+    icon: "./assets/images/icon.png",
     scheme: "bearpool",
     userInterfaceStyle: "dark",
     newArchEnabled: true,
@@ -37,7 +37,7 @@ export default {
     android: {
       package: "com.rebu.bearpool",
       adaptiveIcon: {
-        foregroundImage: "./assets/images/adaptive-icon.png",
+        foregroundImage: "./assets/images/icon.png",
         backgroundColor: "#ffffff",
       },
       edgeToEdgeEnabled: true,
@@ -56,7 +56,7 @@ export default {
       [
         "expo-splash-screen",
         {
-          image: "./assets/images/newsplash-icon.png",
+          image: "./assets/images/icon.png",
           imageWidth: 200,
           resizeMode: "contain",
           backgroundColor: "#ffffff",

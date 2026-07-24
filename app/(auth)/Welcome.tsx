@@ -54,7 +54,7 @@ export default function Welcome() {
           {/* Header */}
           <View style={s.header}>
             <Image
-              source={require("../../assets/images/newicon.png")}
+              source={require("../../assets/images/icon.png")}
               style={s.logo}
               resizeMode="contain"
             />
