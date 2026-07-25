@@ -439,6 +439,7 @@ export default function PostScreen() {
               From
             </Text>
             <TextInput
+              testID="post-ride-from-input"
               value={from}
               placeholder="e.g. Berkeley – Unit 1"
               placeholderTextColor={darkTheme.textMuted}
@@ -461,6 +462,7 @@ export default function PostScreen() {
               To
             </Text>
             <TextInput
+              testID="post-ride-to-input"
               value={to}
               placeholder="e.g. SFO Terminal 2"
               placeholderTextColor={darkTheme.textMuted}
@@ -483,6 +485,7 @@ export default function PostScreen() {
               Date
             </Text>
             <TouchableOpacity
+              testID="post-ride-date-button"
               onPress={showDatePickerModal}
               activeOpacity={0.7}
               style={{
@@ -509,6 +512,7 @@ export default function PostScreen() {
               Time
             </Text>
             <TouchableOpacity
+              testID="post-ride-time-button"
               onPress={showTimePickerModal}
               activeOpacity={0.7}
               style={{
@@ -696,6 +700,7 @@ export default function PostScreen() {
 
           {/* Submit */}
           <SpringPressable
+            testID="post-ride-submit-button"
             onPress={handleSubmit}
             disabled={loading}
             style={{
@@ -806,6 +811,7 @@ export default function PostScreen() {
                 >
                   {/* Go to Home Button */}
                   <TouchableOpacity
+                    testID="post-ride-success-home-button"
                     onPress={handleGoToHome}
                     activeOpacity={0.7}
                     style={{
@@ -1042,11 +1048,12 @@ export default function PostScreen() {
                     <Text style={{ color: darkTheme.textPrimary, fontSize: TYPE.size.subheading, fontWeight: TYPE.weight.semibold }}>
                       Select Date
                     </Text>
-                    <TouchableOpacity onPress={() => setShowDatePicker(false)} style={{ padding: SPACE.sm }}>
+                    <TouchableOpacity testID="post-ride-date-done-button" onPress={() => setShowDatePicker(false)} style={{ padding: SPACE.sm }}>
                       <Text style={{ color: ACCENT, fontSize: TYPE.size.body, fontWeight: TYPE.weight.semibold }}>Done</Text>
                     </TouchableOpacity>
                   </View>
                   <DateTimePicker
+                    testID="post-ride-date-picker"
                     value={date}
                     mode="date"
                     display="spinner"
@@ -1079,11 +1086,12 @@ export default function PostScreen() {
                     <Text style={{ color: darkTheme.textPrimary, fontSize: TYPE.size.subheading, fontWeight: TYPE.weight.semibold }}>
                       Select Time
                     </Text>
-                    <TouchableOpacity onPress={() => setShowTimePicker(false)} style={{ padding: SPACE.sm }}>
+                    <TouchableOpacity testID="post-ride-time-done-button" onPress={() => setShowTimePicker(false)} style={{ padding: SPACE.sm }}>
                       <Text style={{ color: ACCENT, fontSize: TYPE.size.body, fontWeight: TYPE.weight.semibold }}>Done</Text>
                     </TouchableOpacity>
                   </View>
                   <DateTimePicker
+                    testID="post-ride-time-picker"
                     value={date}
                     mode="time"
                     display="spinner"

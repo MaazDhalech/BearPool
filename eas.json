@@ -23,6 +23,15 @@
         "simulator": false
       }
     },
+    "e2e": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_NO_CAPABILITY_SYNC": "1"
+      },
+      "ios": {
+        "simulator": true
+      }
+    },
     "production": {
       "distribution": "store",
       "channel": "production",

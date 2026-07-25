@@ -455,6 +455,7 @@ export default function Login() {
 
               <FormField
                 label="Email"
+                testID="login-email-input"
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
@@ -472,6 +473,7 @@ export default function Login() {
 
               <FormField
                 label="Password"
+                testID="login-password-input"
                 ref={passwordRef}
                 value={password}
                 placeholder="••••••••"
@@ -491,6 +493,7 @@ export default function Login() {
               </TouchableOpacity>
 
               <TouchableOpacity
+                testID="login-submit-button"
                 onPress={onSignInPress}
                 activeOpacity={0.7}
                 disabled={isAnyLoading || !email || !password}

@@ -1350,6 +1350,7 @@ export default function RideChatScreen() {
           mirrored={isCurrentUser}
         >
         <View
+          testID={`chat-message-${msg.id}`}
           style={{
             marginBottom: isLastInGroup ? SPACE.md : 2,
             flexDirection: isCurrentUser ? "row-reverse" : "row",
@@ -1518,6 +1519,7 @@ export default function RideChatScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         {/* Messages */}
         <FlatList
+          testID="chat-message-list"
           ref={flatListRef}
           data={listData}
           renderItem={renderItem}
@@ -1699,6 +1701,7 @@ export default function RideChatScreen() {
               backgroundColor={isArchived ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.1)"}
             >
               <InputField
+                testID="chat-message-input"
                 ref={inputRef}
                 placeholder={
                   isArchived
@@ -1733,6 +1736,7 @@ export default function RideChatScreen() {
             </Input>
 
             <Pressable
+              testID="chat-send-button"
               onPressIn={animatePressIn}
               onPressOut={animatePressOut}
               onPress={handleSend}

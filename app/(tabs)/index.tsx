@@ -757,7 +757,7 @@ export default function HomeScreen() {
     });
 
   return (
-    <View style={{ flex: 1, backgroundColor: darkTheme.bg }}>
+    <View testID="home-feed-screen" style={{ flex: 1, backgroundColor: darkTheme.bg }}>
       <LinearGradient
         colors={["rgba(255, 190, 92, 0.28)", "transparent"]}
         style={{ position: "absolute", top: 0, left: 0, right: 0, height: 280 }}
@@ -765,11 +765,13 @@ export default function HomeScreen() {
       />
       <NavHeader title="Home" showBack={false} />
       <ScrollView
+        testID="home-feed-scroll-view"
         style={{ backgroundColor: "transparent" }}
         contentContainerStyle={{ paddingHorizontal: SPACE.lg, paddingTop: SPACE.md, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
+            testID="home-feed-refresh-control"
             refreshing={refreshing}
             onRefresh={handleRefresh}
             tintColor={ACCENT}
@@ -781,6 +783,7 @@ export default function HomeScreen() {
         {/* Search */}
         <HStack mb="$3">
           <SearchInput
+            testID="home-search-input"
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder="Search by location..."
@@ -840,6 +843,7 @@ export default function HomeScreen() {
             return (
               <TouchableOpacity
                 key={ride.id}
+                testID={`ride-card-${ride.id}`}
                 activeOpacity={isLocked || !canJoin ? 0.55 : 0.85}
                 onPress={() =>
                   router.push({ pathname: "/(stack)/ride/[id]", params: { id: ride.id } })
@@ -1008,6 +1012,7 @@ export default function HomeScreen() {
                       </View>
                     ) : (
                       <SpringPressable
+                        testID={`ride-card-join-button-${ride.id}`}
                         onPress={(e) => {
                           e.stopPropagation?.();
                           handleJoinRide(ride.id);

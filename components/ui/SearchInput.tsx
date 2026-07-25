@@ -10,6 +10,7 @@ type Props = {
   placeholder?: string;
   style?: ViewStyle;
   autoFocus?: boolean;
+  testID?: string;
 };
 
 /** Themed search field with a leading search icon and a clear button. */
@@ -19,6 +20,7 @@ export function SearchInput({
   placeholder = "Search...",
   style,
   autoFocus,
+  testID,
 }: Props) {
   const t = useTheme();
   return (
@@ -41,6 +43,7 @@ export function SearchInput({
     >
       <Ionicons name="search" size={16} color={t.textMuted} />
       <TextInput
+        testID={testID}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}

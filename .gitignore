@@ -40,6 +40,9 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# Mobilewright E2E test output
+mobilewright-report/
+
 app-example
 
 .env

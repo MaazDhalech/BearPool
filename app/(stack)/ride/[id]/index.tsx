@@ -125,13 +125,16 @@ function CTAButton({
   icon,
   label,
   onPress,
+  testID,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
+  testID?: string;
 }) {
   return (
     <Pressable
+      testID={testID}
       onPress={onPress}
       style={({ pressed }) => ({
         opacity: pressed ? 0.85 : 1,
@@ -509,10 +512,11 @@ export default function RideDetailsPage() {
             <Text style={{ color: darkTheme.textSecondary, fontSize: TYPE.size.label, fontWeight: TYPE.weight.medium, marginBottom: SPACE.sm, marginLeft: SPACE.xs, textTransform: "uppercase", letterSpacing: 0.5 }}>
               Group · {members.length} {members.length === 1 ? "member" : "members"}
             </Text>
-            <View style={{ backgroundColor: darkTheme.surface, borderRadius: 16, borderWidth: 1, borderColor: darkTheme.border, overflow: "hidden" }}>
+            <View testID="ride-member-list" style={{ backgroundColor: darkTheme.surface, borderRadius: 16, borderWidth: 1, borderColor: darkTheme.border, overflow: "hidden" }}>
               {members.map((member, i) => (
                 <View
                   key={member.id}
+                  testID={`ride-member-${member.id}`}
                   style={{
                     paddingHorizontal: SPACE.lg,
                     paddingVertical: SPACE.md,
@@ -553,6 +557,7 @@ export default function RideDetailsPage() {
       <View style={{ paddingHorizontal: SPACE.lg, paddingBottom: insets.bottom + SPACE.md, paddingTop: SPACE.md, backgroundColor: darkTheme.bg }}>
         {alreadyJoined ? (
           <CTAButton
+            testID="open-chat-button"
             icon="chatbubble-ellipses"
             label="Open Chat"
             onPress={() => router.push({ pathname: "/(stack)/ride/[id]/chat", params: { id: ride.id } })}
@@ -564,7 +569,7 @@ export default function RideDetailsPage() {
             </Text>
           </View>
         ) : (
-          <CTAButton icon="arrow-forward" label="Join Ride" onPress={handleJoinRide} />
+          <CTAButton testID="join-ride-button" icon="arrow-forward" label="Join Ride" onPress={handleJoinRide} />
         )}
       </View>
 
