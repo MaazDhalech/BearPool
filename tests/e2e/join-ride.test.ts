@@ -12,6 +12,7 @@
 import { test, expect } from "@mobilewright/test";
 import { loginWithEmail, requireCreds } from "./utils/login";
 import { postRide } from "./utils/postRide";
+import { deleteRideByDestination } from "./utils/cleanup";
 
 test.use({ bundleId: "com.rebu.bearpool" });
 
@@ -24,21 +25,28 @@ test("can join a ride posted by another account", async ({
   const joiner = requireCreds("E2E_TEST_EMAIL", "E2E_TEST_PASSWORD");
   const destination = `E2E Join Test ${Date.now()}`;
 
-  // --- Host posts a ride ---
-  await loginWithEmail(device, screen, bundleId!, host.email, host.password);
-  await postRide(screen, { from: "Berkeley - Unit 1", to: destination });
-  await expect(screen.getByText(destination)).toBeVisible();
+  try {
+    // --- Host posts a ride ---
+    await loginWithEmail(device, screen, bundleId!, host.email, host.password);
+    await postRide(screen, { from: "Berkeley - Unit 1", to: destination });
+    await expect(screen.getByText(destination)).toBeVisible();
 
-  // --- Joiner logs in, finds the ride via search, and joins it ---
-  await loginWithEmail(device, screen, bundleId!, joiner.email, joiner.password);
-  await screen.getByTestId("home-search-input").fill(destination);
-  await screen.getByText(destination).tap();
-  await screen.getByTestId("join-ride-button").tap();
+    // --- Joiner logs in, finds the ride via search, and joins it ---
+    await loginWithEmail(device, screen, bundleId!, joiner.email, joiner.password);
+    await screen.getByTestId("home-search-input").fill(destination);
+    await screen.getByText(destination).tap();
+    await screen.getByTestId("join-ride-button").tap();
 
-  // The ride-details CTA flips from "Join Ride" to "Open Chat" once you're a
-  // member — the most reliable signal that the join went through, without
-  // knowing the joining account's Firestore uid up front to target a
-  // specific row in the member list directly.
-  await expect(screen.getByTestId("open-chat-button")).toBeVisible();
-  await expect(screen.getByTestId("ride-member-list")).toBeVisible();
+    // The ride-details CTA flips from "Join Ride" to "Open Chat" once you're a
+    // member — the most reliable signal that the join went through, without
+    // knowing the joining account's Firestore uid up front to target a
+    // specific row in the member list directly.
+    await expect(screen.getByTestId("open-chat-button")).toBeVisible();
+    await expect(screen.getByTestId("ride-member-list")).toBeVisible();
+  } finally {
+    // Deleted by the host account — firestore.rules allows any signed-in
+    // user to delete any ride, but using the host keeps this consistent
+    // with the other specs' cleanup.
+    await deleteRideByDestination(host.email, host.password, destination);
+  }
 });

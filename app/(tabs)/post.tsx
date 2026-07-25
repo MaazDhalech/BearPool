@@ -690,6 +690,7 @@ export default function PostScreen() {
                 </Text>
               </View>
               <Switch
+                testID="post-ride-test-toggle"
                 value={isTestRide}
                 onValueChange={setIsTestRide}
                 trackColor={{ false: darkTheme.borderStrong, true: ACCENT }}

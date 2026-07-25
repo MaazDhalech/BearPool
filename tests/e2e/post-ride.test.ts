@@ -7,6 +7,7 @@
 import { test, expect } from "@mobilewright/test";
 import { loginWithEmail, requireCreds } from "./utils/login";
 import { postRide } from "./utils/postRide";
+import { deleteRideByDestination } from "./utils/cleanup";
 
 test.use({ bundleId: "com.rebu.bearpool" });
 
@@ -21,8 +22,12 @@ test("can post a ride and see it appear in the feed", async ({
   // Unique destination so we can unambiguously find this ride in the feed
   // afterwards, even if other rides already exist.
   const destination = `E2E Test Dest ${Date.now()}`;
-  await postRide(screen, { from: "Berkeley - Unit 1", to: destination });
+  try {
+    await postRide(screen, { from: "Berkeley - Unit 1", to: destination });
 
-  await expect(screen.getByTestId("home-feed-screen")).toBeVisible();
-  await expect(screen.getByText(destination)).toBeVisible();
+    await expect(screen.getByTestId("home-feed-screen")).toBeVisible();
+    await expect(screen.getByText(destination)).toBeVisible();
+  } finally {
+    await deleteRideByDestination(email, password, destination);
+  }
 });

@@ -7,6 +7,7 @@
 import { test, expect } from "@mobilewright/test";
 import { loginWithEmail, requireCreds } from "./utils/login";
 import { postRide } from "./utils/postRide";
+import { deleteRideByDestination } from "./utils/cleanup";
 
 test.use({ bundleId: "com.rebu.bearpool" });
 
@@ -21,15 +22,19 @@ test("can send a chat message in a joined ride", async ({
   // Post a ride so there's a chat we're guaranteed to be a member of — the
   // host is auto-added to memberIds when a ride is created.
   const destination = `E2E Chat Test ${Date.now()}`;
-  await postRide(screen, { from: "Berkeley - Unit 1", to: destination });
+  try {
+    await postRide(screen, { from: "Berkeley - Unit 1", to: destination });
 
-  await screen.getByText(destination).tap();
-  await screen.getByTestId("open-chat-button").tap();
+    await screen.getByText(destination).tap();
+    await screen.getByTestId("open-chat-button").tap();
 
-  const message = `Hello from mobilewright ${Date.now()}`;
-  await screen.getByTestId("chat-message-input").fill(message);
-  await screen.getByTestId("chat-send-button").tap();
+    const message = `Hello from mobilewright ${Date.now()}`;
+    await screen.getByTestId("chat-message-input").fill(message);
+    await screen.getByTestId("chat-send-button").tap();
 
-  await expect(screen.getByTestId("chat-message-list")).toBeVisible();
-  await expect(screen.getByText(message)).toBeVisible();
+    await expect(screen.getByTestId("chat-message-list")).toBeVisible();
+    await expect(screen.getByText(message)).toBeVisible();
+  } finally {
+    await deleteRideByDestination(email, password, destination);
+  }
 });

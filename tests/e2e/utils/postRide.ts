@@ -16,6 +16,15 @@ export async function postRide(
   await screen.getByTestId("post-ride-from-input").fill(opts.from);
   await screen.getByTestId("post-ride-to-input").fill(opts.to);
 
+  // Mark as a test ride so it's hidden from real users (app/(tabs)/index.tsx
+  // filters `isTest` rides out for non-admins) — the toggle only renders for
+  // admin accounts, so this is a no-op (ride stays a normal, visible ride)
+  // until the E2E test accounts are actually granted the admin custom claim.
+  const testToggle = screen.getByTestId("post-ride-test-toggle");
+  if (await testToggle.isVisible().catch(() => false)) {
+    await testToggle.tap();
+  }
+
   // `date` defaults to "now" at mount, which fails the app's
   // must-be-in-the-future validation by the time the form is submitted a few
   // seconds later. Bump the date forward a day via the native spinner so the
