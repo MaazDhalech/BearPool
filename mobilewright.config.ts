@@ -17,6 +17,14 @@ export default defineConfig({
   testDir: "./tests/e2e",
   timeout: 120_000,
   bundleId: "com.rebu.bearpool",
+  // The app under test is now a dev-client build (see eas.json's "e2e"
+  // profile) that loads its JS from a locally-running Metro server rather
+  // than a bundle baked into the binary — this lets CI skip a native rebuild
+  // on JS-only PRs. Connecting the dev client to Metro is done via a one-time
+  // `simctl openurl` deep link (tests/e2e/utils/login.ts) targeting whichever
+  // simulator is currently booted, so this only works correctly with exactly
+  // one simulator/worker at a time.
+  workers: 1,
   projects: [
     {
       name: "ios",

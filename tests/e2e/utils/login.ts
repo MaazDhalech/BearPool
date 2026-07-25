@@ -1,4 +1,31 @@
+import { execFileSync } from "node:child_process";
 import type { Device, Screen } from "@mobilewright/core";
+
+/**
+ * The app under test is a dev-client build (eas.json's "e2e" profile) that
+ * loads JS from a Metro server started by CI, instead of a bundle baked into
+ * the binary — this lets CI reuse a cached native build across JS-only PRs
+ * instead of rebuilding every time. A dev client doesn't know where Metro is
+ * until it's told via this one-time deep link; after that it persists the
+ * URL and reconnects automatically on subsequent cold launches within the
+ * same simulator session, so this only needs to run once per test run.
+ *
+ * No-ops when MOBILEWRIGHT_METRO_URL isn't set (e.g. local runs against a
+ * non-dev-client build), and assumes exactly one simulator is booted, which
+ * mobilewright.config.ts enforces via `workers: 1`.
+ */
+let devClientConnected = false;
+
+export function connectDevClientToMetro(): void {
+  if (devClientConnected) return;
+  devClientConnected = true;
+
+  const metroUrl = process.env.MOBILEWRIGHT_METRO_URL;
+  if (!metroUrl) return;
+
+  const deepLink = `bearpool://expo-development-client/?url=${encodeURIComponent(metroUrl)}`;
+  execFileSync("xcrun", ["simctl", "openurl", "booted", deepLink]);
+}
 
 /**
  * Shared login helper used by the post-ride, join-ride, and chat specs.
@@ -20,6 +47,8 @@ export async function loginWithEmail(
   email: string,
   password: string,
 ): Promise<void> {
+  connectDevClientToMetro();
+
   await device.terminateApp(bundleId).catch(() => {});
   await device.launchApp(bundleId);
 

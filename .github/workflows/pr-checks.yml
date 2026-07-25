@@ -91,9 +91,34 @@ jobs:
           GOOGLE_WEB_CLIENT_ID=${GOOGLE_WEB_CLIENT_ID}
           EOF
 
-      # "e2e" profile (eas.json) builds unsigned since simulator apps don't need
-      # code-signing credentials, so this can run on every PR from forks too.
+      # "e2e" profile (eas.json) is now a dev-client build: it loads JS from a
+      # Metro server at runtime instead of baking a bundle into the binary, so
+      # the (expensive) native build below only needs to actually run when
+      # something native-relevant changed — JS/TS-only PRs, the vast majority,
+      # get a cache hit and skip straight to the already-built app.
+      - name: Cache/restore built iOS simulator dev-client app
+        id: cache-app
+        uses: actions/cache@v4
+        with:
+          path: BearPool-e2e.tar.gz
+          key: ios-e2e-app-${{ hashFiles('ios/**', 'package-lock.json', 'app.config.js', 'eas.json') }}
+
+      # Only matters on a cache miss (native files actually changed) — avoids
+      # CocoaPods re-resolving/recompiling every pod from scratch.
+      - name: Cache CocoaPods
+        if: steps.cache-app.outputs.cache-hit != 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ios/Pods
+            ~/Library/Caches/CocoaPods
+          key: pods-${{ hashFiles('ios/Podfile.lock') }}
+          restore-keys: pods-
+
+      # Unsigned since simulator apps don't need code-signing credentials, so
+      # this can run on every PR from forks too.
       - name: Build iOS simulator app locally on the macOS runner
+        if: steps.cache-app.outputs.cache-hit != 'true'
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           COCOAPODS_DISABLE_STATS: true
@@ -107,17 +132,42 @@ jobs:
 
       # Local simulator builds are emitted as a .tar.gz containing the .app bundle
       # rather than a raw .app, so unpack it before pointing Mobilewright at it.
+      # Runs whether the tarball came from a fresh build or the cache above.
       - name: Extract simulator .app
         run: |
           mkdir -p "$GITHUB_WORKSPACE/build"
           tar -xzf "$GITHUB_WORKSPACE/BearPool-e2e.tar.gz" -C "$GITHUB_WORKSPACE/build"
           echo "MOBILEWRIGHT_IOS_APP_PATH=$(find "$GITHUB_WORKSPACE/build" -maxdepth 1 -name '*.app' | head -n 1)" >> "$GITHUB_ENV"
 
+      # The dev-client build has no bundled JS, so it needs a live Metro server
+      # to load from. --localhost binds to loopback only, which is fine since
+      # Metro and the simulator both run on this same machine.
+      - name: Start Metro bundler
+        run: |
+          nohup npx expo start --dev-client --localhost --port 8081 > metro.log 2>&1 &
+          echo "MOBILEWRIGHT_METRO_URL=http://localhost:8081" >> "$GITHUB_ENV"
+
+      - name: Wait for Metro to be ready
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:8081/status | grep -q "packager-status:running"; then
+              echo "Metro is up"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Metro did not become ready in time"
+          cat metro.log
+          exit 1
+
       # Two accounts are required because the ride flow is two-sided: one user
-      # posts a ride, a second user joins it.
+      # posts a ride, a second user joins it. MOBILEWRIGHT_METRO_URL is used by
+      # tests/e2e/utils/login.ts to point the dev client at Metro via a one-time
+      # deep link before the first app launch.
       - name: Run Mobilewright E2E suite
         env:
           MOBILEWRIGHT_IOS_APP_PATH: ${{ env.MOBILEWRIGHT_IOS_APP_PATH }}
+          MOBILEWRIGHT_METRO_URL: ${{ env.MOBILEWRIGHT_METRO_URL }}
           E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
           E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
           E2E_TEST_EMAIL_2: ${{ secrets.E2E_TEST_EMAIL_2 }}

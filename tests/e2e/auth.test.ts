@@ -8,7 +8,7 @@
 //   E2E_TEST_EMAIL    - email of an existing, verified BearPool test account
 //   E2E_TEST_PASSWORD - password for that account
 import { test, expect } from "@mobilewright/test";
-import { requireCreds } from "./utils/login";
+import { connectDevClientToMetro, requireCreds } from "./utils/login";
 
 test.use({ bundleId: "com.rebu.bearpool" });
 
@@ -18,6 +18,8 @@ test("can log in with email/password and lands on the home feed", async ({
   bundleId,
 }) => {
   const { email, password } = requireCreds("E2E_TEST_EMAIL", "E2E_TEST_PASSWORD");
+
+  connectDevClientToMetro();
 
   // Fresh launch. NOTE: assumes no persisted Firebase Auth session (true for
   // a freshly-installed CI build) — see tests/e2e/utils/login.ts for detail.
