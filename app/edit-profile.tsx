@@ -60,7 +60,7 @@ export default function EditProfileScreen() {
     const fetchUserData = async () => {
       try {
         const userSnap = await getDoc(doc(db, "users", userId));
-        const firebaseData = userSnap.exists()
+        const firebaseData: Record<string, any> = userSnap.exists()
           ? {
               ...userSnap.data(),
               avatar:

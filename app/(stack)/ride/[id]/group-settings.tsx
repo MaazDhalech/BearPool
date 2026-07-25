@@ -166,7 +166,7 @@ export default function GroupSettings() {
         kickedUserId,
         kickedUserName,
         kickedBy: user?.uid,
-        kickedByName: user?.fullName || "Unknown",
+        kickedByName: user?.displayName || "Unknown",
         reason,
         timestamp: serverTimestamp(),
         rideFrom: ride?.from || "Unknown",
