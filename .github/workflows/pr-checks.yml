@@ -130,14 +130,19 @@ jobs:
             --non-interactive \
             --output "$GITHUB_WORKSPACE/BearPool-e2e.tar.gz"
 
-      # Local simulator builds are emitted as a .tar.gz containing the .app bundle
-      # rather than a raw .app, so unpack it before pointing Mobilewright at it.
+      # Local simulator builds are emitted as a .tar.gz containing the .app bundle.
+      # Mobilewright's installApps requires a .zip (it magic-byte-checks for a
+      # zip header and errors with EISDIR on a raw directory), so unpack the
+      # tarball and re-zip just the .app with ditto, which is the Apple-blessed
+      # way to zip an .app bundle without mangling its executable bit/xattrs.
       # Runs whether the tarball came from a fresh build or the cache above.
-      - name: Extract simulator .app
+      - name: Extract simulator .app and repackage as zip for Mobilewright
         run: |
           mkdir -p "$GITHUB_WORKSPACE/build"
           tar -xzf "$GITHUB_WORKSPACE/BearPool-e2e.tar.gz" -C "$GITHUB_WORKSPACE/build"
-          echo "MOBILEWRIGHT_IOS_APP_PATH=$(find "$GITHUB_WORKSPACE/build" -maxdepth 1 -name '*.app' | head -n 1)" >> "$GITHUB_ENV"
+          APP_PATH=$(find "$GITHUB_WORKSPACE/build" -maxdepth 1 -name '*.app' | head -n 1)
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$GITHUB_WORKSPACE/build/app.zip"
+          echo "MOBILEWRIGHT_IOS_APP_PATH=$GITHUB_WORKSPACE/build/app.zip" >> "$GITHUB_ENV"
 
       # The dev-client build has no bundled JS, so it needs a live Metro server
       # to load from. --localhost binds to loopback only, which is fine since
