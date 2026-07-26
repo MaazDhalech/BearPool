@@ -36,7 +36,17 @@ const plugins = [
 ];
 
 if (process.env.E2E_METRO_URL) {
-  plugins.push(["expo-dev-client", { defaultLaunchURL: process.env.E2E_METRO_URL }]);
+  // launchMode defaults to "launcher", which ALWAYS shows the native
+  // launcher screen — defaultLaunchURL only takes effect as a fallback
+  // when launchMode is "most-recent". Without this, defaultLaunchURL is
+  // silently ignored entirely (confirmed: the app launched and stayed
+  // stably foregrounded every time, but Metro never saw a single request
+  // across an entire CI run — consistent with it sitting on the native
+  // launcher screen, which needs no bundle to render).
+  plugins.push([
+    "expo-dev-client",
+    { launchMode: "most-recent", defaultLaunchURL: process.env.E2E_METRO_URL },
+  ]);
 }
 
 export default {
