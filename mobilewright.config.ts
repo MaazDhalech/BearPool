@@ -15,7 +15,11 @@ import { defineConfig } from "mobilewright";
 // ios/build/Build/Products/*-iphonesimulator/BearPool.app.
 export default defineConfig({
   testDir: "./tests/e2e",
-  timeout: 120_000,
+  // Per-test timeout wraps fixture setup too, including app install — must
+  // stay comfortably above installTimeout below (3min) or every test times
+  // out mid-install before it ever gets to run. 5min leaves ~2min headroom
+  // for the actual test steps after a slow dev-client install.
+  timeout: 5 * 60_000,
   bundleId: "com.rebu.bearpool",
   // The app under test is now a dev-client build (see eas.json's "e2e"
   // profile) that loads its JS from a locally-running Metro server rather
