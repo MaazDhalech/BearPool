@@ -144,6 +144,19 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$GITHUB_WORKSPACE/build/app.zip"
           echo "MOBILEWRIGHT_IOS_APP_PATH=$GITHUB_WORKSPACE/build/app.zip" >> "$GITHUB_ENV"
 
+      # Mobilewright auto-discovers a booted simulator (deviceName: /iPhone/ in
+      # mobilewright.config.ts) but never boots one itself — nothing in this
+      # workflow did either, which is why every test was hanging for the full
+      # per-test timeout with zero progress: the device-allocation fixture was
+      # polling forever for a simulator that never existed. workers: 1 in the
+      # config assumes exactly one simulator is booted, so boot exactly one.
+      - name: Boot iOS simulator
+        run: |
+          UDID=$(xcrun simctl list devices available -j | jq -r '[.devices[][] | select(.name | test("iPhone"))][0].udid')
+          echo "Booting simulator $UDID"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID"
+
       # The dev-client build has no bundled JS, so it needs a live Metro server
       # to load from. --localhost binds to loopback only, which is fine since
       # Metro and the simulator both run on this same machine.
