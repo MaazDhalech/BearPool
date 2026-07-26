@@ -20,6 +20,12 @@ export default defineConfig({
   // out mid-install before it ever gets to run. 5min leaves ~2min headroom
   // for the actual test steps after a slow dev-client install.
   timeout: 5 * 60_000,
+  // The underlying mobilecli agent occasionally fails device allocation with
+  // "timed out waiting for WebDriverAgent to be ready" — a cold-start/
+  // resource-contention issue in third-party native tooling outside this
+  // repo's control, not a real app or test bug. Retrying is the standard
+  // mitigation for this class of CI-only device flakiness.
+  retries: process.env.CI ? 2 : 0,
   bundleId: "com.rebu.bearpool",
   // The app under test is now a dev-client build (see eas.json's "e2e"
   // profile) that loads its JS from a locally-running Metro server rather
