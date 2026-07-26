@@ -8,7 +8,7 @@
 //   E2E_TEST_EMAIL    - email of an existing, verified BearPool test account
 //   E2E_TEST_PASSWORD - password for that account
 import { test, expect } from "@mobilewright/test";
-import { connectDevClientToMetro, requireCreds } from "./utils/login";
+import { launchAppConnectedToMetro, requireCreds } from "./utils/login";
 
 test.use({ bundleId: "com.rebu.bearpool" });
 
@@ -22,12 +22,9 @@ test("can log in with email/password and lands on the home feed", async ({
   // Fresh launch. NOTE: assumes no persisted Firebase Auth session (true for
   // a freshly-installed CI build) — see tests/e2e/utils/login.ts for detail.
   await device.terminateApp(bundleId!).catch(() => {});
-  await device.launchApp(bundleId!);
-  // Must come after launchApp, not before — see connectDevClientToMetro's
-  // doc comment in utils/login.ts for why.
-  connectDevClientToMetro();
+  await launchAppConnectedToMetro(device, bundleId!);
 
-  // First render after a Metro (re)connect can take well over the default
+  // First render after a fresh Metro connect can take well over the default
   // 5s action timeout while the bundle transforms, so wait explicitly
   // before interacting rather than letting fill()'s short default wait fail.
   await screen.getByTestId("login-email-input").waitFor({ state: "visible", timeout: 90_000 });

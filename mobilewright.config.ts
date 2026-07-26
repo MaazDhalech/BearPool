@@ -24,11 +24,18 @@ export default defineConfig({
   // The app under test is now a dev-client build (see eas.json's "e2e"
   // profile) that loads its JS from a locally-running Metro server rather
   // than a bundle baked into the binary — this lets CI skip a native rebuild
-  // on JS-only PRs. Connecting the dev client to Metro is done via a one-time
-  // `simctl openurl` deep link (tests/e2e/utils/login.ts) targeting whichever
-  // simulator is currently booted, so this only works correctly with exactly
-  // one simulator/worker at a time.
+  // on JS-only PRs. Connecting the dev client to Metro requires launching it
+  // via a deep link (tests/e2e/utils/login.ts's launchAppConnectedToMetro),
+  // so this only works correctly with exactly one simulator/worker at a time
+  // (the deep link targets whichever device the test fixture allocated).
   workers: 1,
+  // The device fixture auto-launches the app (plain, no Metro connection)
+  // before every test body runs — this raced against our own
+  // terminate+deep-link-launch in loginWithEmail and was silently
+  // discarding the deep link (a dev client only honors it as a "load this
+  // Metro project" command when not already running). We control launching
+  // ourselves in every spec, so disable the fixture's redundant auto-launch.
+  autoAppLaunch: false,
   projects: [
     {
       name: "ios",
@@ -38,10 +45,12 @@ export default defineConfig({
         installApps:
           process.env.MOBILEWRIGHT_IOS_APP_PATH ?? "./builds/ios/BearPool.app",
         installTimeout: 3 * 60_000,
-        // Default is 20s, which isn't enough for a dev-client build's first
-        // launch — it has to fetch and transform the JS bundle from a cold
-        // Metro server rather than loading one baked into the binary, which
-        // routinely takes well over 20s for a project this size.
+        // Applies to the plain device.launchApp() fallback path only (no
+        // MOBILEWRIGHT_METRO_URL set, e.g. local runs) — the deep-link path
+        // uses device.openUrl(), which doesn't do this foreground poll at
+        // all. Default is 20s, which wouldn't be enough for a dev-client
+        // build's first launch fetching/transforming JS from a cold Metro
+        // server.
         appLaunchTimeout: 2 * 60_000,
       },
     },

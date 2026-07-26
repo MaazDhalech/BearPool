@@ -1,34 +1,36 @@
-import { execFileSync } from "node:child_process";
 import type { Device, Screen } from "@mobilewright/core";
 
 /**
- * The app under test is a dev-client build (eas.json's "e2e" profile) that
- * loads JS from a Metro server started by CI, instead of a bundle baked into
- * the binary — this lets CI reuse a cached native build across JS-only PRs
- * instead of rebuilding every time. A dev client doesn't know where Metro is
- * until it's told via this deep link.
+ * Launches the app, connecting a dev-client build (eas.json's "e2e" profile,
+ * which loads JS from a Metro server started by CI instead of a bundle baked
+ * into the binary) to that Metro server via a one-time-per-launch deep link.
+ * Falls through to a plain launch when MOBILEWRIGHT_METRO_URL isn't set
+ * (e.g. local runs against a non-dev-client build).
  *
- * Must be called AFTER the app is already launched and stably in the
- * foreground, never before/racing a launch: sending this deep link to a
- * not-yet-running app cold-launches it to handle the URL, and immediately
- * terminating that in-progress launch (as the old code did, before calling
- * device.launchApp) could kill the app mid-init and leave it crash-looping
- * for the rest of the run — which matched the observed symptom of every
- * subsequent launchApp() timing out waiting for foreground, not just the
- * first one. Called on every login (not just once) since it's cheap and
- * removes any dependency on the dev client actually persisting the URL
- * across a terminate/relaunch.
- *
- * No-ops when MOBILEWRIGHT_METRO_URL isn't set (e.g. local runs against a
- * non-dev-client build), and assumes exactly one simulator is booted, which
- * mobilewright.config.ts enforces via `workers: 1`.
+ * The deep link MUST be what performs the launch — it cannot be sent to an
+ * already-running app. Per expo-dev-launcher's iOS source
+ * (EXDevLauncherController._handleExternalDeepLink), the dev launcher only
+ * treats this URL as a "load this Metro project" command when the app isn't
+ * already running; if it's already running (isReactInstanceValid), the URL
+ * is instead forwarded to the app via the normal Linking API as a plain
+ * external deep link and silently does nothing useful. This is why a prior
+ * version of this code — which called device.launchApp() and then sent the
+ * deep link afterward — never actually connected to Metro at all (confirmed
+ * by Metro's own log showing zero incoming bundle requests across an entire
+ * run): by the time the link arrived, the dev launcher's React instance was
+ * already alive. The caller must terminate the app first; this function
+ * does the (re)launch via device.openUrl, never device.launchApp, when a
+ * Metro URL is configured.
  */
-export function connectDevClientToMetro(): void {
+export async function launchAppConnectedToMetro(device: Device, bundleId: string): Promise<void> {
   const metroUrl = process.env.MOBILEWRIGHT_METRO_URL;
-  if (!metroUrl) return;
+  if (!metroUrl) {
+    await device.launchApp(bundleId);
+    return;
+  }
 
   const deepLink = `bearpool://expo-development-client/?url=${encodeURIComponent(metroUrl)}`;
-  execFileSync("xcrun", ["simctl", "openurl", "booted", deepLink]);
+  await device.openUrl(deepLink);
 }
 
 /**
@@ -52,10 +54,9 @@ export async function loginWithEmail(
   password: string,
 ): Promise<void> {
   await device.terminateApp(bundleId).catch(() => {});
-  await device.launchApp(bundleId);
-  connectDevClientToMetro();
+  await launchAppConnectedToMetro(device, bundleId);
 
-  // First render after a Metro (re)connect can take well over the default
+  // First render after a fresh Metro connect can take well over the default
   // 5s action timeout while the bundle transforms, so wait explicitly
   // before interacting rather than letting fill()'s short default wait fail.
   await screen.getByTestId("login-email-input").waitFor({ state: "visible", timeout: 90_000 });
