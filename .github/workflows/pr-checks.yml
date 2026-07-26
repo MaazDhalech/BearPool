@@ -96,18 +96,26 @@ jobs:
       # the (expensive) native build below only needs to actually run when
       # something native-relevant changed — JS/TS-only PRs, the vast majority,
       # get a cache hit and skip straight to the already-built app.
-      - name: Cache/restore built iOS simulator dev-client app
+      #
+      # Split into restore/save (rather than the combined actions/cache@v4)
+      # because the combined action's save only runs via a post-hook gated on
+      # the *whole job* succeeding — every prior run's build succeeded but the
+      # cache never actually saved, because the job kept failing later at the
+      # E2E test step. Saving explicitly right after a successful build makes
+      # the cache durable regardless of what happens afterward.
+      - name: Restore built iOS simulator dev-client app
         id: cache-app
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: BearPool-e2e.tar.gz
           key: ios-e2e-app-${{ hashFiles('ios/**', 'package-lock.json', 'app.config.js', 'eas.json') }}
 
       # Only matters on a cache miss (native files actually changed) — avoids
       # CocoaPods re-resolving/recompiling every pod from scratch.
-      - name: Cache CocoaPods
+      - name: Restore CocoaPods cache
+        id: cache-pods
         if: steps.cache-app.outputs.cache-hit != 'true'
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: |
             ios/Pods
@@ -129,6 +137,23 @@ jobs:
             --local \
             --non-interactive \
             --output "$GITHUB_WORKSPACE/BearPool-e2e.tar.gz"
+
+      # Save immediately, before Metro/Mobilewright even run — see note above.
+      - name: Save built iOS simulator dev-client app to cache
+        if: steps.cache-app.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: BearPool-e2e.tar.gz
+          key: ${{ steps.cache-app.outputs.cache-primary-key }}
+
+      - name: Save CocoaPods cache
+        if: steps.cache-app.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ios/Pods
+            ~/Library/Caches/CocoaPods
+          key: ${{ steps.cache-pods.outputs.cache-primary-key }}
 
       # Local simulator builds are emitted as a .tar.gz containing the .app bundle.
       # Mobilewright's installApps requires a .zip (it magic-byte-checks for a

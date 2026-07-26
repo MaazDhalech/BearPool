@@ -38,6 +38,11 @@ export default defineConfig({
         installApps:
           process.env.MOBILEWRIGHT_IOS_APP_PATH ?? "./builds/ios/BearPool.app",
         installTimeout: 3 * 60_000,
+        // Default is 20s, which isn't enough for a dev-client build's first
+        // launch — it has to fetch and transform the JS bundle from a cold
+        // Metro server rather than loading one baked into the binary, which
+        // routinely takes well over 20s for a project this size.
+        appLaunchTimeout: 2 * 60_000,
       },
     },
   ],
