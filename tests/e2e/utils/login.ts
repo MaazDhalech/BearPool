@@ -1,44 +1,21 @@
 import type { Device, Screen } from "@mobilewright/core";
 
 /**
- * Launches the app, connecting a dev-client build (eas.json's "e2e" profile,
- * which loads JS from a Metro server started by CI instead of a bundle baked
- * into the binary) to that Metro server via a one-time-per-launch deep link.
- * Falls through to a plain launch when MOBILEWRIGHT_METRO_URL isn't set
- * (e.g. local runs against a non-dev-client build).
- *
- * The deep link MUST be what performs the launch — it cannot be sent to an
- * already-running app. Per expo-dev-launcher's iOS source
- * (EXDevLauncherController._handleExternalDeepLink), the dev launcher only
- * treats this URL as a "load this Metro project" command when the app isn't
- * already running; if it's already running (isReactInstanceValid), the URL
- * is instead forwarded to the app via the normal Linking API as a plain
- * external deep link and silently does nothing useful. This is why a prior
- * version of this code — which called device.launchApp() and then sent the
- * deep link afterward — never actually connected to Metro at all (confirmed
- * by Metro's own log showing zero incoming bundle requests across an entire
- * run): by the time the link arrived, the dev launcher's React instance was
- * already alive. The caller must terminate the app first; this function
- * does the (re)launch via device.openUrl, never device.launchApp, when a
- * Metro URL is configured.
- */
-export async function launchAppConnectedToMetro(device: Device, bundleId: string): Promise<void> {
-  const metroUrl = process.env.MOBILEWRIGHT_METRO_URL;
-  if (!metroUrl) {
-    await device.launchApp(bundleId);
-    return;
-  }
-
-  const deepLink = `bearpool://expo-development-client/?url=${encodeURIComponent(metroUrl)}`;
-  await device.openUrl(deepLink);
-}
-
-/**
  * Shared login helper used by the post-ride, join-ride, and chat specs.
  *
  * Terminates + relaunches the app (so each test starts from a known state),
  * signs in with the given email/password on the Login screen, and waits for
  * the home feed to appear.
+ *
+ * The app under test is a dev-client build (eas.json's "e2e" profile) that
+ * loads JS from a Metro server started by CI instead of a bundle baked into
+ * the binary — this lets CI reuse a cached native build across JS-only PRs.
+ * It connects to that Metro server on every cold launch via
+ * expo-dev-client's defaultLaunchURL, baked in at build time from
+ * app.config.js's E2E_METRO_URL (see there for why: a prior runtime
+ * deep-link-based approach proved unreliable — Metro's own log never showed
+ * a single incoming bundle request across several attempts). So a plain
+ * launchApp() is all that's needed here; no deep link required.
  *
  * NOTE: this assumes the app has no persisted Firebase Auth session when it
  * launches (true for a freshly-installed CI build). If a session is retained
@@ -54,7 +31,7 @@ export async function loginWithEmail(
   password: string,
 ): Promise<void> {
   await device.terminateApp(bundleId).catch(() => {});
-  await launchAppConnectedToMetro(device, bundleId);
+  await device.launchApp(bundleId);
 
   // First render after a fresh Metro connect can take well over the default
   // 5s action timeout while the bundle transforms, so wait explicitly

@@ -30,17 +30,14 @@ export default defineConfig({
   // The app under test is now a dev-client build (see eas.json's "e2e"
   // profile) that loads its JS from a locally-running Metro server rather
   // than a bundle baked into the binary — this lets CI skip a native rebuild
-  // on JS-only PRs. Connecting the dev client to Metro requires launching it
-  // via a deep link (tests/e2e/utils/login.ts's launchAppConnectedToMetro),
-  // so this only works correctly with exactly one simulator/worker at a time
-  // (the deep link targets whichever device the test fixture allocated).
+  // on JS-only PRs. It connects to Metro on its own via expo-dev-client's
+  // defaultLaunchURL (app.config.js's E2E_METRO_URL), baked in at build
+  // time, so a plain launchApp() is all tests need — see utils/login.ts.
+  // The Boot iOS simulator CI step only boots one simulator, so this only
+  // works correctly with exactly one worker.
   workers: 1,
-  // The device fixture auto-launches the app (plain, no Metro connection)
-  // before every test body runs — this raced against our own
-  // terminate+deep-link-launch in loginWithEmail and was silently
-  // discarding the deep link (a dev client only honors it as a "load this
-  // Metro project" command when not already running). We control launching
-  // ourselves in every spec, so disable the fixture's redundant auto-launch.
+  // Avoids a redundant extra terminate+launch cycle on top of the one every
+  // spec already does itself in utils/login.ts.
   autoAppLaunch: false,
   projects: [
     {
@@ -51,12 +48,8 @@ export default defineConfig({
         installApps:
           process.env.MOBILEWRIGHT_IOS_APP_PATH ?? "./builds/ios/BearPool.app",
         installTimeout: 3 * 60_000,
-        // Applies to the plain device.launchApp() fallback path only (no
-        // MOBILEWRIGHT_METRO_URL set, e.g. local runs) — the deep-link path
-        // uses device.openUrl(), which doesn't do this foreground poll at
-        // all. Default is 20s, which wouldn't be enough for a dev-client
-        // build's first launch fetching/transforming JS from a cold Metro
-        // server.
+        // Default is 20s. Generous headroom in case a cold launch is slow
+        // to reach the foreground on a loaded CI runner.
         appLaunchTimeout: 2 * 60_000,
       },
     },

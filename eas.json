@@ -27,7 +27,8 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_NO_CAPABILITY_SYNC": "1"
+        "EXPO_NO_CAPABILITY_SYNC": "1",
+        "E2E_METRO_URL": "http://localhost:8081"
       },
       "ios": {
         "simulator": true

@@ -1,5 +1,44 @@
 import "dotenv/config";
 
+// Only set for the "e2e" EAS build profile (eas.json). Bakes the CI Metro
+// URL directly into the dev-client build so it connects on cold launch with
+// no deep link needed — repeated attempts at connecting via a runtime
+// `expo-development-client://` deep link (xcrun simctl openurl / device.openUrl)
+// proved unreliable: expo-dev-launcher's iOS source only honors that link
+// when the app isn't already running, and even sequenced correctly, Metro's
+// own log never showed a single incoming bundle request across several CI
+// runs. defaultLaunchURL is resolved at build time, so this can't affect
+// regular dev-client builds (development/preview profiles) used locally.
+const plugins = [
+  "expo-router",
+  "react-native-bottom-tabs",
+  ["expo-apple-authentication"],
+  [
+    "expo-splash-screen",
+    {
+      image: "./assets/images/icon.png",
+      imageWidth: 200,
+      resizeMode: "contain",
+      backgroundColor: "#ffffff",
+    },
+  ],
+  "expo-secure-store",
+  "expo-notifications",
+  "expo-font",
+  "expo-localization",
+  "expo-web-browser",
+  [
+    "@react-native-google-signin/google-signin",
+    {
+      iosUrlScheme: "com.googleusercontent.apps.888067452420-h931i412b9d244e27q24at0ehmie2mvr",
+    },
+  ],
+];
+
+if (process.env.E2E_METRO_URL) {
+  plugins.push(["expo-dev-client", { defaultLaunchURL: process.env.E2E_METRO_URL }]);
+}
+
 export default {
   expo: {
     name: "BearPool",
@@ -47,33 +86,7 @@ export default {
       output: "static",
       favicon: "./assets/images/favicon.png",
     },
-    plugins: [
-      "expo-router",
-      "react-native-bottom-tabs",
-      [
-        "expo-apple-authentication",
-      ],
-      [
-        "expo-splash-screen",
-        {
-          image: "./assets/images/icon.png",
-          imageWidth: 200,
-          resizeMode: "contain",
-          backgroundColor: "#ffffff",
-        },
-      ],
-      "expo-secure-store",
-      "expo-notifications",
-      "expo-font",
-      "expo-localization",
-      "expo-web-browser",
-      [
-        "@react-native-google-signin/google-signin",
-        {
-          "iosUrlScheme": "com.googleusercontent.apps.888067452420-h931i412b9d244e27q24at0ehmie2mvr"
-        }
-      ]
-    ],
+    plugins,
     experiments: {
       typedRoutes: true,
     },

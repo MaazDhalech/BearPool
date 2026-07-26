@@ -188,7 +188,6 @@ jobs:
       - name: Start Metro bundler
         run: |
           nohup npx expo start --dev-client --localhost --port 8081 > metro.log 2>&1 &
-          echo "MOBILEWRIGHT_METRO_URL=http://localhost:8081" >> "$GITHUB_ENV"
 
       - name: Wait for Metro to be ready
         run: |
@@ -204,13 +203,12 @@ jobs:
           exit 1
 
       # Two accounts are required because the ride flow is two-sided: one user
-      # posts a ride, a second user joins it. MOBILEWRIGHT_METRO_URL is used by
-      # tests/e2e/utils/login.ts to point the dev client at Metro via a one-time
-      # deep link before the first app launch.
+      # posts a ride, a second user joins it. The dev-client build connects to
+      # Metro on its own via app.config.js's E2E_METRO_URL -> defaultLaunchURL
+      # baked in at build time — no runtime wiring needed here for that.
       - name: Run Mobilewright E2E suite
         env:
           MOBILEWRIGHT_IOS_APP_PATH: ${{ env.MOBILEWRIGHT_IOS_APP_PATH }}
-          MOBILEWRIGHT_METRO_URL: ${{ env.MOBILEWRIGHT_METRO_URL }}
           E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
           E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
           E2E_TEST_EMAIL_2: ${{ secrets.E2E_TEST_EMAIL_2 }}
