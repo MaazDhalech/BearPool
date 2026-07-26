@@ -19,13 +19,18 @@ test("can log in with email/password and lands on the home feed", async ({
 }) => {
   const { email, password } = requireCreds("E2E_TEST_EMAIL", "E2E_TEST_PASSWORD");
 
-  connectDevClientToMetro();
-
   // Fresh launch. NOTE: assumes no persisted Firebase Auth session (true for
   // a freshly-installed CI build) — see tests/e2e/utils/login.ts for detail.
   await device.terminateApp(bundleId!).catch(() => {});
   await device.launchApp(bundleId!);
+  // Must come after launchApp, not before — see connectDevClientToMetro's
+  // doc comment in utils/login.ts for why.
+  connectDevClientToMetro();
 
+  // First render after a Metro (re)connect can take well over the default
+  // 5s action timeout while the bundle transforms, so wait explicitly
+  // before interacting rather than letting fill()'s short default wait fail.
+  await screen.getByTestId("login-email-input").waitFor({ state: "visible", timeout: 90_000 });
   await screen.getByTestId("login-email-input").fill(email);
   await screen.getByTestId("login-password-input").fill(password);
   await screen.getByTestId("login-submit-button").tap();

@@ -6,20 +6,24 @@ import type { Device, Screen } from "@mobilewright/core";
  * loads JS from a Metro server started by CI, instead of a bundle baked into
  * the binary — this lets CI reuse a cached native build across JS-only PRs
  * instead of rebuilding every time. A dev client doesn't know where Metro is
- * until it's told via this one-time deep link; after that it persists the
- * URL and reconnects automatically on subsequent cold launches within the
- * same simulator session, so this only needs to run once per test run.
+ * until it's told via this deep link.
+ *
+ * Must be called AFTER the app is already launched and stably in the
+ * foreground, never before/racing a launch: sending this deep link to a
+ * not-yet-running app cold-launches it to handle the URL, and immediately
+ * terminating that in-progress launch (as the old code did, before calling
+ * device.launchApp) could kill the app mid-init and leave it crash-looping
+ * for the rest of the run — which matched the observed symptom of every
+ * subsequent launchApp() timing out waiting for foreground, not just the
+ * first one. Called on every login (not just once) since it's cheap and
+ * removes any dependency on the dev client actually persisting the URL
+ * across a terminate/relaunch.
  *
  * No-ops when MOBILEWRIGHT_METRO_URL isn't set (e.g. local runs against a
  * non-dev-client build), and assumes exactly one simulator is booted, which
  * mobilewright.config.ts enforces via `workers: 1`.
  */
-let devClientConnected = false;
-
 export function connectDevClientToMetro(): void {
-  if (devClientConnected) return;
-  devClientConnected = true;
-
   const metroUrl = process.env.MOBILEWRIGHT_METRO_URL;
   if (!metroUrl) return;
 
@@ -47,11 +51,14 @@ export async function loginWithEmail(
   email: string,
   password: string,
 ): Promise<void> {
-  connectDevClientToMetro();
-
   await device.terminateApp(bundleId).catch(() => {});
   await device.launchApp(bundleId);
+  connectDevClientToMetro();
 
+  // First render after a Metro (re)connect can take well over the default
+  // 5s action timeout while the bundle transforms, so wait explicitly
+  // before interacting rather than letting fill()'s short default wait fail.
+  await screen.getByTestId("login-email-input").waitFor({ state: "visible", timeout: 90_000 });
   await screen.getByTestId("login-email-input").fill(email);
   await screen.getByTestId("login-password-input").fill(password);
   await screen.getByTestId("login-submit-button").tap();

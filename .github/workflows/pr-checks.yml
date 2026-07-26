@@ -217,6 +217,10 @@ jobs:
           E2E_TEST_PASSWORD_2: ${{ secrets.E2E_TEST_PASSWORD_2 }}
         run: npx mobilewright test --reporter html
 
+      - name: Print Metro log on failure
+        if: failure()
+        run: cat metro.log || true
+
       - name: Upload Mobilewright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
