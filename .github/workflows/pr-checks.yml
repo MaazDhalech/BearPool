@@ -70,6 +70,11 @@ jobs:
       - name: Install EAS CLI
         run: npm install -g eas-cli
 
+      - name: Install Maestro CLI
+        run: |
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
       # app.config.js reads these via process.env at build time and bakes them
       # into the binary. The repo's .env is gitignored, so recreate it here from
       # GitHub Actions secrets. Values are masked in logs and never printed.
@@ -151,7 +156,7 @@ jobs:
             --non-interactive \
             --output "$GITHUB_WORKSPACE/BearPool-e2e.tar.gz"
 
-      # Save immediately, before Metro/Mobilewright even run — see note above.
+      # Save immediately, before Metro/Maestro even run — see note above.
       - name: Save built iOS simulator dev-client app to cache
         if: steps.cache-app.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
@@ -168,28 +173,24 @@ jobs:
             ~/Library/Caches/CocoaPods
           key: ${{ steps.cache-pods.outputs.cache-primary-key }}
 
-      # Local simulator builds are emitted as a .tar.gz containing the .app bundle.
-      # Mobilewright's installApps requires a .zip (it magic-byte-checks for a
-      # zip header and errors with EISDIR on a raw directory), so unpack the
-      # tarball and re-zip just the .app with ditto, which is the Apple-blessed
-      # way to zip an .app bundle without mangling its executable bit/xattrs.
-      # Runs whether the tarball came from a fresh build or the cache above.
-      - name: Extract simulator .app and repackage as zip for Mobilewright
+      # Local simulator builds are emitted as a .tar.gz containing the .app
+      # bundle. Runs whether the tarball came from a fresh build or the cache
+      # above.
+      - name: Extract simulator .app
         run: |
           mkdir -p "$GITHUB_WORKSPACE/build"
           tar -xzf "$GITHUB_WORKSPACE/BearPool-e2e.tar.gz" -C "$GITHUB_WORKSPACE/build"
           APP_PATH=$(find "$GITHUB_WORKSPACE/build" -maxdepth 1 -name '*.app' | head -n 1)
-          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$GITHUB_WORKSPACE/build/app.zip"
-          echo "MOBILEWRIGHT_IOS_APP_PATH=$GITHUB_WORKSPACE/build/app.zip" >> "$GITHUB_ENV"
+          echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
 
-      # Mobilewright auto-discovers a booted simulator (deviceName: /iPhone/ in
-      # mobilewright.config.ts) but never boots one itself. Boot was already
-      # *triggered* right after Xcode setup so it runs in the background
-      # during the long build above — this just waits for it to actually
-      # finish, which by now is usually immediate. workers: 1 in the config
-      # assumes exactly one simulator is booted, so only ever boot one.
+      # Boot was already *triggered* right after Xcode setup so it runs in
+      # the background during the long build above — this just waits for it
+      # to actually finish, which by now is usually immediate.
       - name: Wait for iOS simulator to finish booting
         run: xcrun simctl bootstatus "$SIMULATOR_UDID"
+
+      - name: Install app on simulator
+        run: xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
 
       # The dev-client build has no bundled JS, so it needs a live Metro server
       # to load from. --localhost binds to loopback only, which is fine since
@@ -214,24 +215,60 @@ jobs:
       # Two accounts are required because the ride flow is two-sided: one user
       # posts a ride, a second user joins it. The dev-client connects to Metro
       # by tapping the auto-detected server on its native launcher screen —
-      # see tests/e2e/utils/login.ts for why, no wiring needed here for it.
-      - name: Run Mobilewright E2E suite
+      # see .maestro/flows/login.yaml for why, no wiring needed here for it.
+      #
+      # Each flow gets its own destination string (so post-ride/join-ride/chat
+      # don't collide, and so the ride each one creates can be cleaned up
+      # afterward) and its own --test-output-dir (so screenshots/videos from
+      # one flow don't get overwritten by the next). Retried once on failure —
+      # the underlying device automation occasionally fails to attach with
+      # infra-level flakiness unrelated to the app itself.
+      - name: Run Maestro E2E suite
         env:
-          MOBILEWRIGHT_IOS_APP_PATH: ${{ env.MOBILEWRIGHT_IOS_APP_PATH }}
-          E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
-          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
-          E2E_TEST_EMAIL_2: ${{ secrets.E2E_TEST_EMAIL_2 }}
-          E2E_TEST_PASSWORD_2: ${{ secrets.E2E_TEST_PASSWORD_2 }}
-        run: npx mobilewright test --reporter html
+          EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
+          PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+          HOST_EMAIL: ${{ secrets.E2E_TEST_EMAIL_2 }}
+          HOST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD_2 }}
+        run: |
+          STATUS=0
+
+          run_flow() {
+            local name="$1"; shift
+            for attempt in 1 2; do
+              if maestro test ".maestro/tests/${name}.yaml" \
+                   --test-output-dir "maestro-report/${name}" \
+                   "$@"; then
+                return 0
+              fi
+              echo "::warning::${name}.yaml failed on attempt ${attempt}"
+            done
+            return 1
+          }
+
+          run_flow auth -e EMAIL="$EMAIL" -e PASSWORD="$PASSWORD" || STATUS=1
+
+          DEST1="E2E Test Dest $(date +%s)"
+          run_flow post-ride -e EMAIL="$EMAIL" -e PASSWORD="$PASSWORD" -e DESTINATION="$DEST1" || STATUS=1
+          npx tsx tests/e2e/utils/cleanup-cli.ts "$EMAIL" "$PASSWORD" "$DEST1" || true
+
+          DEST2="E2E Join Test $(date +%s)"
+          run_flow join-ride -e EMAIL="$EMAIL" -e PASSWORD="$PASSWORD" -e HOST_EMAIL="$HOST_EMAIL" -e HOST_PASSWORD="$HOST_PASSWORD" -e DESTINATION="$DEST2" || STATUS=1
+          npx tsx tests/e2e/utils/cleanup-cli.ts "$HOST_EMAIL" "$HOST_PASSWORD" "$DEST2" || true
+
+          DEST3="E2E Chat Test $(date +%s)"
+          run_flow chat -e EMAIL="$EMAIL" -e PASSWORD="$PASSWORD" -e DESTINATION="$DEST3" -e MESSAGE="Hello from Maestro $(date +%s)" || STATUS=1
+          npx tsx tests/e2e/utils/cleanup-cli.ts "$EMAIL" "$PASSWORD" "$DEST3" || true
+
+          exit $STATUS
 
       - name: Print Metro log on failure
         if: failure()
         run: cat metro.log || true
 
-      - name: Upload Mobilewright report
+      - name: Upload Maestro report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: mobilewright-report
-          path: mobilewright-report/
+          name: maestro-report
+          path: maestro-report/
           retention-days: 30
