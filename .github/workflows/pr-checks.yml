@@ -125,11 +125,21 @@ jobs:
 
       # Unsigned since simulator apps don't need code-signing credentials, so
       # this can run on every PR from forks too.
+      #
+      # E2E_METRO_URL is also declared in eas.json's "e2e" profile env block,
+      # but it's unclear whether `eas build --local` actually exposes
+      # profile-level env to the app.config.js evaluation subprocess the way
+      # cloud builds do (docs don't say either way for --local) — verified
+      # locally that app.config.js itself resolves the plugin correctly given
+      # this var, but two straight builds with it only in eas.json still
+      # showed zero Metro traffic. Setting it directly here closes that gap
+      # regardless of which layer was dropping it.
       - name: Build iOS simulator app locally on the macOS runner
         if: steps.cache-app.outputs.cache-hit != 'true'
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           COCOAPODS_DISABLE_STATS: true
+          E2E_METRO_URL: http://localhost:8081
         run: |
           eas build \
             --platform ios \
@@ -168,6 +178,17 @@ jobs:
           APP_PATH=$(find "$GITHUB_WORKSPACE/build" -maxdepth 1 -name '*.app' | head -n 1)
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$GITHUB_WORKSPACE/build/app.zip"
           echo "MOBILEWRIGHT_IOS_APP_PATH=$GITHUB_WORKSPACE/build/app.zip" >> "$GITHUB_ENV"
+          echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
+
+      # Diagnostic: confirm the dev-client launch config actually made it into
+      # the built app, rather than inferring it indirectly from Metro traffic
+      # (or lack thereof) after a ~20min test run. Non-fatal either way.
+      - name: Debug - check dev-client launch config in built Info.plist
+        run: |
+          echo "--- DEV_CLIENT_DEFAULT_LAUNCHER_URL ---"
+          /usr/libexec/PlistBuddy -c "Print :DEV_CLIENT_DEFAULT_LAUNCHER_URL" "$APP_PATH/Info.plist" || echo "(not present)"
+          echo "--- DEV_CLIENT_TRY_TO_LAUNCH_LAST_BUNDLE ---"
+          /usr/libexec/PlistBuddy -c "Print :DEV_CLIENT_TRY_TO_LAUNCH_LAST_BUNDLE" "$APP_PATH/Info.plist" || echo "(not present)"
 
       # Mobilewright auto-discovers a booted simulator (deviceName: /iPhone/ in
       # mobilewright.config.ts) but never boots one itself — nothing in this
