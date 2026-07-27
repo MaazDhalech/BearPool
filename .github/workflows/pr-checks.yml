@@ -123,42 +123,28 @@ jobs:
           key: pods-${{ hashFiles('ios/Podfile.lock') }}
           restore-keys: pods-
 
-      # ios/ is committed to the repo (not gitignored), and per expo-doctor's
-      # appConfigFieldsNotSyncedCheck, EAS Build deliberately does NOT sync
-      # app.config.js properties (including plugins) into an already-existing
-      # native project — confirmed via the "Debug - check dev-client launch
-      # config" step showing DEV_CLIENT_DEFAULT_LAUNCHER_URL absent from the
-      # built Info.plist despite app.config.js resolving it correctly when
-      # checked locally with `npx expo config`. Explicitly running prebuild
-      # here applies it to this CI checkout's ios/ before the build — the
-      # checkout is ephemeral and never committed back, so this can't affect
-      # the real committed ios/ used by other profiles/developers.
-      # --clean (not just a plain prebuild): a non-clean prebuild against the
-      # committed ios/ reported "Finished prebuild" successfully but never
-      # actually wrote DEV_CLIENT_DEFAULT_LAUNCHER_URL into Info.plist
-      # (confirmed via the "Debug - check source ios/" step reading the
-      # source file directly, right after prebuild, before eas build even
-      # ran) — consistent with prebuild's own diff/fingerprint-based skip
-      # logic (it also logged "Updated package.json | no changes" the same
-      # run) deciding there was nothing to re-apply. --clean forces a full
-      # regeneration, bypassing whatever that skip logic is keying off.
-      - name: Run expo prebuild for iOS (applies e2e dev-client config)
-        if: steps.cache-app.outputs.cache-hit != 'true'
-        env:
-          E2E_METRO_URL: http://localhost:8081
-        run: npx expo prebuild --platform ios --no-install --clean
-
-      # Isolates whether prebuild itself wrote the key (this check) vs. eas
-      # build --local dropping it afterward (the later Debug step, which
-      # checks the actually-built app's Info.plist) — the previous run
-      # showed the key absent post-build but we never confirmed whether
-      # prebuild wrote it to the source file in the first place.
-      - name: Debug - check source ios/ Info.plist right after prebuild
+      # ios/ is committed to the repo (not gitignored) with real hand-tuning
+      # beyond what a fresh config-plugin pass reproduces — confirmed the
+      # hard way: `expo prebuild --clean` regenerated a Podfile missing
+      # `use_modular_headers!`/static-lib config the committed one has,
+      # breaking `pod install` on AppCheckCore/GoogleUtilities entirely. A
+      # non-clean prebuild is safe but silently no-ops against this
+      # pre-existing ios/ (its diff/fingerprint logic decides nothing needs
+      # re-applying — confirmed by reading the source Info.plist right after
+      # a "successful" prebuild and finding the key absent). So: skip
+      # prebuild/config-plugin sync entirely and patch just the one plist
+      # key the native dev-launcher actually reads (traced via
+      # EXDevLauncherController.m — DEV_CLIENT_DEFAULT_LAUNCHER_URL is the
+      # only one that matters for a fresh install with no prior session;
+      # DEV_CLIENT_TRY_TO_LAUNCH_LAST_BUNDLE only affects a different code
+      # path that requires a previously-opened app URL, which never exists
+      # here). Surgical: doesn't touch the Podfile/project.pbxproj at all.
+      - name: Inject Metro URL into Info.plist for dev-client auto-connect
         if: steps.cache-app.outputs.cache-hit != 'true'
         run: |
           PLIST=$(find ios -maxdepth 2 -name "Info.plist" | head -n 1)
-          echo "Checking $PLIST"
-          /usr/libexec/PlistBuddy -c "Print :DEV_CLIENT_DEFAULT_LAUNCHER_URL" "$PLIST" || echo "(not present in source ios/)"
+          /usr/libexec/PlistBuddy -c "Add :DEV_CLIENT_DEFAULT_LAUNCHER_URL string http://localhost:8081" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Print :DEV_CLIENT_DEFAULT_LAUNCHER_URL" "$PLIST"
 
       # Unsigned since simulator apps don't need code-signing credentials, so
       # this can run on every PR from forks too.
@@ -167,7 +153,6 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           COCOAPODS_DISABLE_STATS: true
-          E2E_METRO_URL: http://localhost:8081
         run: |
           eas build \
             --platform ios \
@@ -253,8 +238,8 @@ jobs:
 
       # Two accounts are required because the ride flow is two-sided: one user
       # posts a ride, a second user joins it. The dev-client build connects to
-      # Metro on its own via app.config.js's E2E_METRO_URL -> defaultLaunchURL
-      # baked in at build time — no runtime wiring needed here for that.
+      # Metro on its own via the DEV_CLIENT_DEFAULT_LAUNCHER_URL Info.plist
+      # key injected above — no runtime wiring needed here for that.
       - name: Run Mobilewright E2E suite
         env:
           MOBILEWRIGHT_IOS_APP_PATH: ${{ env.MOBILEWRIGHT_IOS_APP_PATH }}

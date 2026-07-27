@@ -1,14 +1,5 @@
 import "dotenv/config";
 
-// Only set for the "e2e" EAS build profile (eas.json). Bakes the CI Metro
-// URL directly into the dev-client build so it connects on cold launch with
-// no deep link needed — repeated attempts at connecting via a runtime
-// `expo-development-client://` deep link (xcrun simctl openurl / device.openUrl)
-// proved unreliable: expo-dev-launcher's iOS source only honors that link
-// when the app isn't already running, and even sequenced correctly, Metro's
-// own log never showed a single incoming bundle request across several CI
-// runs. defaultLaunchURL is resolved at build time, so this can't affect
-// regular dev-client builds (development/preview profiles) used locally.
 const plugins = [
   "expo-router",
   "react-native-bottom-tabs",
@@ -34,20 +25,6 @@ const plugins = [
     },
   ],
 ];
-
-if (process.env.E2E_METRO_URL) {
-  // launchMode defaults to "launcher", which ALWAYS shows the native
-  // launcher screen — defaultLaunchURL only takes effect as a fallback
-  // when launchMode is "most-recent". Without this, defaultLaunchURL is
-  // silently ignored entirely (confirmed: the app launched and stayed
-  // stably foregrounded every time, but Metro never saw a single request
-  // across an entire CI run — consistent with it sitting on the native
-  // launcher screen, which needs no bundle to render).
-  plugins.push([
-    "expo-dev-client",
-    { launchMode: "most-recent", defaultLaunchURL: process.env.E2E_METRO_URL },
-  ]);
-}
 
 export default {
   expo: {
