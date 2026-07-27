@@ -47,14 +47,35 @@ export async function loginWithEmail(
     await devServerRow.tap();
   }
 
-  // First render after connecting to Metro requires a full cold bundle
-  // transform (confirmed via Metro's own log: 186s for 3545 modules on the
-  // very first request in CI), so wait well beyond that rather than letting
-  // fill()'s short default timeout — or an insufficiently generous one —
-  // fail before the bundle is even ready. Subsequent logins within the same
-  // run reuse Metro's warm cache and are fast (under 2s per its own log).
-  await screen.getByTestId("login-email-input").waitFor({ state: "visible", timeout: 240_000 });
-  await screen.getByTestId("login-email-input").fill(email);
+  // The very first successful connection triggers Expo's one-time "This is
+  // the developer menu" onboarding popup, rendered on top of the (correctly
+  // loaded) Login screen underneath it — confirmed via an actual failure
+  // screenshot. It only appears once the JS bundle has fully rendered, which
+  // can take a while on a cold Metro cache (confirmed via Metro's own log:
+  // up to ~186s for 3545 modules on the very first request in CI) — but on
+  // every other login in the same run it never reappears at all. Rather
+  // than a single fixed wait that's either too short for a slow first
+  // bundle or wastefully long on every other login, poll for whichever of
+  // the popup or the login screen itself appears first, dismissing the
+  // popup the moment it shows up.
+  const loginEmailInput = screen.getByTestId("login-email-input");
+  const devMenuContinueButton = screen.getByText("Continue");
+  const deadline = Date.now() + 240_000;
+  while (Date.now() < deadline) {
+    if (await devMenuContinueButton.isVisible({ timeout: 500 }).catch(() => false)) {
+      await devMenuContinueButton.tap();
+      break;
+    }
+    if (await loginEmailInput.isVisible({ timeout: 500 }).catch(() => false)) {
+      break;
+    }
+  }
+
+  // Safety-net wait: fast in practice at this point (bundle's already
+  // loaded and any onboarding popup dismissed), just confirms we didn't
+  // exit the loop above via the deadline.
+  await loginEmailInput.waitFor({ state: "visible", timeout: 30_000 });
+  await loginEmailInput.fill(email);
   await screen.getByTestId("login-password-input").fill(password);
   await screen.getByTestId("login-submit-button").tap();
 
