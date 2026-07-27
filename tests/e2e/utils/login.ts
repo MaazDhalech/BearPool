@@ -47,10 +47,13 @@ export async function loginWithEmail(
     await devServerRow.tap();
   }
 
-  // First render after connecting to Metro can take well over the default
-  // 5s action timeout while the bundle transforms, so wait explicitly
-  // before interacting rather than letting fill()'s short default wait fail.
-  await screen.getByTestId("login-email-input").waitFor({ state: "visible", timeout: 90_000 });
+  // First render after connecting to Metro requires a full cold bundle
+  // transform (confirmed via Metro's own log: 186s for 3545 modules on the
+  // very first request in CI), so wait well beyond that rather than letting
+  // fill()'s short default timeout — or an insufficiently generous one —
+  // fail before the bundle is even ready. Subsequent logins within the same
+  // run reuse Metro's warm cache and are fast (under 2s per its own log).
+  await screen.getByTestId("login-email-input").waitFor({ state: "visible", timeout: 240_000 });
   await screen.getByTestId("login-email-input").fill(email);
   await screen.getByTestId("login-password-input").fill(password);
   await screen.getByTestId("login-submit-button").tap();

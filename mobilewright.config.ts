@@ -15,11 +15,13 @@ import { defineConfig } from "mobilewright";
 // ios/build/Build/Products/*-iphonesimulator/BearPool.app.
 export default defineConfig({
   testDir: "./tests/e2e",
-  // Per-test timeout wraps fixture setup too, including app install — must
-  // stay comfortably above installTimeout below (3min) or every test times
-  // out mid-install before it ever gets to run. 5min leaves ~2min headroom
-  // for the actual test steps after a slow dev-client install.
-  timeout: 5 * 60_000,
+  // Per-test timeout wraps fixture setup too, including app install (up to
+  // installTimeout below, 3min) and — for the first test in the run only —
+  // waiting through Metro's cold bundle transform (confirmed via Metro's own
+  // log: 186s for 3545 modules the first time; every subsequent login in the
+  // same run reuses the warm cache and takes under 2s). 10min leaves
+  // headroom for install + a slow first bundle + the actual test steps.
+  timeout: 10 * 60_000,
   // The underlying mobilecli agent occasionally fails device allocation with
   // "timed out waiting for WebDriverAgent to be ready" — a cold-start/
   // resource-contention issue in third-party native tooling outside this
@@ -30,11 +32,10 @@ export default defineConfig({
   // The app under test is now a dev-client build (see eas.json's "e2e"
   // profile) that loads its JS from a locally-running Metro server rather
   // than a bundle baked into the binary — this lets CI skip a native rebuild
-  // on JS-only PRs. It connects to Metro on its own via expo-dev-client's
-  // defaultLaunchURL (app.config.js's E2E_METRO_URL), baked in at build
-  // time, so a plain launchApp() is all tests need — see utils/login.ts.
-  // The Boot iOS simulator CI step only boots one simulator, so this only
-  // works correctly with exactly one worker.
+  // on JS-only PRs. It connects to Metro by tapping the auto-detected server
+  // on expo-dev-launcher's native launcher screen — see utils/login.ts for
+  // why. The Boot iOS simulator CI step only boots one simulator, so this
+  // only works correctly with exactly one worker.
   workers: 1,
   // Avoids a redundant extra terminate+launch cycle on top of the one every
   // spec already does itself in utils/login.ts.
