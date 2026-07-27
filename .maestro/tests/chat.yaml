@@ -1,0 +1,33 @@
+appId: com.rebu.bearpool
+---
+# Covers ONBOARDING.md §10 "Chat" -> open a joined ride's chat and send a
+# message (golden path only; multi-device real-time sync, scroll-to-latest,
+# keyboard/FAB behavior, and profanity filtering are not scripted here).
+#
+# Required env vars: EMAIL, PASSWORD, DESTINATION, MESSAGE.
+- runFlow:
+    file: ../flows/login.yaml
+    env:
+      EMAIL: ${EMAIL}
+      PASSWORD: ${PASSWORD}
+
+# Post a ride so there's a chat we're guaranteed to be a member of — the
+# host is auto-added to memberIds when a ride is created.
+- runFlow:
+    file: ../flows/post-ride.yaml
+    env:
+      FROM: "Berkeley - Unit 1"
+      TO: ${DESTINATION}
+
+- tapOn: ${DESTINATION}
+- tapOn:
+    id: "open-chat-button"
+- tapOn:
+    id: "chat-message-input"
+- inputText: ${MESSAGE}
+- tapOn:
+    id: "chat-send-button"
+
+- assertVisible:
+    id: "chat-message-list"
+- assertVisible: ${MESSAGE}

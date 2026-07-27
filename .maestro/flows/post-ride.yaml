@@ -1,0 +1,44 @@
+appId: com.rebu.bearpool
+---
+# Reusable "post a ride" flow, shared by the post-ride, join-ride, and chat
+# tests. Params: FROM, TO. Assumes the caller is already signed in and
+# currently on any tab screen.
+
+# The native bottom tab bar isn't part of this ticket's testID surface, so
+# it's targeted by its visible label.
+- tapOn: "Post"
+
+- tapOn:
+    id: "post-ride-from-input"
+- inputText: ${FROM}
+- tapOn:
+    id: "post-ride-to-input"
+- inputText: ${TO}
+
+# Marks the ride as a test ride so it's hidden from real users
+# (app/(tabs)/index.tsx filters isTest rides out for non-admins) — the
+# toggle only renders for admin accounts, so this is a no-op until the E2E
+# test accounts are granted the admin custom claim.
+- tapOn:
+    id: "post-ride-test-toggle"
+    optional: true
+
+# `date` defaults to "now" at mount, which fails the app's
+# must-be-in-the-future validation by the time the form is submitted a few
+# seconds later. Bump the date forward via the native spinner so the ride
+# stays valid regardless of how long the fields above took to fill.
+- tapOn:
+    id: "post-ride-date-button"
+- swipe:
+    from:
+      id: "post-ride-date-picker"
+    direction: UP
+- tapOn:
+    id: "post-ride-date-done-button"
+
+- tapOn:
+    id: "post-ride-submit-button"
+
+# Dismiss the "Ride is live" success modal back to the home feed.
+- tapOn:
+    id: "post-ride-success-home-button"

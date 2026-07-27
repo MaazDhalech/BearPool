@@ -1,0 +1,45 @@
+appId: com.rebu.bearpool
+---
+# Reusable login flow, shared by every top-level test in .maestro/tests.
+# Params: EMAIL, PASSWORD.
+#
+# launchApp stops + restarts the app by default, which is what gets us back
+# to a clean, signed-out state between logins — the app doesn't persist a
+# Firebase Auth session across a full process relaunch, which is what lets
+# join-ride.yaml switch between the host and joiner accounts mid-flow.
+- launchApp
+
+# The app under test is a dev-client build (eas.json's "e2e" profile) that
+# loads JS from a Metro server started by CI instead of a bundle baked into
+# the binary. A cold launch lands on expo-dev-launcher's native
+# "Development servers" screen, which auto-discovers CI's Metro server and
+# lists it, but doesn't auto-connect — tap it, same as a developer would.
+# Once tapped, expo-dev-launcher remembers the connection for subsequent
+# cold launches within the same simulator session, so this only actually
+# taps anything on the very first login of a run.
+- tapOn:
+    text: "http://localhost:8081"
+    optional: true
+
+# First render after connecting to Metro requires a full cold bundle
+# transform (confirmed via Metro's own log: over 100s for ~3500 modules on
+# the very first request in CI), so wait well beyond that. Subsequent logins
+# within the same run reuse Metro's warm cache and are fast.
+- extendedWaitUntil:
+    visible:
+      id: "login-email-input"
+    timeout: 240000
+
+- tapOn:
+    id: "login-email-input"
+- inputText: ${EMAIL}
+- tapOn:
+    id: "login-password-input"
+- inputText: ${PASSWORD}
+- tapOn:
+    id: "login-submit-button"
+
+- extendedWaitUntil:
+    visible:
+      id: "home-feed-screen"
+    timeout: 20000

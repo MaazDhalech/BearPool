@@ -1,0 +1,16 @@
+appId: com.rebu.bearpool
+---
+# Covers ONBOARDING.md §10 "Auth flows" -> log out / log back in with
+# email + password (golden path only). Signup + email verification is
+# intentionally NOT scripted here: it requires a real @berkeley.edu inbox,
+# which CI does not have. This assumes a pre-existing, already-verified
+# test account.
+#
+# Required env vars (passed via -e from the CI workflow):
+#   EMAIL, PASSWORD - credentials for an existing, verified BearPool test account
+- runFlow:
+    file: ../flows/login.yaml
+    env:
+      EMAIL: ${EMAIL}
+      PASSWORD: ${PASSWORD}
+- assertVisible: "Home"

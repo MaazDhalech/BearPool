@@ -1,0 +1,49 @@
+appId: com.rebu.bearpool
+---
+# Covers ONBOARDING.md §10 "Joining and leaving" -> join a ride (golden
+# path only; leaving and gender-restriction blocking are not scripted here).
+#
+# Joining requires a ride posted by someone else, so this uses a second test
+# account (HOST_EMAIL / HOST_PASSWORD) to host the ride, then joins it with
+# the primary account. This also mirrors how joining works in the real app
+# — you can't meaningfully join your own ride.
+#
+# Required env vars:
+#   EMAIL / PASSWORD           - primary account (joins)
+#   HOST_EMAIL / HOST_PASSWORD - secondary account (hosts)
+#   DESTINATION                - unique destination string for cleanup
+
+# --- Host posts a ride ---
+- runFlow:
+    file: ../flows/login.yaml
+    env:
+      EMAIL: ${HOST_EMAIL}
+      PASSWORD: ${HOST_PASSWORD}
+- runFlow:
+    file: ../flows/post-ride.yaml
+    env:
+      FROM: "Berkeley - Unit 1"
+      TO: ${DESTINATION}
+- assertVisible: ${DESTINATION}
+
+# --- Joiner logs in, finds the ride via search, and joins it ---
+- runFlow:
+    file: ../flows/login.yaml
+    env:
+      EMAIL: ${EMAIL}
+      PASSWORD: ${PASSWORD}
+- tapOn:
+    id: "home-search-input"
+- inputText: ${DESTINATION}
+- tapOn: ${DESTINATION}
+- tapOn:
+    id: "join-ride-button"
+
+# The ride-details CTA flips from "Join Ride" to "Open Chat" once you're a
+# member — the most reliable signal that the join went through, without
+# knowing the joining account's Firestore uid up front to target a specific
+# row in the member list directly.
+- assertVisible:
+    id: "open-chat-button"
+- assertVisible:
+    id: "ride-member-list"
