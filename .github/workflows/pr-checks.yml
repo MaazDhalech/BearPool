@@ -133,11 +133,20 @@ jobs:
       # here applies it to this CI checkout's ios/ before the build — the
       # checkout is ephemeral and never committed back, so this can't affect
       # the real committed ios/ used by other profiles/developers.
+      # --clean (not just a plain prebuild): a non-clean prebuild against the
+      # committed ios/ reported "Finished prebuild" successfully but never
+      # actually wrote DEV_CLIENT_DEFAULT_LAUNCHER_URL into Info.plist
+      # (confirmed via the "Debug - check source ios/" step reading the
+      # source file directly, right after prebuild, before eas build even
+      # ran) — consistent with prebuild's own diff/fingerprint-based skip
+      # logic (it also logged "Updated package.json | no changes" the same
+      # run) deciding there was nothing to re-apply. --clean forces a full
+      # regeneration, bypassing whatever that skip logic is keying off.
       - name: Run expo prebuild for iOS (applies e2e dev-client config)
         if: steps.cache-app.outputs.cache-hit != 'true'
         env:
           E2E_METRO_URL: http://localhost:8081
-        run: npx expo prebuild --platform ios --no-install
+        run: npx expo prebuild --platform ios --no-install --clean
 
       # Isolates whether prebuild itself wrote the key (this check) vs. eas
       # build --local dropping it afterward (the later Debug step, which
