@@ -139,6 +139,18 @@ jobs:
           E2E_METRO_URL: http://localhost:8081
         run: npx expo prebuild --platform ios --no-install
 
+      # Isolates whether prebuild itself wrote the key (this check) vs. eas
+      # build --local dropping it afterward (the later Debug step, which
+      # checks the actually-built app's Info.plist) — the previous run
+      # showed the key absent post-build but we never confirmed whether
+      # prebuild wrote it to the source file in the first place.
+      - name: Debug - check source ios/ Info.plist right after prebuild
+        if: steps.cache-app.outputs.cache-hit != 'true'
+        run: |
+          PLIST=$(find ios -maxdepth 2 -name "Info.plist" | head -n 1)
+          echo "Checking $PLIST"
+          /usr/libexec/PlistBuddy -c "Print :DEV_CLIENT_DEFAULT_LAUNCHER_URL" "$PLIST" || echo "(not present in source ios/)"
+
       # Unsigned since simulator apps don't need code-signing credentials, so
       # this can run on every PR from forks too.
       - name: Build iOS simulator app locally on the macOS runner
