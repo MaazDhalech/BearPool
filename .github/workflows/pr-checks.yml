@@ -123,29 +123,6 @@ jobs:
           key: pods-${{ hashFiles('ios/Podfile.lock') }}
           restore-keys: pods-
 
-      # ios/ is committed to the repo (not gitignored) with real hand-tuning
-      # beyond what a fresh config-plugin pass reproduces — confirmed the
-      # hard way: `expo prebuild --clean` regenerated a Podfile missing
-      # `use_modular_headers!`/static-lib config the committed one has,
-      # breaking `pod install` on AppCheckCore/GoogleUtilities entirely. A
-      # non-clean prebuild is safe but silently no-ops against this
-      # pre-existing ios/ (its diff/fingerprint logic decides nothing needs
-      # re-applying — confirmed by reading the source Info.plist right after
-      # a "successful" prebuild and finding the key absent). So: skip
-      # prebuild/config-plugin sync entirely and patch just the one plist
-      # key the native dev-launcher actually reads (traced via
-      # EXDevLauncherController.m — DEV_CLIENT_DEFAULT_LAUNCHER_URL is the
-      # only one that matters for a fresh install with no prior session;
-      # DEV_CLIENT_TRY_TO_LAUNCH_LAST_BUNDLE only affects a different code
-      # path that requires a previously-opened app URL, which never exists
-      # here). Surgical: doesn't touch the Podfile/project.pbxproj at all.
-      - name: Inject Metro URL into Info.plist for dev-client auto-connect
-        if: steps.cache-app.outputs.cache-hit != 'true'
-        run: |
-          PLIST=$(find ios -maxdepth 2 -name "Info.plist" | head -n 1)
-          /usr/libexec/PlistBuddy -c "Add :DEV_CLIENT_DEFAULT_LAUNCHER_URL string http://localhost:8081" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Print :DEV_CLIENT_DEFAULT_LAUNCHER_URL" "$PLIST"
-
       # Unsigned since simulator apps don't need code-signing credentials, so
       # this can run on every PR from forks too.
       - name: Build iOS simulator app locally on the macOS runner
@@ -191,17 +168,6 @@ jobs:
           APP_PATH=$(find "$GITHUB_WORKSPACE/build" -maxdepth 1 -name '*.app' | head -n 1)
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$GITHUB_WORKSPACE/build/app.zip"
           echo "MOBILEWRIGHT_IOS_APP_PATH=$GITHUB_WORKSPACE/build/app.zip" >> "$GITHUB_ENV"
-          echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
-
-      # Diagnostic: confirm the dev-client launch config actually made it into
-      # the built app, rather than inferring it indirectly from Metro traffic
-      # (or lack thereof) after a ~20min test run. Non-fatal either way.
-      - name: Debug - check dev-client launch config in built Info.plist
-        run: |
-          echo "--- DEV_CLIENT_DEFAULT_LAUNCHER_URL ---"
-          /usr/libexec/PlistBuddy -c "Print :DEV_CLIENT_DEFAULT_LAUNCHER_URL" "$APP_PATH/Info.plist" || echo "(not present)"
-          echo "--- DEV_CLIENT_TRY_TO_LAUNCH_LAST_BUNDLE ---"
-          /usr/libexec/PlistBuddy -c "Print :DEV_CLIENT_TRY_TO_LAUNCH_LAST_BUNDLE" "$APP_PATH/Info.plist" || echo "(not present)"
 
       # Mobilewright auto-discovers a booted simulator (deviceName: /iPhone/ in
       # mobilewright.config.ts) but never boots one itself — nothing in this
@@ -237,9 +203,9 @@ jobs:
           exit 1
 
       # Two accounts are required because the ride flow is two-sided: one user
-      # posts a ride, a second user joins it. The dev-client build connects to
-      # Metro on its own via the DEV_CLIENT_DEFAULT_LAUNCHER_URL Info.plist
-      # key injected above — no runtime wiring needed here for that.
+      # posts a ride, a second user joins it. The dev-client connects to Metro
+      # by tapping the auto-detected server on its native launcher screen —
+      # see tests/e2e/utils/login.ts for why, no wiring needed here for it.
       - name: Run Mobilewright E2E suite
         env:
           MOBILEWRIGHT_IOS_APP_PATH: ${{ env.MOBILEWRIGHT_IOS_APP_PATH }}
