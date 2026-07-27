@@ -123,17 +123,24 @@ jobs:
           key: pods-${{ hashFiles('ios/Podfile.lock') }}
           restore-keys: pods-
 
+      # ios/ is committed to the repo (not gitignored), and per expo-doctor's
+      # appConfigFieldsNotSyncedCheck, EAS Build deliberately does NOT sync
+      # app.config.js properties (including plugins) into an already-existing
+      # native project — confirmed via the "Debug - check dev-client launch
+      # config" step showing DEV_CLIENT_DEFAULT_LAUNCHER_URL absent from the
+      # built Info.plist despite app.config.js resolving it correctly when
+      # checked locally with `npx expo config`. Explicitly running prebuild
+      # here applies it to this CI checkout's ios/ before the build — the
+      # checkout is ephemeral and never committed back, so this can't affect
+      # the real committed ios/ used by other profiles/developers.
+      - name: Run expo prebuild for iOS (applies e2e dev-client config)
+        if: steps.cache-app.outputs.cache-hit != 'true'
+        env:
+          E2E_METRO_URL: http://localhost:8081
+        run: npx expo prebuild --platform ios --no-install
+
       # Unsigned since simulator apps don't need code-signing credentials, so
       # this can run on every PR from forks too.
-      #
-      # E2E_METRO_URL is also declared in eas.json's "e2e" profile env block,
-      # but it's unclear whether `eas build --local` actually exposes
-      # profile-level env to the app.config.js evaluation subprocess the way
-      # cloud builds do (docs don't say either way for --local) — verified
-      # locally that app.config.js itself resolves the plugin correctly given
-      # this var, but two straight builds with it only in eas.json still
-      # showed zero Metro traffic. Setting it directly here closes that gap
-      # regardless of which layer was dropping it.
       - name: Build iOS simulator app locally on the macOS runner
         if: steps.cache-app.outputs.cache-hit != 'true'
         env:
