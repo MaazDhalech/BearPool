@@ -1,4 +1,36 @@
+import { execFileSync } from "node:child_process";
 import type { Device, Screen } from "@mobilewright/core";
+
+/**
+ * Suppresses expo-dev-client's one-time "This is the developer menu"
+ * onboarding popup, which otherwise renders on top of the app on its first
+ * successful Metro connection and blocks all interaction until dismissed
+ * (confirmed via an actual failure screenshot from a CI run's mobilewright
+ * report — it showed the real Login screen fully and correctly loaded
+ * underneath the popup). Traced the actual mechanism through expo-dev-menu's
+ * source (node_modules/expo-dev-menu/ios/Modules/DevMenuPreferences.swift):
+ * it's gated on a plain UserDefaults boolean, key
+ * "EXDevMenuIsOnboardingFinished", scoped to the app's own bundle ID.
+ *
+ * Must run after the app has been installed at least once (its sandboxed
+ * preferences container doesn't exist before that) — Mobilewright's device
+ * fixture handles installation before any test body runs, so by the time
+ * this is called from within a test it's always safe. Idempotent and cheap,
+ * so no need to guard against calling it more than once per run.
+ */
+function disableDevMenuOnboarding(bundleId: string): void {
+  execFileSync("xcrun", [
+    "simctl",
+    "spawn",
+    "booted",
+    "defaults",
+    "write",
+    bundleId,
+    "EXDevMenuIsOnboardingFinished",
+    "-bool",
+    "YES",
+  ]);
+}
 
 /**
  * Shared login helper used by the post-ride, join-ride, and chat specs.
@@ -15,7 +47,7 @@ import type { Device, Screen } from "@mobilewright/core";
  * an actual screenshot from a failed run's report — it showed
  * "http://localhost:8081" listed with a green "reachable" indicator) but
  * doesn't auto-connect to it; tap that row, same as a developer would
- * manually. Two prior mechanisms were tried and abandoned: a runtime
+ * manually. Two other mechanisms were tried and abandoned: a runtime
  * `expo-development-client://` deep link, and baking a default-launch-URL
  * into Info.plist at build time (via app.config.js's expo-dev-client plugin
  * config, or later a direct PlistBuddy injection) — both were eventually
@@ -39,6 +71,8 @@ export async function loginWithEmail(
   email: string,
   password: string,
 ): Promise<void> {
+  disableDevMenuOnboarding(bundleId);
+
   await device.terminateApp(bundleId).catch(() => {});
   await device.launchApp(bundleId);
 
@@ -47,34 +81,14 @@ export async function loginWithEmail(
     await devServerRow.tap();
   }
 
-  // The very first successful connection triggers Expo's one-time "This is
-  // the developer menu" onboarding popup, rendered on top of the (correctly
-  // loaded) Login screen underneath it — confirmed via an actual failure
-  // screenshot. It only appears once the JS bundle has fully rendered, which
-  // can take a while on a cold Metro cache (confirmed via Metro's own log:
-  // up to ~186s for 3545 modules on the very first request in CI) — but on
-  // every other login in the same run it never reappears at all. Rather
-  // than a single fixed wait that's either too short for a slow first
-  // bundle or wastefully long on every other login, poll for whichever of
-  // the popup or the login screen itself appears first, dismissing the
-  // popup the moment it shows up.
+  // First render after connecting to Metro requires a full cold bundle
+  // transform (confirmed via Metro's own log: up to ~186s for 3545 modules
+  // on the very first request in CI), so wait well beyond that rather than
+  // letting fill()'s short default timeout — or an insufficiently generous
+  // one — fail before the bundle is even ready. Subsequent logins within
+  // the same run reuse Metro's warm cache and are fast (under 2s).
   const loginEmailInput = screen.getByTestId("login-email-input");
-  const devMenuContinueButton = screen.getByText("Continue");
-  const deadline = Date.now() + 240_000;
-  while (Date.now() < deadline) {
-    if (await devMenuContinueButton.isVisible({ timeout: 500 }).catch(() => false)) {
-      await devMenuContinueButton.tap();
-      break;
-    }
-    if (await loginEmailInput.isVisible({ timeout: 500 }).catch(() => false)) {
-      break;
-    }
-  }
-
-  // Safety-net wait: fast in practice at this point (bundle's already
-  // loaded and any onboarding popup dismissed), just confirms we didn't
-  // exit the loop above via the deadline.
-  await loginEmailInput.waitFor({ state: "visible", timeout: 30_000 });
+  await loginEmailInput.waitFor({ state: "visible", timeout: 240_000 });
   await loginEmailInput.fill(email);
   await screen.getByTestId("login-password-input").fill(password);
   await screen.getByTestId("login-submit-button").tap();

@@ -45,6 +45,19 @@ jobs:
       - name: Print Xcode version
         run: xcodebuild -version
 
+      # Kicked off this early (before the ~25-30min native build on a cache
+      # miss) so the simulator finishes booting in the background while the
+      # build runs, instead of paying for it sequentially afterward. `boot`
+      # itself only *initiates* boot and returns immediately — the actual
+      # wait for it to finish happens later via bootstatus, right before
+      # it's actually needed, by which point it's usually already done.
+      - name: Start booting iOS simulator (runs in background during the build)
+        run: |
+          UDID=$(xcrun simctl list devices available -j | jq -r '[.devices[][] | select(.name | test("iPhone"))][0].udid')
+          echo "Booting simulator $UDID"
+          echo "SIMULATOR_UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID"
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -170,17 +183,13 @@ jobs:
           echo "MOBILEWRIGHT_IOS_APP_PATH=$GITHUB_WORKSPACE/build/app.zip" >> "$GITHUB_ENV"
 
       # Mobilewright auto-discovers a booted simulator (deviceName: /iPhone/ in
-      # mobilewright.config.ts) but never boots one itself — nothing in this
-      # workflow did either, which is why every test was hanging for the full
-      # per-test timeout with zero progress: the device-allocation fixture was
-      # polling forever for a simulator that never existed. workers: 1 in the
-      # config assumes exactly one simulator is booted, so boot exactly one.
-      - name: Boot iOS simulator
-        run: |
-          UDID=$(xcrun simctl list devices available -j | jq -r '[.devices[][] | select(.name | test("iPhone"))][0].udid')
-          echo "Booting simulator $UDID"
-          xcrun simctl boot "$UDID"
-          xcrun simctl bootstatus "$UDID"
+      # mobilewright.config.ts) but never boots one itself. Boot was already
+      # *triggered* right after Xcode setup so it runs in the background
+      # during the long build above — this just waits for it to actually
+      # finish, which by now is usually immediate. workers: 1 in the config
+      # assumes exactly one simulator is booted, so only ever boot one.
+      - name: Wait for iOS simulator to finish booting
+        run: xcrun simctl bootstatus "$SIMULATOR_UDID"
 
       # The dev-client build has no bundled JS, so it needs a live Metro server
       # to load from. --localhost binds to loopback only, which is fine since
