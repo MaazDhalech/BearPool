@@ -29,6 +29,13 @@ export default defineConfig({
   // mitigation for this class of CI-only device flakiness.
   retries: process.env.CI ? 2 : 0,
   bundleId: "com.rebu.bearpool",
+  // Dumps the full accessibility tree (identifiers, visibility, bounds) as a
+  // JSON attachment whenever a test fails, alongside the screenshot. Needed
+  // to see what mobilewright's driver actually resolves testIDs to — a
+  // screenshot alone can't tell us whether an element mobilewright can't
+  // find is actually absent from the tree, present but marked not-visible,
+  // or matched against the wrong node.
+  viewTree: "on-failure",
   // The app under test is now a dev-client build (see eas.json's "e2e"
   // profile) that loads its JS from a locally-running Metro server rather
   // than a bundle baked into the binary — this lets CI skip a native rebuild
