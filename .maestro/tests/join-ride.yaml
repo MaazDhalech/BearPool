@@ -34,6 +34,9 @@ appId: com.rebu.bearpool
       PASSWORD: ${PASSWORD}
 - tapOn:
     id: "home-search-input"
+- assertVisible:
+    id: "home-search-input"
+    focused: true
 - inputText: ${DESTINATION}
 - tapOn: ${DESTINATION}
 - tapOn:

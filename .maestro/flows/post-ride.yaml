@@ -8,11 +8,19 @@ appId: com.rebu.bearpool
 # it's targeted by its visible label.
 - tapOn: "Post"
 
+# See flows/login.yaml for why each tap is followed by a focus check
+# before typing — without it, a stray character from FROM can land in TO.
 - tapOn:
     id: "post-ride-from-input"
+- assertVisible:
+    id: "post-ride-from-input"
+    focused: true
 - inputText: ${FROM}
 - tapOn:
     id: "post-ride-to-input"
+- assertVisible:
+    id: "post-ride-to-input"
+    focused: true
 - inputText: ${TO}
 
 # Marks the ride as a test ride so it's hidden from real users

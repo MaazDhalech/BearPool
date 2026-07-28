@@ -24,6 +24,9 @@ appId: com.rebu.bearpool
     id: "open-chat-button"
 - tapOn:
     id: "chat-message-input"
+- assertVisible:
+    id: "chat-message-input"
+    focused: true
 - inputText: ${MESSAGE}
 - tapOn:
     id: "chat-send-button"

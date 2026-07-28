@@ -32,11 +32,24 @@ appId: com.rebu.bearpool
       id: "login-email-input"
     timeout: 420000
 
+# Confirming focus before typing matters here, not just as a formality:
+# without it, a tap's own "done" signal can fire a beat before the
+# keyboard/focus has actually landed on the newly-tapped field, so the
+# first character or two of the following inputText lands in whichever
+# field was PREVIOUSLY focused instead — confirmed via a real failure
+# screenshot showing the email field as "<real address>g", the stray "g"
+# being the password's first character, typed a moment too early.
 - tapOn:
     id: "login-email-input"
+- assertVisible:
+    id: "login-email-input"
+    focused: true
 - inputText: ${EMAIL}
 - tapOn:
     id: "login-password-input"
+- assertVisible:
+    id: "login-password-input"
+    focused: true
 - inputText: ${PASSWORD}
 - tapOn:
     id: "login-submit-button"
