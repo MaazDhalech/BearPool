@@ -391,7 +391,7 @@ export default function Login() {
         keyboardVerticalOffset={insets.top}
         style={s.root}
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
           <View style={[s.mainContainer, { paddingTop: insets.top }]}>
             <ScrollView
               contentContainerStyle={s.scrollContent}
