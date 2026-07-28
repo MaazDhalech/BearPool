@@ -192,6 +192,19 @@ jobs:
       - name: Install app on simulator
         run: xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
 
+      # Suppresses expo-dev-client's one-time "This is the developer menu"
+      # onboarding popup, which otherwise renders on top of the app on its
+      # first successful Metro connection and blocks all interaction until
+      # dismissed (confirmed via a real Maestro accessibility-tree capture
+      # from a failed run — it showed this popup's text sitting over the
+      # login screen). Backed by a plain UserDefaults boolean
+      # (node_modules/expo-dev-menu/ios/Modules/DevMenuPreferences.swift),
+      # scoped to the app's own bundle ID, so it can be set directly here.
+      # Must run after install (the app's sandboxed preferences container
+      # doesn't exist before that), which is why this step is right after it.
+      - name: Disable dev-menu onboarding popup
+        run: xcrun simctl spawn "$SIMULATOR_UDID" defaults write com.rebu.bearpool EXDevMenuIsOnboardingFinished -bool YES
+
       # The dev-client build has no bundled JS, so it needs a live Metro server
       # to load from. --localhost binds to loopback only, which is fine since
       # Metro and the simulator both run on this same machine.

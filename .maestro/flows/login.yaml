@@ -22,13 +22,15 @@ appId: com.rebu.bearpool
     optional: true
 
 # First render after connecting to Metro requires a full cold bundle
-# transform (confirmed via Metro's own log: over 100s for ~3500 modules on
-# the very first request in CI), so wait well beyond that. Subsequent logins
-# within the same run reuse Metro's warm cache and are fast.
+# transform (confirmed via Metro's own log: as much as ~284s for ~3500
+# modules on a loaded CI runner — a prior 240s timeout here was too tight
+# and cut this off mid-transform), so wait well beyond that with real
+# margin. Subsequent logins within the same run reuse Metro's warm cache
+# and are fast.
 - extendedWaitUntil:
     visible:
       id: "login-email-input"
-    timeout: 240000
+    timeout: 420000
 
 - tapOn:
     id: "login-email-input"
