@@ -71,6 +71,7 @@ export default {
         "expo-calendar",
         {
           calendarPermission: "BearPool needs calendar access to add your ride to your calendar.",
+          remindersPermission: false,
         },
       ],
       [
