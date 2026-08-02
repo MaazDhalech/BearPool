@@ -68,6 +68,12 @@ export default {
       "expo-localization",
       "expo-web-browser",
       [
+        "expo-calendar",
+        {
+          calendarPermission: "BearPool needs calendar access to add your ride to your calendar.",
+        },
+      ],
+      [
         "@react-native-google-signin/google-signin",
         {
           "iosUrlScheme": "com.googleusercontent.apps.888067452420-h931i412b9d244e27q24at0ehmie2mvr"

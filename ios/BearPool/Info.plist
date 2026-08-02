@@ -57,6 +57,8 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSCalendarsUsageDescription</key>
+	<string>BearPool needs calendar access to add your ride to your calendar.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Allow $(PRODUCT_NAME) to access your camera. $(PRODUCT_NAME) lets you choose a profile picture or avatar from your photo library so you can personalize your account.</string>
 	<key>NSFaceIDUsageDescription</key>

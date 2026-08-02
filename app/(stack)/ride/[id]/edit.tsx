@@ -9,6 +9,7 @@ import DateTimePicker, {
 import { format } from "date-fns";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { deleteDoc, doc, getDoc, updateDoc } from "firebase/firestore";
+import { removeRideFromCalendar } from "@/utils/rideCalendar";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -395,6 +396,7 @@ export default function EditRideScreen() {
 
       // Delete the ride document
       await deleteDoc(rideRef);
+      if (userId) await removeRideFromCalendar(userId, id as string);
 
       toast("Ride deleted successfully!", { type: "success" });
       // Pop the (now-deleted) ride screens off the stack, then land on chats

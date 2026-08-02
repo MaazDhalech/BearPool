@@ -35,6 +35,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Modal, TextInput, TouchableOpacity, View } from "react-native";
 import { confirm, showMenu, toast } from "@/components/ui/Dialog";
 import { NavHeader } from "@/components/ui/NavHeader";
+import { removeRideFromCalendar } from "@/utils/rideCalendar";
 
 const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
@@ -455,6 +456,7 @@ This ride has been permanently deleted from the system.
       // Note: When a document is deleted, its subcollections (including kickLogs)
       // are also automatically deleted by Firestore
       await deleteDoc(rideRef);
+      if (user?.uid) await removeRideFromCalendar(user.uid, String(rideId));
 
       toast(
         emailSent ? "Your ride has been removed." : "Your ride has been removed. The admin report could not be sent.",
@@ -557,6 +559,8 @@ This ride has been permanently deleted from the system.
       // Verify update
       const updatedSnap = await getDoc(rideRef);
       console.log("Seats after update:", updatedSnap.data()?.seats);
+
+      await removeRideFromCalendar(user.uid, String(rideId));
 
       router.dismissTo("/(tabs)/chats");
     } catch (error) {

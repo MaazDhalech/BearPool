@@ -32,6 +32,12 @@ import { toast } from "@/components/ui/Dialog";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NavHeader } from "@/components/ui/NavHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
+import {
+  addRideToCalendar,
+  isRideLinkedToCalendar,
+  removeRideFromCalendar,
+  syncRideCalendarEvent,
+} from "@/utils/rideCalendar";
 
 type Ride = {
   id: string;
@@ -185,6 +191,8 @@ export default function RideDetailsPage() {
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
   const [notifDenied, setNotifDenied] = useState(false);
   const pendingNavRef = useRef<(() => void) | null>(null);
+  const [calendarLinked, setCalendarLinked] = useState(false);
+  const [calendarBusy, setCalendarBusy] = useState(false);
 
   const { shouldPrompt, requestPermission, openSettings, markDismissed } =
     useNotificationOptInPrompt(userId);
@@ -309,6 +317,73 @@ export default function RideDetailsPage() {
 
     fetchMembers();
   }, [ride]);
+
+  // Reconciles any device-local calendar link against the current ride state, since
+  // ride docs are fetched once (no live listener) rather than watched in real time.
+  useEffect(() => {
+    if (!userId || !id || typeof id !== "string") return;
+
+    const reconcile = async () => {
+      if (!ride) {
+        if (!loading) {
+          const hadLink = await isRideLinkedToCalendar(userId, id);
+          if (hadLink) {
+            await removeRideFromCalendar(userId, id);
+            toast("Calendar event removed — this ride was cancelled.", { type: "info" });
+          }
+        }
+        return;
+      }
+
+      const stillMember = ride.memberIds.includes(userId);
+      if (!stillMember) {
+        const hadLink = await isRideLinkedToCalendar(userId, ride.id);
+        if (hadLink) {
+          await removeRideFromCalendar(userId, ride.id);
+          toast("Calendar event removed — you're no longer in this ride.", { type: "info" });
+        }
+        setCalendarLinked(false);
+        return;
+      }
+
+      const linked = await isRideLinkedToCalendar(userId, ride.id);
+      setCalendarLinked(linked);
+      if (linked) {
+        const rdt = parseRideDateTime(ride.date, ride.time);
+        if (rdt) await syncRideCalendarEvent(userId, ride, rdt);
+      }
+    };
+
+    reconcile();
+  }, [ride, userId, loading, id]);
+
+  const handleToggleCalendar = async () => {
+    if (!userId || !ride?.id || calendarBusy) return;
+
+    setCalendarBusy(true);
+    try {
+      if (calendarLinked) {
+        await removeRideFromCalendar(userId, ride.id);
+        setCalendarLinked(false);
+        toast("Removed from your calendar.", { type: "success" });
+        return;
+      }
+
+      const rdt = parseRideDateTime(ride.date, ride.time);
+      if (!rdt) {
+        toast("Couldn't determine this ride's start time.", { type: "error" });
+        return;
+      }
+
+      const ok = await addRideToCalendar(userId, ride, rdt);
+      if (ok) {
+        setCalendarLinked(true);
+        toast("Added to your calendar.", { type: "success" });
+      }
+    } finally {
+      setCalendarBusy(false);
+    }
+  };
 
   const handleJoinRide = async () => {
     if (!userId || !ride?.id) return;
@@ -555,6 +630,34 @@ export default function RideDetailsPage() {
 
       {/* Sticky CTA */}
       <View style={{ paddingHorizontal: SPACE.lg, paddingBottom: insets.bottom + SPACE.md, paddingTop: SPACE.md, backgroundColor: darkTheme.bg }}>
+        {alreadyJoined && (
+          <Pressable
+            testID="calendar-toggle-button"
+            disabled={calendarBusy}
+            onPress={handleToggleCalendar}
+            style={({ pressed }) => ({
+              opacity: pressed || calendarBusy ? 0.7 : 1,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: SPACE.sm,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: darkTheme.border,
+              paddingVertical: SPACE.md,
+              marginBottom: SPACE.sm,
+            })}
+          >
+            <Ionicons
+              name={calendarLinked ? "checkmark-circle" : "calendar-outline"}
+              size={18}
+              color={calendarLinked ? darkTheme.success : darkTheme.textPrimary}
+            />
+            <Text style={{ color: darkTheme.textPrimary, fontWeight: TYPE.weight.semibold, fontSize: TYPE.size.body }}>
+              {calendarLinked ? "Remove from Calendar" : "Add to Calendar"}
+            </Text>
+          </Pressable>
+        )}
         {alreadyJoined ? (
           <CTAButton
             testID="open-chat-button"
