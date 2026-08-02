@@ -14,6 +14,16 @@ import { SPACE } from "@/constants/Spacing";
 import { TYPE } from "@/constants/Typography";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { db, storage } from "@/services/firebaseConfig";
+import { CalendarOptInModal } from "@/components/CalendarOptInModal";
+import {
+  addRideToCalendar,
+  isRideLinkedToCalendar,
+} from "@/utils/rideCalendar";
+import {
+  getCalendarPromptDismissed,
+  setCalendarPromptDismissed,
+} from "@/utils/calendarLink";
+import { parseRideDateTime } from "@/utils/rideDateTime";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import * as ImageManipulator from "expo-image-manipulator";
@@ -88,6 +98,7 @@ type RideInfo = {
   to: string;
   date: string;
   time: string;
+  notes: string;
   startTime: Timestamp | null;
   archived: boolean;
   archivedAt: Timestamp | null;
@@ -349,6 +360,8 @@ export default function RideChatScreen() {
   const [loadingEarlier, setLoadingEarlier] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [lightboxUri, setLightboxUri] = useState<string | null>(null);
+  const [showCalendarPrompt, setShowCalendarPrompt] = useState(false);
+  const calendarPromptCheckedRef = useRef(false);
   const inputRef = useRef<any>(null);
 
   const userMapRef = useRef<UserMap>({});
@@ -451,39 +464,6 @@ export default function RideChatScreen() {
     filtered: filter.clean(text),
     containsProfanity: filter.check(text),
   });
-
-  const parseRideDateTime = (dateStr: string, timeStr: string): Date | null => {
-    try {
-      const currentYear = new Date().getFullYear();
-      const parsedDate = new Date(`${dateStr}, ${currentYear} ${timeStr}`);
-      if (!isNaN(parsedDate.getTime())) return parsedDate;
-
-      const timeParts = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
-      if (timeParts) {
-        let [_, hours, minutes, period] = timeParts;
-        let hourNum = parseInt(hours);
-        if (period.toUpperCase() === "PM" && hourNum < 12) hourNum += 12;
-        if (period.toUpperCase() === "AM" && hourNum === 12) hourNum = 0;
-
-        const dateParts = dateStr.match(/(\w+)\s+(\d+)/);
-        if (dateParts) {
-          const monthNames = [
-            "January","February","March","April","May","June",
-            "July","August","September","October","November","December",
-          ];
-          const monthIndex = monthNames.findIndex(
-            (m) => m.toLowerCase() === dateParts[1].toLowerCase(),
-          );
-          if (monthIndex !== -1) {
-            return new Date(currentYear, monthIndex, parseInt(dateParts[2]), hourNum, parseInt(minutes));
-          }
-        }
-      }
-      return null;
-    } catch {
-      return null;
-    }
-  };
 
   const formatDividerText = (date: Date): string => {
     const today = new Date();
@@ -599,6 +579,7 @@ export default function RideChatScreen() {
           to: d.to || "Unknown",
           date: d.date || "",
           time: d.time || "",
+          notes: d.notes || "",
           startTime: d.startTime || null,
           archived: d.archived || false,
           archivedAt: d.archivedAt || null,
@@ -634,6 +615,7 @@ export default function RideChatScreen() {
               to: ud.to || "Unknown",
               date: ud.date || "",
               time: ud.time || "",
+              notes: ud.notes || "",
               startTime: ud.startTime || null,
               archived: ud.archived || false,
               archivedAt: ud.archivedAt || null,
@@ -659,6 +641,50 @@ export default function RideChatScreen() {
       if (archiveCountdownIntervalRef.current) clearInterval(archiveCountdownIntervalRef.current);
     };
   }, [rideId]);
+
+  // Nudge members to add the ride to their calendar — once per user/ride, and only
+  // while it's still worth reminding them (not archived, not already departed).
+  useEffect(() => {
+    if (calendarPromptCheckedRef.current) return;
+    if (!user?.uid || !rideId || !rideInfo) return;
+    if (rideInfo.archived || !rideInfo.memberIds.includes(user.uid)) return;
+
+    const rdt = parseRideDateTime(rideInfo.date, rideInfo.time);
+    if (rdt && new Date() >= rdt) return;
+
+    calendarPromptCheckedRef.current = true;
+
+    (async () => {
+      const [linked, dismissed] = await Promise.all([
+        isRideLinkedToCalendar(user.uid, String(rideId)),
+        getCalendarPromptDismissed(user.uid, String(rideId)),
+      ]);
+      if (!linked && !dismissed) setShowCalendarPrompt(true);
+    })();
+  }, [user?.uid, rideId, rideInfo]);
+
+  const handleAddToCalendarFromPrompt = async () => {
+    setShowCalendarPrompt(false);
+    if (!user?.uid || !rideId || !rideInfo) return;
+
+    const rdt = parseRideDateTime(rideInfo.date, rideInfo.time);
+    if (!rdt) {
+      toast("Couldn't determine this ride's start time.", { type: "error" });
+      return;
+    }
+
+    const ok = await addRideToCalendar(
+      user.uid,
+      { id: String(rideId), from: rideInfo.from, to: rideInfo.to, date: rideInfo.date, time: rideInfo.time, notes: rideInfo.notes },
+      rdt,
+    );
+    if (ok) toast("Added to your calendar.", { type: "success" });
+  };
+
+  const handleDismissCalendarPrompt = () => {
+    setShowCalendarPrompt(false);
+    if (user?.uid && rideId) setCalendarPromptDismissed(user.uid, String(rideId));
+  };
 
   useEffect(() => {
     userMapRef.current = userMap;
@@ -1768,6 +1794,14 @@ export default function RideChatScreen() {
 
       {/* Full-screen image viewer */}
       <ImageLightbox uri={lightboxUri} onClose={() => setLightboxUri(null)} />
+
+      <CalendarOptInModal
+        visible={showCalendarPrompt}
+        from={rideInfo?.from ?? ""}
+        to={rideInfo?.to ?? ""}
+        onAdd={handleAddToCalendarFromPrompt}
+        onClose={handleDismissCalendarPrompt}
+      />
     </View>
   );
 }

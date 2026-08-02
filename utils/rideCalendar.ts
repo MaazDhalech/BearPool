@@ -1,5 +1,4 @@
 import * as Calendar from "expo-calendar";
-import { Platform } from "react-native";
 
 import { toast } from "@/components/ui/Dialog";
 import {
@@ -26,16 +25,6 @@ async function requestCalendarAccess(): Promise<boolean> {
   if (status === "granted") return true;
   toast("Calendar access is off. Enable it for BearPool in Settings to add rides.", { type: "error" });
   return false;
-}
-
-async function getWritableCalendarId(): Promise<string | null> {
-  if (Platform.OS === "ios") {
-    const defaultCalendar = await Calendar.getDefaultCalendarAsync();
-    return defaultCalendar?.id ?? null;
-  }
-  const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
-  const writable = calendars.find((c) => c.allowsModifications) ?? calendars[0];
-  return writable?.id ?? null;
 }
 
 function syncedFieldsFromRide(ride: RideForCalendar): SyncedRideFields {
@@ -69,6 +58,9 @@ export async function isRideLinkedToCalendar(userId: string, rideId: string): Pr
   return (await getCalendarLink(userId, rideId)) !== null;
 }
 
+// Presents the OS's own "New Event" sheet (EKEventEditViewController on iOS, a Calendar
+// intent on Android) pre-filled with the ride details, rather than writing the event
+// silently — matches the native "Add to Calendar" pattern other apps use.
 export async function addRideToCalendar(
   userId: string,
   ride: RideForCalendar,
@@ -78,14 +70,18 @@ export async function addRideToCalendar(
   if (!granted) return false;
 
   try {
-    const calendarId = await getWritableCalendarId();
-    if (!calendarId) {
-      toast("Couldn't find a calendar to add this ride to.", { type: "error" });
-      return false;
-    }
+    const result = await Calendar.createEventInCalendarAsync(buildEventDetails(ride, startDate), {
+      startNewActivityTask: false,
+    });
 
-    const eventId = await Calendar.createEventAsync(calendarId, buildEventDetails(ride, startDate));
-    await setCalendarLink(userId, ride.id, { eventId, syncedFields: syncedFieldsFromRide(ride) });
+    if (result.action === "canceled" || result.action === "deleted") return false;
+
+    // `id` is only ever populated on iOS; Android's calendar intent never returns one.
+    // Without it we can't manage the event later (sync-on-edit, remove-on-leave/cancel),
+    // so only the devices that get an id participate in that lifecycle tracking.
+    if (result.id) {
+      await setCalendarLink(userId, ride.id, { eventId: result.id, syncedFields: syncedFieldsFromRide(ride) });
+    }
     return true;
   } catch (error) {
     console.error("Failed to add ride to calendar", error);

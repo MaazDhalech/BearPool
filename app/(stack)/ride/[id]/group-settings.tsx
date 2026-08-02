@@ -35,7 +35,12 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Modal, TextInput, TouchableOpacity, View } from "react-native";
 import { confirm, showMenu, toast } from "@/components/ui/Dialog";
 import { NavHeader } from "@/components/ui/NavHeader";
-import { removeRideFromCalendar } from "@/utils/rideCalendar";
+import {
+  addRideToCalendar,
+  isRideLinkedToCalendar,
+  removeRideFromCalendar,
+} from "@/utils/rideCalendar";
+import { parseRideDateTime } from "@/utils/rideDateTime";
 
 const DEFAULT_AVATAR =
   "https://static.vecteezy.com/system/resources/previews/008/442/086/non_2x/illustration-of-human-icon-user-symbol-icon-modern-design-on-blank-background-free-vector.jpg";
@@ -60,6 +65,8 @@ export default function GroupSettings() {
   const [deletionReason, setDeletionReason] = useState("");
   const [customReason, setCustomReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [calendarLinked, setCalendarLinked] = useState(false);
+  const [calendarBusy, setCalendarBusy] = useState(false);
 
   // Kick modal states
   const [showKickModal, setShowKickModal] = useState(false);
@@ -144,6 +151,43 @@ export default function GroupSettings() {
       setRide((prev: any) => ({ ...prev, hostId: user.uid }));
     }
   }, [ride?.hostId, user?.uid]);
+
+  useEffect(() => {
+    if (!user?.uid || !rideId) return;
+    isRideLinkedToCalendar(user.uid, String(rideId)).then(setCalendarLinked);
+  }, [user?.uid, rideId]);
+
+  const handleToggleCalendar = async () => {
+    if (!user?.uid || !ride || !rideId || calendarBusy) return;
+
+    setCalendarBusy(true);
+    try {
+      if (calendarLinked) {
+        await removeRideFromCalendar(user.uid, String(rideId));
+        setCalendarLinked(false);
+        toast("Removed from your calendar.", { type: "success" });
+        return;
+      }
+
+      const rdt = parseRideDateTime(ride.date, ride.time);
+      if (!rdt) {
+        toast("Couldn't determine this ride's start time.", { type: "error" });
+        return;
+      }
+
+      const ok = await addRideToCalendar(
+        user.uid,
+        { id: String(rideId), from: ride.from, to: ride.to, date: ride.date, time: ride.time, notes: ride.notes },
+        rdt,
+      );
+      if (ok) {
+        setCalendarLinked(true);
+        toast("Added to your calendar.", { type: "success" });
+      }
+    } finally {
+      setCalendarBusy(false);
+    }
+  };
 
   const storeKickRecord = async (
     kickedUserId: string,
@@ -732,6 +776,13 @@ This ride has been permanently deleted from the system.
 
           {/* Actions */}
           <VStack space="sm">
+            <ActionButton
+              variant="primary"
+              icon={calendarLinked ? "checkmark-circle-outline" : "calendar-outline"}
+              label={calendarLinked ? "Added to Calendar" : "Add to Calendar"}
+              loading={calendarBusy}
+              onPress={handleToggleCalendar}
+            />
             {isHost && (
               <ActionButton
                 variant="danger"

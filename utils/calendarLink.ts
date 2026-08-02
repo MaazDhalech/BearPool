@@ -43,3 +43,22 @@ export async function clearCalendarLink(userId: string, rideId: string): Promise
     console.warn("Failed to clear calendar link", error);
   }
 }
+
+const promptDismissedKey = (userId: string, rideId: string) => `calendarPromptDismissed:${userId}:${rideId}`;
+
+export async function getCalendarPromptDismissed(userId: string, rideId: string): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(promptDismissedKey(userId, rideId))) !== null;
+  } catch (error) {
+    console.warn("Failed to read calendar prompt dismissal", error);
+    return false;
+  }
+}
+
+export async function setCalendarPromptDismissed(userId: string, rideId: string): Promise<void> {
+  try {
+    await AsyncStorage.setItem(promptDismissedKey(userId, rideId), String(Date.now()));
+  } catch (error) {
+    console.warn("Failed to store calendar prompt dismissal", error);
+  }
+}

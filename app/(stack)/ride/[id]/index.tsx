@@ -38,6 +38,7 @@ import {
   removeRideFromCalendar,
   syncRideCalendarEvent,
 } from "@/utils/rideCalendar";
+import { parseRideDateTime } from "@/utils/rideDateTime";
 
 type Ride = {
   id: string;
@@ -52,28 +53,6 @@ type Ride = {
   genderPref?: string;
   hostId: string | null;
   archived: boolean;
-};
-
-const parseRideDateTime = (dateStr: string, timeStr: string): Date | null => {
-  try {
-    const currentYear = new Date().getFullYear();
-    const parsed = new Date(`${dateStr}, ${currentYear} ${timeStr}`);
-    if (!isNaN(parsed.getTime())) return parsed;
-    const timeParts = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
-    if (timeParts) {
-      let hours = parseInt(timeParts[1]);
-      const minutes = parseInt(timeParts[2]);
-      if (timeParts[3].toUpperCase() === "PM" && hours < 12) hours += 12;
-      if (timeParts[3].toUpperCase() === "AM" && hours === 12) hours = 0;
-      const dateParts = dateStr.match(/(\w+)\s+(\d+)/);
-      if (dateParts) {
-        const months = ["january","february","march","april","may","june","july","august","september","october","november","december"];
-        const monthIdx = months.indexOf(dateParts[1].toLowerCase());
-        if (monthIdx !== -1) return new Date(currentYear, monthIdx, parseInt(dateParts[2]), hours, minutes);
-      }
-    }
-    return null;
-  } catch { return null; }
 };
 
 type Member = {
@@ -636,14 +615,15 @@ export default function RideDetailsPage() {
             disabled={calendarBusy}
             onPress={handleToggleCalendar}
             style={({ pressed }) => ({
-              opacity: pressed || calendarBusy ? 0.7 : 1,
+              opacity: pressed || calendarBusy ? 0.8 : 1,
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "center",
               gap: SPACE.sm,
               borderRadius: 14,
-              borderWidth: 1,
-              borderColor: darkTheme.border,
+              borderWidth: 1.5,
+              borderColor: calendarLinked ? darkTheme.success + "55" : ACCENT + "55",
+              backgroundColor: calendarLinked ? darkTheme.success + "1A" : ACCENT + "14",
               paddingVertical: SPACE.md,
               marginBottom: SPACE.sm,
             })}
@@ -651,10 +631,10 @@ export default function RideDetailsPage() {
             <Ionicons
               name={calendarLinked ? "checkmark-circle" : "calendar-outline"}
               size={18}
-              color={calendarLinked ? darkTheme.success : darkTheme.textPrimary}
+              color={calendarLinked ? darkTheme.success : ACCENT}
             />
-            <Text style={{ color: darkTheme.textPrimary, fontWeight: TYPE.weight.semibold, fontSize: TYPE.size.body }}>
-              {calendarLinked ? "Remove from Calendar" : "Add to Calendar"}
+            <Text style={{ color: calendarLinked ? darkTheme.success : ACCENT, fontWeight: TYPE.weight.bold, fontSize: TYPE.size.body }}>
+              {calendarLinked ? "Added to Calendar" : "Add to Calendar"}
             </Text>
           </Pressable>
         )}
