@@ -26,7 +26,8 @@ import {
     where
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { confirm, showMenu, toast } from "@/components/ui/Dialog";
+import { Alert } from "react-native";
+import { confirm, toast } from "@/components/ui/Dialog";
 
 // Default avatar image
 const DEFAULT_AVATAR =
@@ -47,9 +48,14 @@ export default function UserProfileScreen() {
 
     const fetchUserProfile = async () => {
       try {
-        // Fetch the user's profile
+        // Fetch the viewed profile and the current user's blocked-list doc
+        // concurrently — they're independent reads, no need to serialize them.
         const userDocRef = doc(db, "users", userId as string);
-        const userSnap = await getDoc(userDocRef);
+        const currentUserDocRef = doc(db, "users", currentUserId);
+        const [userSnap, currentUserSnap] = await Promise.all([
+          getDoc(userDocRef),
+          getDoc(currentUserDocRef),
+        ]);
 
         if (!userSnap.exists()) {
           toast("User profile not found.", { type: "error" });
@@ -59,17 +65,14 @@ export default function UserProfileScreen() {
 
         const userData = {
           ...userSnap.data(),
-          avatar: typeof userSnap.data().avatar === "string" 
-            ? userSnap.data().avatar 
+          avatar: typeof userSnap.data().avatar === "string"
+            ? userSnap.data().avatar
             : DEFAULT_AVATAR,
         };
 
         setUserProfile(userData);
 
         // Check if current user has blocked this user
-        const currentUserDocRef = doc(db, "users", currentUserId);
-        const currentUserSnap = await getDoc(currentUserDocRef);
-        
         if (currentUserSnap.exists()) {
           const blockedUsers = currentUserSnap.data().blockedUsers || [];
           setIsBlocked(blockedUsers.includes(userId));
@@ -151,15 +154,16 @@ export default function UserProfileScreen() {
         // Show alert with ride information using formatted locations
         const ridesList = sharedRides.map(ride => formatRideLocation(ride)).join("\n");
         
-        showMenu({
-          title: "Shared Rides Found",
-          message: `You and ${userProfile?.first_name || userProfile?.username || 'this user'} are both members of ${sharedRides.length} ride(s):\n\n${ridesList}\n\nWould you like to leave these rides before blocking this user?`,
-          onCancel: () => setIsBlocking(false),
-          options: [
-            { label: "Block Only", destructive: true, onPress: () => proceedWithBlock(false, []) },
-            { label: "Leave Rides & Block", destructive: true, onPress: () => proceedWithBlock(true, sharedRides) },
+        Alert.alert(
+          "Shared Rides Found",
+          `You and ${userProfile?.first_name || userProfile?.username || 'this user'} are both members of ${sharedRides.length} ride(s):\n\n${ridesList}\n\nWould you like to leave these rides before blocking this user?`,
+          [
+            { text: "Block Only", style: "destructive", onPress: () => proceedWithBlock(false, []) },
+            { text: "Leave Rides & Block", style: "destructive", onPress: () => proceedWithBlock(true, sharedRides) },
+            { text: "Cancel", style: "cancel", onPress: () => setIsBlocking(false) },
           ],
-        });
+          { onDismiss: () => setIsBlocking(false) },
+        );
       } else {
         // No shared rides, proceed with normal block confirmation
         const ok = await confirm({

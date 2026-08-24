@@ -117,30 +117,39 @@ export default function ChatsScreen() {
         const active: any[] = [];
         const archived: any[] = [];
 
-        for (const docSnap of rideSnap.docs) {
-          const ride = docSnap.data();
-          const rideId = docSnap.id;
+        // Build every ride's group data concurrently instead of awaiting one
+        // ride (member lookups + unread check) at a time — with N rides this
+        // cuts wait time from N×latency to ~1×latency.
+        const groups = await Promise.all(
+          rideSnap.docs.map(async (docSnap) => {
+            const ride = docSnap.data();
+            const rideId = docSnap.id;
 
-          const group: any = {
-            id: rideId,
-            from: ride.from ?? "Unknown",
-            to: ride.to ?? "Unknown",
-            members: [] as any[],
-            joinedAt: (ride.createdAt as any)?.toMillis() || 0,
-            archived: ride.archived ?? false,
-            date: ride.date ?? "",
-            time: ride.time ?? "",
-            hasUnread: false,
-          };
+            const group: any = {
+              id: rideId,
+              from: ride.from ?? "Unknown",
+              to: ride.to ?? "Unknown",
+              members: [] as any[],
+              joinedAt: (ride.createdAt as any)?.toMillis() || 0,
+              archived: ride.archived ?? false,
+              date: ride.date ?? "",
+              time: ride.time ?? "",
+              hasUnread: false,
+            };
 
-          const ids: string[] = ride.memberIds || [];
-          const [members, hasUnread] = await Promise.all([
-            Promise.all(ids.map((uid) => getUserData(uid))),
-            getUnreadStatus(rideId),
-          ]);
-          group.members = members.filter(Boolean);
-          group.hasUnread = hasUnread;
+            const ids: string[] = ride.memberIds || [];
+            const [members, hasUnread] = await Promise.all([
+              Promise.all(ids.map((uid) => getUserData(uid))),
+              getUnreadStatus(rideId),
+            ]);
+            group.members = members.filter(Boolean);
+            group.hasUnread = hasUnread;
 
+            return group;
+          }),
+        );
+
+        for (const group of groups) {
           if (group.archived) {
             archived.push(group);
           } else {

@@ -55,9 +55,18 @@ export const usePushNotifications = (options: Options = {}): PushNotificationSta
       console.warn("Expo projectId is missing - push token may not register properly.");
     }
 
-    const token = await Notifications.getExpoPushTokenAsync({
-      projectId: projectId ?? undefined,
-    });
+    let token: Notifications.ExpoPushToken;
+    try {
+      token = await Notifications.getExpoPushTokenAsync({
+        projectId: projectId ?? undefined,
+      });
+    } catch (error) {
+      // Registration can fail even with permission granted — e.g. a build
+      // signed without the Push Notifications entitlement/capability. Don't
+      // let that surface as an uncaught rejection.
+      console.warn("Failed to get Expo push token:", error);
+      return undefined;
+    }
 
     console.log("Expo Push Token:", token.data);
 

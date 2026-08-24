@@ -2,7 +2,7 @@ import { darkTheme } from "@/constants/theme";
 // app/_layout.tsx
 import { ACCENT } from "@/constants/Colors";
 import RideFeedbackModal from "@/components/RideFeedbackModal";
-import { DialogHost } from "@/components/ui/Dialog";
+import { DialogHost, MODAL_DISMISS_MS } from "@/components/ui/Dialog";
 import "@/global.css";
 import { config } from "@/gluestack-ui.config";
 import { db } from "@/services/firebaseConfig";
@@ -379,14 +379,25 @@ function RootLayoutContent() {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as any;
       if (data?.type === "chat_message" && data?.rideId) {
-        router.push({
-          pathname: "/(stack)/ride/[id]/chat",
-          params: { id: String(data.rideId) },
-        });
+        const navigate = () =>
+          router.push({
+            pathname: "/(stack)/ride/[id]/chat",
+            params: { id: String(data.rideId) },
+          });
+        // If the ride-feedback Modal is up, close it first and wait for its
+        // native dismiss to finish — navigating while it's still presented
+        // can hang the app.
+        if (showFeedback) {
+          setShowFeedback(false);
+          setCurrentRide(null);
+          setTimeout(navigate, MODAL_DISMISS_MS);
+        } else {
+          navigate();
+        }
       }
     });
     return () => sub.remove();
-  }, [router]);
+  }, [router, showFeedback]);
 
   if (!loaded || !isAuthLoaded || isLoading) {
     return (

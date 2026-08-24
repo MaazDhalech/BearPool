@@ -28,7 +28,7 @@ import {
 } from "firebase/firestore";
 import { useEffect, useRef, useState } from "react";
 import { View } from "react-native";
-import { toast } from "@/components/ui/Dialog";
+import { toast, MODAL_DISMISS_MS } from "@/components/ui/Dialog";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NavHeader } from "@/components/ui/NavHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -206,8 +206,10 @@ export default function RideDetailsPage() {
       console.error("Notification prompt failed", error);
     } finally {
       setShowNotifPrompt(false);
-      pendingNavRef.current?.();
+      const nav = pendingNavRef.current;
       pendingNavRef.current = null;
+      // Defer nav until the Modal's native dismiss finishes, or the router push can hang.
+      if (nav) setTimeout(nav, MODAL_DISMISS_MS);
     }
   };
 
@@ -218,8 +220,10 @@ export default function RideDetailsPage() {
       console.error("Failed to mark notification prompt dismissed", error);
     } finally {
       setShowNotifPrompt(false);
-      pendingNavRef.current?.();
+      const nav = pendingNavRef.current;
       pendingNavRef.current = null;
+      // Defer nav until the Modal's native dismiss finishes, or the router push can hang.
+      if (nav) setTimeout(nav, MODAL_DISMISS_MS);
     }
   };
 
@@ -281,28 +285,33 @@ export default function RideDetailsPage() {
     const fetchMembers = async () => {
       if (!ride) return;
 
-      const fetched: Member[] = [];
-      for (const uid of ride.memberIds) {
-        try {
-          const userDoc = await getDoc(doc(db, "users", uid));
-          if (userDoc.exists()) {
-            const data = userDoc.data();
-            const fullName =
-              [data.first_name, data.last_name].filter(Boolean).join(" ") ||
-              data.username ||
-              "Anonymous";
-            fetched.push({
-              id: uid,
-              name: fullName,
-              avatar: data.avatar || initialsAvatarUrl(data.first_name, data.last_name),
-            });
-          } else {
-            fetched.push({ id: uid, name: "Unknown User", avatar: initialsAvatarUrl() });
-          }
-        } catch (err) {
-          console.error("Failed to fetch member", uid, err);
-        }
-      }
+      // Fetch every member doc concurrently instead of one round-trip per
+      // uid — with N members this cuts wait time from N×latency to ~1×latency.
+      const fetched = (
+        await Promise.all(
+          ride.memberIds.map(async (uid): Promise<Member | null> => {
+            try {
+              const userDoc = await getDoc(doc(db, "users", uid));
+              if (userDoc.exists()) {
+                const data = userDoc.data();
+                const fullName =
+                  [data.first_name, data.last_name].filter(Boolean).join(" ") ||
+                  data.username ||
+                  "Anonymous";
+                return {
+                  id: uid,
+                  name: fullName,
+                  avatar: data.avatar || initialsAvatarUrl(data.first_name, data.last_name),
+                };
+              }
+              return { id: uid, name: "Unknown User", avatar: initialsAvatarUrl() };
+            } catch (err) {
+              console.error("Failed to fetch member", uid, err);
+              return null;
+            }
+          }),
+        )
+      ).filter((m): m is Member => m !== null);
 
       setMembers(fetched);
     };

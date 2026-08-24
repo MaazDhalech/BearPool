@@ -5,7 +5,7 @@ import { darkTheme } from "@/constants/theme";
 
 import { ACCENT } from "@/constants/Colors";
 import { auth, db } from "@/services/firebaseConfig";
-import { confirm, prompt, toast } from "@/components/ui/Dialog";
+import { confirm, MODAL_DISMISS_MS, prompt, toast } from "@/components/ui/Dialog";
 import { Ionicons } from "@expo/vector-icons";
 import {
   GoogleSignin,
@@ -299,6 +299,9 @@ export default function Login() {
             confirmText: "Link Account",
           })
         ) {
+          // Wait for the confirm dialog's Modal to actually finish
+          // dismissing — presenting another Modal before that hangs the app.
+          await new Promise((r) => setTimeout(r, MODAL_DISMISS_MS));
           const password = await prompt({
             title: "Enter Password",
             message: "Your current BearPool password:",

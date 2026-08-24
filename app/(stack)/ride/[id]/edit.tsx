@@ -12,6 +12,7 @@ import { deleteDoc, doc, getDoc, updateDoc } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -23,7 +24,7 @@ import {
   View,
 } from "react-native";
 import { NavHeader } from "@/components/ui/NavHeader";
-import { confirm, toast } from "@/components/ui/Dialog";
+import { confirm, MODAL_DISMISS_MS, toast } from "@/components/ui/Dialog";
 
 import * as filter from "leo-profanity";
 
@@ -361,7 +362,9 @@ export default function EditRideScreen() {
         destructive: true,
       })
     ) {
-      setShowDeleteModal(true);
+      // Wait for the confirm dialog's Modal to actually finish dismissing —
+      // presenting another Modal before that hangs the app.
+      setTimeout(() => setShowDeleteModal(true), MODAL_DISMISS_MS);
     }
   };
 
@@ -756,6 +759,7 @@ export default function EditRideScreen() {
         animationType="slide"
         onRequestClose={() => !deleting && setShowDeleteModal(false)}
       >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View
           style={{
             flex: 1,
@@ -772,7 +776,7 @@ export default function EditRideScreen() {
               maxHeight: "80%",
             }}
           >
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <Text
                 style={{
                   color: darkTheme.textPrimary,
@@ -958,6 +962,7 @@ export default function EditRideScreen() {
             </ScrollView>
           </View>
         </View>
+        </TouchableWithoutFeedback>
       </Modal>
 
       {/* Android Date Picker Modal */}
