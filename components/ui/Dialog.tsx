@@ -5,6 +5,7 @@ import { TYPE } from "@/constants/Typography";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import {
+  Keyboard,
   Modal,
   StyleSheet,
   Text,
@@ -16,10 +17,11 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 /**
- * App-wide imperative dialogs + toasts, replacing native Alert.alert.
+ * App-wide imperative dialogs + toasts. Confirm/prompt use a custom Modal;
+ * multi-option pickers go through the native Alert.alert instead (see
+ * ContextMenu.tsx / viewProfile.tsx / group-settings.tsx for examples).
  *
  *   await confirm({ title, message, confirmText, destructive })  // -> boolean
- *   showMenu({ title, options: [{ label, destructive, onPress }] })
  *   toast("Saved", { type: "success" })
  *
  * Mount <DialogHost /> once near the app root.
@@ -32,8 +34,6 @@ type ConfirmOpts = {
   cancelText?: string;
   destructive?: boolean;
 };
-type MenuOption = { label: string; destructive?: boolean; onPress?: () => void };
-type MenuOpts = { title?: string; message?: string; options: MenuOption[]; onCancel?: () => void };
 type PromptOpts = {
   title?: string;
   message?: string;
@@ -46,12 +46,18 @@ type ToastItem = { id: number; message: string; type: ToastType };
 
 type State = {
   confirm: (ConfirmOpts & { resolve: (v: boolean) => void }) | null;
-  menu: MenuOpts | null;
   prompt: (PromptOpts & { resolve: (v: string | null) => void }) | null;
   toasts: ToastItem[];
 };
 
-let state: State = { confirm: null, menu: null, prompt: null, toasts: [] };
+// RN's Modal presents/dismisses via a real native transition (not just a JS
+// state flip) that takes real wall-clock time — roughly this long on both
+// platforms. Presenting a new Modal before the previous one has actually
+// finished dismissing natively hangs the app, so any code that closes one
+// dialog and opens another must wait at least this long first.
+export const MODAL_DISMISS_MS = 350;
+
+let state: State = { confirm: null, prompt: null, toasts: [] };
 const listeners = new Set<() => void>();
 const emit = () => {
   state = { ...state };
@@ -68,11 +74,6 @@ export function confirm(opts: ConfirmOpts): Promise<boolean> {
     state.confirm = { ...opts, resolve };
     emit();
   });
-}
-
-export function showMenu(opts: MenuOpts) {
-  state.menu = opts;
-  emit();
 }
 
 export function prompt(opts: PromptOpts): Promise<string | null> {
@@ -113,16 +114,6 @@ export function DialogHost() {
     state.confirm = null;
     emit();
     c?.resolve(result);
-  };
-  const closeMenu = () => {
-    state.menu = null;
-    emit();
-  };
-  const dismissMenu = () => {
-    const m = s.menu;
-    state.menu = null;
-    emit();
-    m?.onCancel?.();
   };
   const closePrompt = (value: string | null) => {
     const p = s.prompt;
@@ -185,46 +176,6 @@ export function DialogHost() {
         </View>
       </Modal>
 
-      {/* Action menu (bottom sheet) */}
-      <Modal
-        visible={!!s.menu}
-        transparent
-        animationType="slide"
-        presentationStyle="overFullScreen"
-        statusBarTranslucent
-        onRequestClose={dismissMenu}
-      >
-        <TouchableWithoutFeedback onPress={dismissMenu}>
-          <View style={styles.menuBackdrop}>
-            <TouchableWithoutFeedback onPress={() => {}}>
-              <View style={[styles.menuSheet, { paddingBottom: Math.max(insets.bottom, SPACE.md) + SPACE.sm }]}>
-                <View style={styles.grabber} />
-                {s.menu?.title ? <Text style={styles.menuTitle}>{s.menu.title}</Text> : null}
-                {s.menu?.message ? <Text style={styles.menuMessage}>{s.menu.message}</Text> : null}
-                {s.menu?.options.map((opt, i) => (
-                  <TouchableOpacity
-                    key={i}
-                    activeOpacity={0.7}
-                    style={styles.menuItem}
-                    onPress={() => {
-                      closeMenu();
-                      opt.onPress?.();
-                    }}
-                  >
-                    <Text style={[styles.menuItemText, opt.destructive && { color: t.danger }]}>
-                      {opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-                <TouchableOpacity activeOpacity={0.7} style={styles.menuItem} onPress={dismissMenu}>
-                  <Text style={[styles.menuItemText, { color: t.textSecondary }]}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
-
       {/* Prompt (text input) */}
       <Modal
         visible={!!s.prompt}
@@ -234,6 +185,7 @@ export function DialogHost() {
         statusBarTranslucent
         onRequestClose={() => closePrompt(null)}
       >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.backdrop}>
           <View style={styles.card}>
             {s.prompt?.title ? <Text style={styles.title}>{s.prompt.title}</Text> : null}
@@ -265,6 +217,7 @@ export function DialogHost() {
             </View>
           </View>
         </View>
+        </TouchableWithoutFeedback>
       </Modal>
     </>
   );
@@ -320,12 +273,4 @@ const styles = StyleSheet.create({
   btnPrimaryText: { color: t.onAccent, fontSize: TYPE.size.body, fontWeight: TYPE.weight.semibold },
   btnDanger: { backgroundColor: "#3a1f1f" },
   btnDangerText: { color: t.danger, fontSize: TYPE.size.body, fontWeight: TYPE.weight.semibold },
-
-  menuBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" },
-  menuSheet: { backgroundColor: t.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: SPACE.sm },
-  grabber: { alignSelf: "center", width: 40, height: 5, borderRadius: 3, backgroundColor: "#3a3a3a", marginBottom: SPACE.sm },
-  menuTitle: { color: t.textPrimary, fontSize: TYPE.size.body, fontWeight: TYPE.weight.bold, textAlign: "center", paddingHorizontal: SPACE.lg },
-  menuMessage: { color: t.textSecondary, fontSize: TYPE.size.label, textAlign: "center", paddingHorizontal: SPACE.lg, marginTop: 4 },
-  menuItem: { paddingVertical: SPACE.md, paddingHorizontal: SPACE.lg, alignItems: "center" },
-  menuItemText: { color: t.textPrimary, fontSize: TYPE.size.body, fontWeight: "500" },
 });

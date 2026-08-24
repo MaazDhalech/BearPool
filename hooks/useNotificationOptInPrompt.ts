@@ -147,9 +147,17 @@ export const useNotificationOptInPrompt = (userId?: string | null) => {
       }
 
       const projectId = getProjectId();
-      const token = await Notifications.getExpoPushTokenAsync(
-        projectId ? { projectId } : undefined
-      );
+      let token: Notifications.ExpoPushToken;
+      try {
+        token = await Notifications.getExpoPushTokenAsync(
+          projectId ? { projectId } : undefined
+        );
+      } catch (error) {
+        // Registration can fail even with permission granted — e.g. a build
+        // signed without the Push Notifications entitlement/capability.
+        console.warn("Failed to get Expo push token:", error);
+        return null;
+      }
 
       const deviceKey =
         Device.osInternalBuildId ||

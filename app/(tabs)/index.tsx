@@ -233,31 +233,24 @@ export default function HomeScreen() {
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const didInitBlockedRef = useRef(false);
 
-  const fetchUserGender = async () => {
+  // Gender + blocked-users both live on the same "users/{userId}" doc, and
+  // admin status comes from an independent Auth custom claim check, so fetch
+  // all three concurrently instead of reading the same doc twice in series.
+  const fetchUserGenderAndBlocked = async () => {
     if (!userId) return;
     try {
-      const userDoc = await getDoc(doc(db, "users", userId));
+      const [userDoc, adminStatus] = await Promise.all([
+        getDoc(doc(db, "users", userId)),
+        checkIsAdmin(),
+      ]);
       if (userDoc.exists()) {
         const data = userDoc.data();
         setUserGender(data.gender || null);
-      }
-      // Admin status comes from the Auth custom claim, not the Firestore field.
-      setIsAdmin(await checkIsAdmin());
-    } catch (err) {
-      console.error("Error fetching user gender:", err);
-    }
-  };
-
-  const fetchBlockedUsers = async () => {
-    if (!userId) return;
-    try {
-      const userDoc = await getDoc(doc(db, "users", userId));
-      if (userDoc.exists()) {
-        const data = userDoc.data();
         setBlockedUsers(data.blockedUsers || []);
       }
+      setIsAdmin(adminStatus);
     } catch (err) {
-      console.error("Error fetching blocked users:", err);
+      console.error("Error fetching user gender/blocked users:", err);
     }
   };
 
@@ -277,32 +270,36 @@ export default function HomeScreen() {
       }
     });
 
-    for (const uid of uidsToFetch) {
-      try {
-        const userDoc = await getDoc(doc(db, "users", uid));
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          usersData[uid] = {
-            id: uid,
-            avatar: data.avatar || data.profileImage || DEFAULT_AVATAR,
-            gender: data.gender || undefined,
-          };
-        } else {
+    // Fire all member-doc reads concurrently instead of one round-trip per
+    // uid — with N members this cuts wait time from N×latency to ~1×latency.
+    await Promise.all(
+      uidsToFetch.map(async (uid) => {
+        try {
+          const userDoc = await getDoc(doc(db, "users", uid));
+          if (userDoc.exists()) {
+            const data = userDoc.data();
+            usersData[uid] = {
+              id: uid,
+              avatar: data.avatar || data.profileImage || DEFAULT_AVATAR,
+              gender: data.gender || undefined,
+            };
+          } else {
+            usersData[uid] = {
+              id: uid,
+              avatar: DEFAULT_AVATAR,
+              gender: undefined,
+            };
+          }
+        } catch (err) {
+          console.error(`Error fetching user ${uid}:`, err);
           usersData[uid] = {
             id: uid,
             avatar: DEFAULT_AVATAR,
             gender: undefined,
           };
         }
-      } catch (err) {
-        console.error(`Error fetching user ${uid}:`, err);
-        usersData[uid] = {
-          id: uid,
-          avatar: DEFAULT_AVATAR,
-          gender: undefined,
-        };
-      }
-    }
+      }),
+    );
 
     setUsers((prev) => ({ ...prev, ...usersData }));
   };
@@ -434,8 +431,7 @@ export default function HomeScreen() {
 
   useEffect(() => {
     const initializeData = async () => {
-      await fetchUserGender();
-      await fetchBlockedUsers();
+      await fetchUserGenderAndBlocked();
       setupRealTimeListener();
     };
 
@@ -481,9 +477,7 @@ export default function HomeScreen() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchUserGender();
-    await fetchBlockedUsers();
-    await fetchRidesManually();
+    await Promise.all([fetchUserGenderAndBlocked(), fetchRidesManually()]);
     setRefreshing(false);
   };
 

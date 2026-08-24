@@ -1,6 +1,7 @@
 import { darkTheme } from "@/constants/theme";
 import { SPACE } from "@/constants/Spacing";
 import { TYPE } from "@/constants/Typography";
+import { MODAL_DISMISS_MS } from "@/components/ui/Dialog";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
@@ -167,7 +168,9 @@ export function MessageMenu({
                 key={a.key}
                 onPress={() => {
                   close();
-                  a.onPress();
+                  // Action may navigate or open another modal (e.g. Report) —
+                  // defer until this Modal's native dismiss finishes.
+                  setTimeout(a.onPress, MODAL_DISMISS_MS);
                 }}
                 style={({ pressed }) => [
                   styles.actionRow,

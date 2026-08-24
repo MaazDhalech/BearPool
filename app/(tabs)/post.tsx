@@ -3,7 +3,7 @@ import { ACCENT } from "@/constants/Colors";
 import { TYPE } from "@/constants/Typography";
 import { SPACE } from "@/constants/Spacing";
 import { NotificationOptInModal } from "@/components/NotificationOptInModal";
-import { toast } from "@/components/ui/Dialog";
+import { MODAL_DISMISS_MS, toast } from "@/components/ui/Dialog";
 import { useNotificationOptInPrompt } from "@/hooks/useNotificationOptInPrompt";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { db } from "@/services/firebaseConfig";
@@ -35,6 +35,7 @@ import {
 } from "firebase/firestore";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -277,6 +278,8 @@ export default function PostScreen() {
 
   // === Submit ride ===
   const handleSubmit = async () => {
+    Keyboard.dismiss();
+
     if (!from || !to || !seats) {
       toast("Please fill out all required fields", { type: "error" });
       return;
@@ -352,13 +355,32 @@ export default function PostScreen() {
   // Handle navigation after success
   const handleGoToHome = () => {
     setShowSuccessPopup(false);
-    router.replace("/(tabs)");
+    // Wait for the success popup's Modal to actually finish dismissing —
+    // navigating while it's still closing makes the transition look broken.
+    setTimeout(() => router.replace("/(tabs)"), MODAL_DISMISS_MS);
   };
 
   const handleGoToChat = () => {
     setShowSuccessPopup(false);
-    router.replace("/(tabs)/chats");
+    const rideId = lastRideId;
+    setTimeout(() => {
+      if (rideId) {
+        router.replace({ pathname: "/(stack)/ride/[id]/chat", params: { id: rideId } });
+      } else {
+        router.replace("/(tabs)/chats");
+      }
+    }, MODAL_DISMISS_MS);
   };
+
+  // Auto-route to the new ride's chat a couple seconds after posting, so the
+  // user isn't stuck waiting on a popup tap to get where they're going.
+  // Manually tapping either button still cancels this.
+  useEffect(() => {
+    if (!showSuccessPopup) return;
+    const timer = setTimeout(handleGoToChat, 2500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showSuccessPopup]);
 
   // === Real-time input filtering ===
   const handleTextChange = (
@@ -396,8 +418,11 @@ export default function PostScreen() {
       console.error("Notification prompt failed", error);
     } finally {
       setShowNotifPrompt(false);
-      pendingSuccessRef.current?.();
+      // Wait for the notif-prompt Modal to actually finish dismissing —
+      // presenting the success popup Modal before that hangs the app.
+      const runPendingSuccess = pendingSuccessRef.current;
       pendingSuccessRef.current = null;
+      if (runPendingSuccess) setTimeout(runPendingSuccess, MODAL_DISMISS_MS);
     }
   };
 
@@ -408,8 +433,9 @@ export default function PostScreen() {
       console.error("Failed to mark notification prompt dismissed", error);
     } finally {
       setShowNotifPrompt(false);
-      pendingSuccessRef.current?.();
+      const runPendingSuccess = pendingSuccessRef.current;
       pendingSuccessRef.current = null;
+      if (runPendingSuccess) setTimeout(runPendingSuccess, MODAL_DISMISS_MS);
     }
   };
 
@@ -852,7 +878,7 @@ export default function PostScreen() {
                         fontSize: 16,
                       }}
                     >
-                      View Chats
+                      View Chat
                     </Text>
                   </TouchableOpacity>
                 </View>

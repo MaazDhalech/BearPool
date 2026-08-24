@@ -1,11 +1,10 @@
 import { darkTheme } from "@/constants/theme";
 import { SPACE } from "@/constants/Spacing";
 import { TYPE } from "@/constants/Typography";
-import { showMenu } from "@/components/ui/Dialog";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React from "react";
-import { Platform, Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from "react-native";
+import { Alert, Platform, Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from "react-native";
 
 /**
  * Native iOS context menus (UIMenu) with a graceful fallback.
@@ -178,7 +177,7 @@ export function ChatMessageMenu({
 // ── Filter dropdown ─────────────────────────────────────────────────────────
 // A labelled chip that opens a native iOS dropdown (ContextMenuButton, tap to
 // open) to pick one option; the current value shows a checkmark. On Android it
-// falls back to the in-app action sheet (showMenu).
+// falls back to the native Alert.alert.
 // `label` shows in the dropdown menu; `chipLabel` (optional) is the shorter text
 // shown on the collapsed chip so a long option doesn't overflow the row.
 export type DropdownOption = { key: string; label: string; chipLabel?: string };
@@ -229,10 +228,14 @@ export function FilterDropdown({
   return (
     <Pressable
       onPress={() =>
-        showMenu({
-          title,
-          options: options.map((o) => ({ label: o.label, onPress: () => onSelect(o.key) })),
-        })
+        Alert.alert(
+          title ?? "",
+          undefined,
+          [
+            ...options.map((o) => ({ text: o.label, onPress: () => onSelect(o.key) })),
+            { text: "Cancel", style: "cancel" as const },
+          ],
+        )
       }
     >
       {chip}

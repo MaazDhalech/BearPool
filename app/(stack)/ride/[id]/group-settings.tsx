@@ -31,9 +31,18 @@ import {
 } from "firebase/firestore";
 import { Sheet, SheetAction, SHEET_DESTRUCTIVE } from "@/components/ui/Sheet";
 import { ContextMenu, type MenuAction } from "@/components/ui/ContextMenu";
-import { useEffect, useState } from "react";
-import { ActivityIndicator, Modal, TextInput, TouchableOpacity, View } from "react-native";
-import { confirm, showMenu, toast } from "@/components/ui/Dialog";
+import { useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Keyboard,
+  Modal,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
+} from "react-native";
+import { confirm, MODAL_DISMISS_MS, toast } from "@/components/ui/Dialog";
 import { NavHeader } from "@/components/ui/NavHeader";
 
 const DEFAULT_AVATAR =
@@ -59,6 +68,8 @@ export default function GroupSettings() {
   const [deletionReason, setDeletionReason] = useState("");
   const [customReason, setCustomReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [leavingGroup, setLeavingGroup] = useState(false);
+  const scrollViewRef = useRef<any>(null);
 
   // Kick modal states
   const [showKickModal, setShowKickModal] = useState(false);
@@ -102,10 +113,16 @@ export default function GroupSettings() {
       setRide(rideData);
 
       const memberIds: string[] = rideData.memberIds || [];
-      const usersData: User[] = [];
 
-      for (const uid of memberIds) {
-        const userDoc = await getDoc(doc(db, "users", uid));
+      // Fetch all member profiles concurrently instead of one round-trip at
+      // a time — with N members this cut load time from ~N×latency to ~1×.
+      const memberDocs = await Promise.all(
+        memberIds.map((uid) => getDoc(doc(db, "users", uid))),
+      );
+
+      const usersData: User[] = [];
+      memberIds.forEach((uid, i) => {
+        const userDoc = memberDocs[i];
         if (userDoc.exists()) {
           const data = userDoc.data();
           usersData.push({
@@ -125,7 +142,7 @@ export default function GroupSettings() {
             avatar: DEFAULT_AVATAR,
           });
         }
-      }
+      });
 
       setUsers(usersData);
       setLoading(false);
@@ -488,80 +505,53 @@ This ride has been permanently deleted from the system.
     proceedWithDeletion(finalReason);
   };
 
+  // Leave Group button is only disabled when the host is the sole member
+  // (they must use Delete Ride instead — there's no one to hand off to).
   const handleLeaveGroup = async () => {
-    if (!rideId || !user?.uid) return;
+    if (!rideId || !user?.uid || leavingGroup) return;
 
-    const isHost = user?.uid === ride.hostId;
-    const otherMembers = users.filter((u) => u.id !== user?.uid);
-
-    // If host is trying to leave and there are other members, show assign host options
+    // Host with other members: they must hand off host before leaving.
+    // Uses the native Alert.alert (the OS's own alert, not a React Native
+    // <Modal>) instead of a button-per-member list — a single "Host Options"
+    // action just scrolls up to the member list, where they can long-press
+    // a member and pick "Make Host".
     if (isHost && otherMembers.length > 0) {
-      showMenu({
-        title: "Assign New Host",
-        message: "You must assign a new host before leaving the ride.",
-        options: [
+      Alert.alert(
+        "Assign New Host",
+        "You must assign a new host before you can leave this ride.",
+        [
           {
-            label: "Choose New Host",
-            onPress: () => {
-              showMenu({
-                title: "Select New Host",
-                message: "Choose who will be the new host:",
-                options: otherMembers.map((member) => ({
-                  label: member.name || "Member",
-                  onPress: () => handleAssignHost(member.id),
-                })),
-              });
-            },
+            text: "Host Options",
+            onPress: () => scrollViewRef.current?.scrollTo({ y: 0, animated: true }),
           },
-          // Delete ride instead
-          { label: "Delete Ride", destructive: true, onPress: () => handleDeleteRide(false) },
+          { text: "Cancel", style: "cancel" },
         ],
-      });
+      );
       return;
     }
 
-    // If host is trying to leave and no other members, or if regular member is leaving
     const ok = await confirm({
       title: "Leave Group",
-      message:
-        isHost && otherMembers.length === 0
-          ? "You're the last member. Leaving will delete this ride."
-          : "Are you sure you want to leave this ride?",
-      confirmText: isHost && otherMembers.length === 0 ? "Delete Ride" : "Leave",
+      message: "Are you sure you want to leave this ride?",
+      confirmText: "Leave",
       destructive: true,
     });
     if (!ok) return;
 
+    setLeavingGroup(true);
     try {
-      // If host is the only member, delete the ride instead of just leaving
-      if (isHost && otherMembers.length === 0) {
-        handleDeleteRide(true); // Skip feedback when deleting through leave
-        return;
-      }
-
-      // Regular member leaving or host leaving after assigning new host
-      const rideRef = doc(db, "rides", String(rideId));
-
-      // First get current ride data
-      const rideSnap = await getDoc(rideRef);
-      if (!rideSnap.exists()) throw new Error("Ride not found");
-
-      const currentSeats = rideSnap.data().seats || 0;
-      console.log("Current seats before update:", currentSeats);
-
-      await updateDoc(rideRef, {
+      await updateDoc(doc(db, "rides", String(rideId)), {
         memberIds: arrayRemove(user.uid),
         seats: increment(1),
       });
 
-      // Verify update
-      const updatedSnap = await getDoc(rideRef);
-      console.log("Seats after update:", updatedSnap.data()?.seats);
-
+      // Same navigation this screen's own Delete Ride flow already uses
+      // (see proceedWithDeletion below) — proven to work here.
       router.dismissTo("/(tabs)/chats");
     } catch (error) {
       console.error("Error leaving group:", error);
-      toast("Failed to leave group", { type: "error" });
+      toast("Failed to leave group. Please try again.", { type: "error" });
+      setLeavingGroup(false);
     }
   };
 
@@ -590,13 +580,16 @@ This ride has been permanently deleted from the system.
   const memberIds: string[] = ride.memberIds ?? [];
   const isHost = user?.uid === ride.hostId || (!ride.hostId && memberIds.includes(user?.uid ?? ""));
   const otherMembers = users.filter((u) => u.id !== user?.uid);
-  const hostCanLeave = !isHost || otherMembers.length === 0;
+  // Only the sole-member host is blocked — Delete Ride is the correct
+  // action there (no one to hand host off to). A host with other members
+  // can still tap Leave Group; it walks them through assigning a new host.
+  const canLeaveGroup = !isHost || otherMembers.length > 0;
 
   return (
     <Box flex={1} bg={darkTheme.bg}>
       <NavHeader title="Group Settings" />
 
-      <ScrollView px="$4" py="$4" showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollViewRef} px="$4" py="$4" showsVerticalScrollIndicator={false}>
         {loading ? (
           <LoadingState label="Loading members…" />
         ) : (
@@ -690,9 +683,14 @@ This ride has been permanently deleted from the system.
                     <Avatar size="md">
                       <AvatarImage source={{ uri: u.avatar }} />
                     </Avatar>
-                    <VStack flex={1}>
+                    <VStack flex={1} minWidth={0}>
                       <HStack alignItems="center" space="xs">
-                        <Text color={darkTheme.textPrimary} fontWeight="$semibold">
+                        <Text
+                          color={darkTheme.textPrimary}
+                          fontWeight="$semibold"
+                          numberOfLines={1}
+                          flexShrink={1}
+                        >
                           {u.name}
                         </Text>
                         {u.id === user?.uid && (
@@ -701,7 +699,7 @@ This ride has been permanently deleted from the system.
                           </Text>
                         )}
                       </HStack>
-                      <Text color={darkTheme.textMuted} fontSize="$sm">
+                      <Text color={darkTheme.textMuted} fontSize="$sm" numberOfLines={1}>
                         @{u.username}
                       </Text>
                     </VStack>
@@ -713,6 +711,7 @@ This ride has been permanently deleted from the system.
                         px="$2.5"
                         py="$1"
                         borderRadius="$full"
+                        flexShrink={0}
                       >
                         <Ionicons name="star" size={11} color={darkTheme.accent} />
                         <Text color={darkTheme.accent} fontSize="$2xs" fontWeight="$bold">
@@ -740,15 +739,17 @@ This ride has been permanently deleted from the system.
               variant="danger"
               icon="exit-outline"
               label="Leave Group"
+              loading={leavingGroup}
+              disabled={canLeaveGroup && leavingGroup}
               onPress={
-                hostCanLeave
+                canLeaveGroup
                   ? handleLeaveGroup
                   : () =>
-                      toast("You must assign a new host before leaving the ride.", {
+                      toast("You're the only member — use Delete Ride instead.", {
                         type: "error",
                       })
               }
-              style={hostCanLeave ? undefined : { opacity: 0.55 }}
+              style={canLeaveGroup ? undefined : { opacity: 0.55 }}
             />
           </VStack>
         </VStack>
@@ -762,6 +763,7 @@ This ride has been permanently deleted from the system.
         animationType="slide"
         onRequestClose={() => !kickSubmitting && setShowKickModal(false)}
       >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View
           style={{
             flex: 1,
@@ -778,7 +780,7 @@ This ride has been permanently deleted from the system.
               maxHeight: "80%",
             }}
           >
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <Heading color={darkTheme.textPrimary} size="lg" mb={2}>
                 Remove Member
               </Heading>
@@ -894,6 +896,7 @@ This ride has been permanently deleted from the system.
             </ScrollView>
           </View>
         </View>
+        </TouchableWithoutFeedback>
       </Modal>
 
       {/* Deletion Feedback Modal */}
@@ -903,6 +906,7 @@ This ride has been permanently deleted from the system.
         animationType="slide"
         onRequestClose={() => !submitting && setShowDeleteModal(false)}
       >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View
           style={{
             flex: 1,
@@ -919,7 +923,7 @@ This ride has been permanently deleted from the system.
               maxHeight: "80%",
             }}
           >
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <Heading color={darkTheme.textPrimary} size="lg" mb={2}>
                 Delete Ride
               </Heading>
@@ -1038,6 +1042,7 @@ This ride has been permanently deleted from the system.
             </ScrollView>
           </View>
         </View>
+        </TouchableWithoutFeedback>
       </Modal>
 
       {/* User action sheet (long-press a member or tap the menu) */}
@@ -1076,7 +1081,9 @@ This ride has been permanently deleted from the system.
               onPress={() => {
                 const x = actionSheetUser;
                 setActionSheetUser(null);
-                if (x) handleAssignHost(x.id);
+                // Wait for the Sheet's Modal to actually finish dismissing —
+                // opening the confirm dialog before that hangs the app.
+                if (x) setTimeout(() => handleAssignHost(x.id), MODAL_DISMISS_MS);
               }}
             />
             <SheetAction
@@ -1086,7 +1093,7 @@ This ride has been permanently deleted from the system.
               onPress={() => {
                 const x = actionSheetUser;
                 setActionSheetUser(null);
-                if (x) handleKick(x.id);
+                if (x) setTimeout(() => handleKick(x.id), MODAL_DISMISS_MS);
               }}
             />
           </>

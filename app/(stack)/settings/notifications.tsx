@@ -83,6 +83,12 @@ export default function NotificationsScreen() {
           return;
         }
 
+        if (!Device.isDevice) {
+          toast("Push notifications require a physical device.", { type: "error" });
+          setSavingNotif(false);
+          return;
+        }
+
         // Register token
         const projectId = Constants.expoConfig?.extra?.eas?.projectId;
         const token = await Notifications.getExpoPushTokenAsync(

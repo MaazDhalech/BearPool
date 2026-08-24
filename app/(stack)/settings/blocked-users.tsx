@@ -58,18 +58,22 @@ export default function BlockedUsersScreen() {
         return;
       }
 
-      // Fetch blocked users data in batches (Firestore 'in' query limit is 10)
-      const blockedUsersData: BlockedUser[] = [];
+      // Fetch blocked users data in batches (Firestore 'in' query limit is 10).
+      // Run the batch queries concurrently instead of one-at-a-time.
       const batchSize = 10;
-
+      const batches: string[][] = [];
       for (let i = 0; i < blockedUserIds.length; i += batchSize) {
-        const batch = blockedUserIds.slice(i, i + batchSize);
-        const q = query(
-          collection(db, "users"),
-          where("__name__", "in", batch)
-        );
+        batches.push(blockedUserIds.slice(i, i + batchSize));
+      }
 
-        const querySnapshot = await getDocs(q);
+      const batchSnapshots = await Promise.all(
+        batches.map((batch) =>
+          getDocs(query(collection(db, "users"), where("__name__", "in", batch))),
+        ),
+      );
+
+      const blockedUsersData: BlockedUser[] = [];
+      batchSnapshots.forEach((querySnapshot) => {
         querySnapshot.forEach((docSnap) => {
           const data = docSnap.data();
           blockedUsersData.push({
@@ -80,7 +84,7 @@ export default function BlockedUsersScreen() {
             avatar: data.avatar || DEFAULT_AVATAR,
           });
         });
-      }
+      });
 
       setBlockedUsers(blockedUsersData);
     } catch (error) {
