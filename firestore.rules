@@ -2,28 +2,39 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
     function isRideMember(rideId, userId) {
       return exists(/databases/$(database)/documents/rides/$(rideId))
         && userId in get(/databases/$(database)/documents/rides/$(rideId)).data.memberIds;
     }
 
     // ---------------------------------------------------------------------
-    // READS: any signed-in user may read any document EXCEPT adminActions
-    // (the admin audit log, restricted below). This matches the app's
-    // existing behavior — profiles, rides, and chats are all read broadly.
-    // Note: Firestore rules are ADDITIVE (an operation is allowed if ANY
-    // match grants it), so writes are handled per-collection below rather
-    // than with a broad write rule.
+    // READS are granted explicitly, per collection, below.
+    //
+    // There is deliberately NO `match /{document=**} { allow read: ... }`
+    // catch-all here. The previous version of this file used one guarded by
+    // `document[0] != 'adminActions'`, and that silently broke every
+    // collection QUERY in the app: Firestore evaluates `list` against the
+    // query rather than against documents, and it cannot prove a path-based
+    // condition on a *recursive* wildcard holds for every possible result, so
+    // it denies the whole query. Single-document `get`s still passed, which is
+    // why most of the app kept working while the rides feed logged
+    // "Missing or insufficient permissions".
+    //
+    // Rules are ADDITIVE (an operation is allowed if ANY match grants it), so
+    // a broad read grant can never be narrowed by a later `allow read: if
+    // false` — the only way to keep `adminActions` private is to not grant it
+    // in the first place.
     // ---------------------------------------------------------------------
-    match /{document=**} {
-      allow read: if request.auth != null && document[0] != 'adminActions';
-    }
 
     // Admin audit log: written only by the admin web app (via the Admin SDK,
     // which bypasses these rules) and readable only by admins — never by the
     // mobile app's regular signed-in users.
     match /adminActions/{actionId} {
-      allow read: if request.auth != null && request.auth.token.admin == true;
+      allow read: if isSignedIn() && request.auth.token.admin == true;
       allow write: if false;
     }
 
@@ -34,21 +45,29 @@ service cloud.firestore {
     // so no client can self-promote by writing to their own profile.
     // ---------------------------------------------------------------------
     match /users/{userId} {
-      allow create, update: if request.auth != null
+      // get + list: the app reads profiles by id and queries this collection
+      // (blocked-users screen).
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn()
         && request.auth.uid == userId
         && !request.resource.data.keys().hasAny(['isAdmin', 'admin']);
-      allow delete: if request.auth != null && request.auth.uid == userId;
+      allow delete: if isSignedIn() && request.auth.uid == userId;
     }
 
     // ---------------------------------------------------------------------
     // RIDES + group chat: authenticated writes (unchanged behavior).
     // ---------------------------------------------------------------------
     match /rides/{rideId} {
-      allow write: if request.auth != null;
+      // get + list: the feed queries this ordered by createdAt, and the chats
+      // list / feedback prompts query it by memberIds.
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
     }
 
     match /rides/{rideId}/messages/{messageId} {
-      allow write: if request.auth != null;
+      // get + list: the chat screen subscribes to the whole collection.
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
     }
 
     // Post-ride reviews: one doc per rider. A rider may only write their own
@@ -56,7 +75,8 @@ service cloud.firestore {
     // boolean `completed`. Re-submitting overwrites their previous vote; the
     // running aggregate lives on the ride doc (see services/rideReviews.ts).
     match /rides/{rideId}/reviews/{userId} {
-      allow create, update: if request.auth != null
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn()
         && request.auth.uid == userId
         && isRideMember(rideId, request.auth.uid)
         && request.resource.data.rating is int
@@ -66,23 +86,36 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Per-user chat read state: only the owner, and only while they are a
-    // member of the ride. (Stricter than the old catch-all, which let any
-    // signed-in user write anyone's read state.)
+    // Per-user chat read state: readable by any signed-in user (the chat
+    // screen lists the whole collection to render read receipts), writable
+    // only by the owner, and only while they are a member of the ride.
     match /rides/{rideId}/readState/{userId} {
-      allow create, update: if request.auth != null
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn()
         && request.auth.uid == userId
         && isRideMember(rideId, request.auth.uid);
       allow delete: if false;
     }
 
+    // Ephemeral typing indicators: one doc per member, listed by the chat
+    // screen and set/cleared by each member for themselves. This collection
+    // had no rule at all previously, so every typing write was denied (the
+    // client swallows those errors, so the indicator just never appeared).
+    match /rides/{rideId}/typing/{userId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isSignedIn()
+        && request.auth.uid == userId
+        && isRideMember(rideId, request.auth.uid);
+    }
+
     // ---------------------------------------------------------------------
-    // Other client-written collections: authenticated writes (unchanged).
+    // Write-only client collections: the app submits these and never reads
+    // them back (they're consumed by the admin app / Admin SDK).
     // ---------------------------------------------------------------------
-    match /reports/{reportId}      { allow write: if request.auth != null; }
-    match /supportRequests/{docId} { allow write: if request.auth != null; }
-    match /bugReports/{docId}      { allow write: if request.auth != null; }
-    match /rideFeedback/{docId}    { allow write: if request.auth != null; }
+    match /reports/{reportId}      { allow write: if isSignedIn(); }
+    match /supportRequests/{docId} { allow write: if isSignedIn(); }
+    match /bugReports/{docId}      { allow write: if isSignedIn(); }
+    match /rideFeedback/{docId}    { allow write: if isSignedIn(); }
 
     // ---------------------------------------------------------------------
     // USER-TO-USER RATINGS: one doc per (ride, rater, rated) triple.
@@ -93,7 +126,10 @@ service cloud.firestore {
     // and you were actually a member of that ride.
     // ---------------------------------------------------------------------
     match /userRatings/{ratingId} {
-      allow create, update: if request.auth != null
+      // get + list: getUserRatingSummary queries this collection by
+      // ratedUserId to compute a user's average.
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn()
         && request.resource.data.raterId == request.auth.uid
         && request.resource.data.ratedUserId != request.auth.uid
         && request.resource.data.stars is number
@@ -106,6 +142,7 @@ service cloud.firestore {
 
     // App config is read-only to clients (managed via the console / Admin SDK).
     match /config/{docId} {
+      allow read: if isSignedIn();
       allow write: if false;
     }
   }

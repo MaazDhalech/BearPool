@@ -54,6 +54,7 @@ export default function RideFeedbackModal({
   const [completed, setCompleted] = useState<boolean | null>(null);
   const [feedback, setFeedback] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Start each prompt from a blank slate.
   useEffect(() => {
@@ -62,6 +63,7 @@ export default function RideFeedbackModal({
       setCompleted(null);
       setFeedback("");
       setSubmitting(false);
+      setSubmitError(null);
     }
   }, [visible]);
 
@@ -70,6 +72,7 @@ export default function RideFeedbackModal({
   const handleSubmit = async () => {
     if (!rideInfo?.id || !userId || !canSubmit) return;
     setSubmitting(true);
+    setSubmitError(null);
     try {
       await submitRideReview(rideInfo.id, userId, {
         rating,
@@ -81,7 +84,14 @@ export default function RideFeedbackModal({
       onClose();
     } catch (err) {
       console.error("Failed to submit ride review:", err);
-      toast("Couldn't submit your rating. Please try again.", { type: "error" });
+      // Shown inline rather than via toast(): DialogHost renders toasts in the
+      // root view, which a native Modal covers entirely — so a toast fired from
+      // in here is invisible and the failure just looks like a frozen sheet.
+      setSubmitError(
+        (err as { code?: string })?.code === "permission-denied"
+          ? "You don't have permission to review this ride."
+          : "Couldn't submit your rating. Please try again.",
+      );
       setSubmitting(false);
     }
   };
@@ -217,6 +227,19 @@ export default function RideFeedbackModal({
                   >
                     {feedback.length} / {MAX_FEEDBACK_LENGTH}
                   </Text>
+
+                  {submitError ? (
+                    <Text
+                      style={{
+                        color: t.danger,
+                        fontSize: TYPE.size.caption,
+                        marginTop: SPACE.md,
+                        textAlign: "center",
+                      }}
+                    >
+                      {submitError}
+                    </Text>
+                  ) : null}
 
                   {/* Actions */}
                   <View style={{ marginTop: SPACE.xl, gap: SPACE.sm }}>

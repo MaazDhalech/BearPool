@@ -4,6 +4,7 @@ import { TYPE } from "@/constants/Typography";
 import { SPACE } from "@/constants/Spacing";
 import { NotificationOptInModal } from "@/components/NotificationOptInModal";
 import RideFeedbackModal, { type RideFeedbackRide } from "@/components/RideFeedbackModal";
+import RateMembersModal from "@/components/RateMembersModal";
 import { toast } from "@/components/ui/Dialog";
 import { useNotificationOptInPrompt } from "@/hooks/useNotificationOptInPrompt";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -31,7 +32,10 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
   increment,
+  limit,
+  query,
   setDoc,
 } from "firebase/firestore";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -57,10 +61,14 @@ filter.add(["ridehate", "berkeleybully"]);
 const MAX_NOTES_LENGTH = 200;
 
 // TEMP (testing): when true, posting a ride immediately opens the post-ride
-// rating prompt so the UI can be exercised without waiting 30 minutes past the
-// ride's start time. Set to false to restore the real flow (success popup +
-// notification opt-in), which is what ships.
-const TEST_SHOW_FEEDBACK_ON_CREATE = true;
+// rating prompt so the UI can be exercised without waiting for the real
+// trigger (one hour past the ride's startTime — see sendRideReviewReminders in
+// functions/src/index.ts and the prompt in app/_layout.tsx).
+//
+// Leave this false. Flipping it on also seeds RateMembersModal with real user
+// accounts pulled from the users collection, and rating them writes real
+// userRatings docs against those accounts.
+const TEST_SHOW_FEEDBACK_ON_CREATE = false;
 
 export default function PostScreen() {
   const { userId } = useFirebaseAuth();
@@ -91,9 +99,13 @@ export default function PostScreen() {
   // Success popup state
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
 
-  // TEMP (testing): drives the immediate post-create rating prompt.
+  // TEMP (testing): drives the immediate post-create rating prompt, and the
+  // member-rating step chained after it. testMemberIds is seeded with a few real
+  // users so the member modal has someone to rate (a fresh ride is solo).
   const [showTestFeedback, setShowTestFeedback] = useState(false);
   const [testFeedbackRide, setTestFeedbackRide] = useState<RideFeedbackRide | null>(null);
+  const [showTestMembers, setShowTestMembers] = useState(false);
+  const [testMemberIds, setTestMemberIds] = useState<string[]>([]);
   const [lastRideId, setLastRideId] = useState<string | null>(null);
 
   const { shouldPrompt, requestPermission, openSettings, markDismissed } =
@@ -356,6 +368,23 @@ export default function PostScreen() {
       // instead of waiting 30 minutes past the ride's start time. Flip
       // TEST_SHOW_FEEDBACK_ON_CREATE to false to restore the normal flow.
       if (TEST_SHOW_FEEDBACK_ON_CREATE) {
+        // Seed the member-rating step with a few real users (a fresh ride is
+        // solo, so there'd otherwise be no one to rate). The rating rule only
+        // requires the rater — you — to be a ride member, so these users don't
+        // need to be on the ride. NOTE: rating them writes real userRatings docs
+        // against those accounts; delete them (and this test ride) afterward.
+        try {
+          const usersSnap = await getDocs(query(collection(db, "users"), limit(4)));
+          const otherIds = usersSnap.docs
+            .map((d) => d.id)
+            .filter((uid) => uid !== userId)
+            .slice(0, 3);
+          setTestMemberIds(otherIds);
+        } catch (e) {
+          console.warn("Could not seed test members:", e);
+          setTestMemberIds([]);
+        }
+
         setTestFeedbackRide({
           id: rideDocRef.id,
           from: cleanedFrom,
@@ -895,13 +924,24 @@ export default function PostScreen() {
         onClose={handleDismissNotifications}
       />
 
-      {/* TEMP (testing): rating prompt shown right after posting a ride. */}
+      {/* TEMP (testing): rating prompt shown right after posting a ride, then
+          the member-rating step chained after it (matching the real flow). */}
       <RideFeedbackModal
         visible={showTestFeedback}
         rideInfo={testFeedbackRide}
         onClose={() => setShowTestFeedback(false)}
         onRateLater={() => setShowTestFeedback(false)}
-        onFeedbackSubmit={() => setShowTestFeedback(false)}
+        onFeedbackSubmit={() => {
+          // Chain to the member step only if there's someone to rate.
+          if (testMemberIds.length > 0) setShowTestMembers(true);
+        }}
+      />
+      <RateMembersModal
+        visible={showTestMembers}
+        rideId={testFeedbackRide?.id ?? null}
+        memberIds={testMemberIds}
+        currentUserId={userId}
+        onClose={() => setShowTestMembers(false)}
       />
 
       {/* Android Date Picker Modal */}

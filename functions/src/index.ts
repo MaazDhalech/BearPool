@@ -539,3 +539,214 @@ export const checkPushReceipts = onSchedule("every 60 minutes", async () => {
 
   logger.info(`✅ Processed ${Object.keys(receipts).length} receipt(s)`);
 });
+
+/**
+ * Post-ride review reminders.
+ *
+ * One hour after a ride's scheduled `startTime`, every member who hasn't yet
+ * written a review gets a push nudging them to rate it. Tapping the push opens
+ * the review sheet directly (see the `ride_review` handler in app/_layout.tsx);
+ * ignoring it is fine too, because the client re-prompts on next app open for
+ * as long as the ride stays inside REVIEW_REMINDER_WINDOW_MS.
+ *
+ * This is a sweep rather than a per-ride scheduled task so that it stays
+ * correct when a host edits a ride's time: the reminder is derived from
+ * whatever `startTime` currently says, not from a job queued at creation.
+ * The 15-minute tick means delivery lands 60–75 minutes past start.
+ */
+const REVIEW_REMINDER_DELAY_MS = 60 * 60 * 1000;
+const REVIEW_REMINDER_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const REVIEW_SWEEP_LIMIT = 200;
+
+/**
+ * Builds the review-reminder pushes for a single ride: every member who hasn't
+ * reviewed it, hasn't disabled notifications, and has at least one registered
+ * token. Returns an empty array when there's nobody left to tell.
+ */
+const buildReviewReminderMessages = async (
+  rideDoc: admin.firestore.DocumentSnapshot
+): Promise<PushMessage[]> => {
+  const ride = rideDoc.data();
+  const rideId = rideDoc.id;
+  const memberIds: string[] = Array.isArray(ride?.memberIds) ? ride.memberIds : [];
+
+  if (memberIds.length === 0) {
+    logger.info("Review reminder skipped: ride has no members", { rideId });
+    return [];
+  }
+
+  // Skip anyone who already reviewed this ride.
+  let reviewed = new Set<string>();
+  try {
+    const reviewsSnap = await rideDoc.ref.collection("reviews").get();
+    reviewed = new Set(reviewsSnap.docs.map((d) => d.id));
+  } catch (err) {
+    logger.error("Failed to read reviews for ride", { rideId, error: String(err) });
+  }
+
+  const recipients = memberIds.filter((id) => id && !reviewed.has(id));
+  if (recipients.length === 0) {
+    logger.info("Every member already reviewed", { rideId });
+    return [];
+  }
+
+  const rideLabel = ride?.from && ride?.to ? `${ride.from} → ${ride.to}` : "your ride";
+  const payload: ExpoPushPayload = {
+    sound: "default",
+    title: "How was your ride?",
+    body: formatBody(`Leave a quick review for ${rideLabel}.`),
+    data: { type: "ride_review", rideId },
+  };
+
+  const userSnaps = await Promise.allSettled(
+    recipients.map(async (memberId) => ({
+      memberId,
+      userSnap: await db.collection("users").doc(memberId).get(),
+    }))
+  );
+
+  const messages: PushMessage[] = [];
+  for (const result of userSnaps) {
+    if (result.status === "rejected") {
+      logger.error("Failed to fetch member for review reminder", {
+        rideId,
+        error: String(result.reason),
+      });
+      continue;
+    }
+
+    const { memberId, userSnap } = result.value;
+
+    if (userSnap.data()?.notifPrefs?.enabled === false) {
+      logger.info("Review reminder suppressed: notifications off", { rideId, memberId });
+      continue;
+    }
+
+    const tokens = resolveTokens(userSnap.data());
+    if (tokens.length === 0) {
+      logger.info("Review reminder skipped: no push token", { rideId, memberId });
+      continue;
+    }
+
+    for (const token of tokens) {
+      messages.push({ userId: memberId, token, payload });
+    }
+  }
+
+  return messages;
+};
+
+/** Split a flat message list into Expo-sized batches and send them all. */
+const sendPushMessages = async (messages: PushMessage[]): Promise<void> => {
+  const batches: PushMessage[][] = [];
+  for (let i = 0; i < messages.length; i += EXPO_BATCH_SIZE) {
+    batches.push(messages.slice(i, i + EXPO_BATCH_SIZE));
+  }
+  await Promise.all(batches.map(sendPushBatch));
+};
+
+export const sendRideReviewReminders = onSchedule("every 15 minutes", async () => {
+  const now = Date.now();
+  const dueBefore = admin.firestore.Timestamp.fromMillis(now - REVIEW_REMINDER_DELAY_MS);
+  const windowStart = admin.firestore.Timestamp.fromMillis(now - REVIEW_REMINDER_WINDOW_MS);
+
+  // Rides that started between 7 days and 1 hour ago. Rides predating the
+  // `startTime` field are excluded automatically — a range filter only matches
+  // documents where the field exists.
+  const snapshot = await db
+    .collection("rides")
+    .where("startTime", ">=", windowStart)
+    .where("startTime", "<=", dueBefore)
+    .orderBy("startTime")
+    .limit(REVIEW_SWEEP_LIMIT)
+    .get();
+
+  if (snapshot.empty) {
+    logger.info("No rides due for a review reminder");
+    return;
+  }
+
+  // `reviewReminderSentAt` is filtered here rather than in the query: the field
+  // doesn't exist on older rides, and Firestore can't express "missing OR null"
+  // as a where clause. The startTime range already bounds the scan.
+  const dueRides = snapshot.docs.filter((d) => !d.data().reviewReminderSentAt);
+  if (dueRides.length === 0) {
+    logger.info(`Scanned ${snapshot.size} ride(s), all already reminded`);
+    return;
+  }
+
+  const messages: PushMessage[] = [];
+  const markRemindedBatch = db.batch();
+
+  for (const rideDoc of dueRides) {
+    // Mark regardless of how many pushes go out, so an empty ride (or one where
+    // everyone already reviewed) isn't rescanned on every tick for a week.
+    markRemindedBatch.update(rideDoc.ref, {
+      reviewReminderSentAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    messages.push(...(await buildReviewReminderMessages(rideDoc)));
+  }
+
+  // Commit the marks before sending. A duplicate push is worse than a missed
+  // one here, and a crash mid-send would otherwise re-notify the whole sweep.
+  try {
+    await markRemindedBatch.commit();
+  } catch (err) {
+    logger.error("Failed to mark rides as reminded — skipping sends", {
+      error: String(err),
+    });
+    return;
+  }
+
+  if (messages.length === 0) {
+    logger.info(`Marked ${dueRides.length} ride(s), no pushes to send`);
+    return;
+  }
+
+  await sendPushMessages(messages);
+  logger.info(
+    `✅ Sent ${messages.length} review reminder(s) across ${dueRides.length} ride(s)`
+  );
+});
+
+/**
+ * TEMP (testing): fires the review-reminder push the moment a ride is created,
+ * instead of waiting an hour past its startTime. Set to false — or delete this
+ * trigger and redeploy — before this goes anywhere near real users.
+ *
+ * It calls the same buildReviewReminderMessages() the real sweep does, so the
+ * payload, the suppression rules, and the `ride_review` tap handling are all
+ * exactly what ships. At creation the only member is the host, so the push
+ * comes back to whoever posted the ride.
+ *
+ * It deliberately does NOT stamp `reviewReminderSentAt`, so the same ride still
+ * gets its genuine reminder an hour later and both paths can be tested.
+ */
+const TEST_REVIEW_PUSH_ON_CREATE = true;
+
+export const testReviewPushOnRideCreate = onDocumentCreated(
+  "rides/{rideId}",
+  async (event) => {
+    if (!TEST_REVIEW_PUSH_ON_CREATE) return;
+
+    const rideDoc = event.data;
+    const { rideId } = event.params;
+    if (!rideDoc) {
+      logger.warn("🧪 TEST review push: no ride snapshot", { rideId });
+      return;
+    }
+
+    const messages = await buildReviewReminderMessages(rideDoc);
+    if (messages.length === 0) {
+      logger.warn(
+        "🧪 TEST review push: nothing to send — check the host has a push token " +
+          "and notifPrefs.enabled !== false",
+        { rideId }
+      );
+      return;
+    }
+
+    await sendPushMessages(messages);
+    logger.info(`🧪 TEST review push: sent ${messages.length} push(es)`, { rideId });
+  }
+);

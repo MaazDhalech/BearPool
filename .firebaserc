@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "bearpool-14bb5"
+    "default": "bearpool-14bb5",
+    "prod": "bearpool-14bb5",
+    "testing": "testing-bearpool"
   }
 }

@@ -98,7 +98,28 @@ const parseRideDateTime = (dateStr: string, timeStr: string): Date | null => {
 // AsyncStorage keys
 const RATED_RIDES_KEY = "rated_rides";
 const RATE_LATER_RIDES_KEY = "rate_later_rides";
-const FEEDBACK_COOLDOWN_KEY = "feedback_cooldown";
+
+// The review prompt opens one hour past a ride's startTime and stays available
+// for a week. REVIEW_PROMPT_DELAY_MS must stay in sync with
+// REVIEW_REMINDER_DELAY_MS in functions/src/index.ts — the push and the in-app
+// prompt are meant to become available at the same moment.
+const REVIEW_PROMPT_DELAY_MS = 60 * 60 * 1000;
+const REVIEW_PROMPT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Shape the review modal expects, from a raw ride document. */
+const buildRidePrompt = (rideId: string, rideData: any) => ({
+  id: rideId,
+  from: rideData.from || "Unknown",
+  to: rideData.to || "Unknown",
+  date: rideData.date || "",
+  time: rideData.time || "",
+  startTime: rideData.startTime || null,
+  hostId: rideData.hostId || "",
+  memberIds: rideData.memberIds || [],
+  seats: rideData.seats || 0,
+  rideFull: rideData.rideFull || false,
+  archived: rideData.archived || false,
+});
 
 const APP_STORE_URL = "https://apps.apple.com/ph/app/bearpool/id6747465780";
 
@@ -130,6 +151,12 @@ function RootLayoutContent() {
 
   const rideCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const appStateRef = useRef(AppState.currentState);
+  // Rides dismissed during THIS app session. Deliberately not persisted: the
+  // prompt is meant to come back on the next app open, but closing it has to
+  // stick for now — re-attaching the rides listener (which happens whenever
+  // showFeedback flips) redelivers every ride as "added", so without this the
+  // sheet would reopen the instant it's closed.
+  const dismissedThisSessionRef = useRef<Set<string>>(new Set());
 
   // Load rated rides and rate-later rides from storage
   useEffect(() => {
@@ -175,11 +202,10 @@ function RootLayoutContent() {
     if (!userId || !isAuthLoaded || isLoading) return;
 
     try {
-      const cooldownData = await AsyncStorage.getItem(FEEDBACK_COOLDOWN_KEY);
-      if (cooldownData) {
-        const { timestamp } = JSON.parse(cooldownData);
-        if (Date.now() - timestamp < 24 * 60 * 60 * 1000) return;
-      }
+      // No global cooldown: an unreviewed ride is meant to re-prompt on every
+      // app open until the rider either submits a review or taps "Remind me
+      // later" (which snoozes that one ride for 6h). Suppression is per-ride,
+      // via ratedRides / rateLaterRides and the Firestore review check below.
 
       // Every ride this user is on. Deliberately no orderBy("startTime") — that
       // silently drops rides created before startTime existed — and no
@@ -194,53 +220,75 @@ function RootLayoutContent() {
       const unsubscribe = onSnapshot(
         ridesQuery,
         (snapshot) => {
+          if (showFeedback) return;
+
+          // Collect every ride inside the review window, then pick one below.
+          // The pick is async (it checks Firestore for an existing review), so
+          // it can't happen inside this synchronous forEach.
+          const candidates: { rideId: string; rideData: any }[] = [];
+
           snapshot.docChanges().forEach((change) => {
-            if (change.type === "added" || change.type === "modified") {
-              const rideData = change.doc.data();
-              const rideId = change.doc.id;
+            if (change.type !== "added" && change.type !== "modified") return;
 
-              if (ratedRides.has(rideId) || rateLaterRides.has(rideId)) return;
+            const rideData = change.doc.data();
+            const rideId = change.doc.id;
 
-              let startTime: Date | null = null;
-              if (rideData.startTime) {
-                startTime = rideData.startTime.toDate();
-              } else if (rideData.date && rideData.time) {
-                startTime = parseRideDateTime(rideData.date, rideData.time);
-              }
+            if (
+              ratedRides.has(rideId) ||
+              rateLaterRides.has(rideId) ||
+              dismissedThisSessionRef.current.has(rideId)
+            ) {
+              return;
+            }
 
-              if (!startTime) return;
+            let startTime: Date | null = null;
+            if (rideData.startTime) {
+              startTime = rideData.startTime.toDate();
+            } else if (rideData.date && rideData.time) {
+              startTime = parseRideDateTime(rideData.date, rideData.time);
+            }
 
-              // Prompt once the ride is 30 minutes past its start time, and keep
-              // the offer open for a week so a rider who doesn't open the app
-              // that day still gets asked.
-              const timeSinceStart = Date.now() - startTime.getTime();
-              const THIRTY_MINUTES = 30 * 60 * 1000;
-              const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+            if (!startTime) return;
 
-              if (timeSinceStart >= THIRTY_MINUTES && timeSinceStart <= SEVEN_DAYS) {
-                if (!showFeedback) {
-                  setCurrentRide({
-                    id: rideId,
-                    from: rideData.from || "Unknown",
-                    to: rideData.to || "Unknown",
-                    date: rideData.date || "",
-                    time: rideData.time || "",
-                    startTime: rideData.startTime || null,
-                    hostId: rideData.hostId || "",
-                    memberIds: rideData.memberIds || [],
-                    seats: rideData.seats || 0,
-                    rideFull: rideData.rideFull || false,
-                    archived: rideData.archived || false,
-                  });
-                  setShowFeedback(true);
-                  AsyncStorage.setItem(
-                    FEEDBACK_COOLDOWN_KEY,
-                    JSON.stringify({ timestamp: Date.now() }),
-                  ).catch(console.error);
-                }
-              }
+            // Prompt once the ride is an hour past its start time — the same
+            // point at which sendRideReviewReminders pushes — and keep the
+            // offer open for a week, so a rider who ignores the notification
+            // still gets asked the next time they open the app.
+            const timeSinceStart = Date.now() - startTime.getTime();
+            if (
+              timeSinceStart >= REVIEW_PROMPT_DELAY_MS &&
+              timeSinceStart <= REVIEW_PROMPT_WINDOW_MS
+            ) {
+              candidates.push({ rideId, rideData });
             }
           });
+
+          if (candidates.length === 0) return;
+
+          void (async () => {
+            for (const { rideId, rideData } of candidates) {
+              // Firestore is the source of truth for "already reviewed" —
+              // `ratedRides` is per-device, so without this a reinstall (or a
+              // review left on a second device) would re-prompt forever now
+              // that there's no global cooldown holding it back.
+              try {
+                const existing = await getDoc(
+                  doc(db, "rides", rideId, "reviews", userId),
+                );
+                if (existing.exists()) {
+                  setRatedRides((prev) => new Set([...prev, rideId]));
+                  continue;
+                }
+              } catch (err) {
+                console.error(`Error checking review for ride ${rideId}:`, err);
+                continue;
+              }
+
+              setCurrentRide(buildRidePrompt(rideId, rideData));
+              setShowFeedback(true);
+              return;
+            }
+          })();
         },
         (error) => {
           console.error("Error in rides snapshot:", error);
@@ -283,6 +331,7 @@ function RootLayoutContent() {
   }, [userId, isAuthLoaded, isLoading, ratedRides, rateLaterRides, showFeedback]);
 
   const handleFeedbackClose = () => {
+    if (currentRide?.id) dismissedThisSessionRef.current.add(currentRide.id);
     setShowFeedback(false);
     setCurrentRide(null);
   };
@@ -336,19 +385,7 @@ function RootLayoutContent() {
                 const rideDoc = await getDoc(doc(db, "rides", rideId));
                 const rideData = rideDoc.data();
                 if (rideData?.memberIds?.includes(userId) && !ratedRides.has(rideId)) {
-                  setCurrentRide({
-                    id: rideId,
-                    from: rideData.from || "Unknown",
-                    to: rideData.to || "Unknown",
-                    date: rideData.date || "",
-                    time: rideData.time || "",
-                    startTime: rideData.startTime || null,
-                    hostId: rideData.hostId || "",
-                    memberIds: rideData.memberIds || [],
-                    seats: rideData.seats || 0,
-                    rideFull: rideData.rideFull || false,
-                    archived: rideData.archived || false,
-                  });
+                  setCurrentRide(buildRidePrompt(rideId, rideData));
                   setShowFeedback(true);
                   await AsyncStorage.removeItem(key);
                   const next = new Set([...rateLaterRides]);
@@ -397,10 +434,43 @@ function RootLayoutContent() {
           pathname: "/(stack)/ride/[id]/chat",
           params: { id: String(data.rideId) },
         });
+        return;
+      }
+
+      // Tapping a review reminder opens the sheet for that specific ride,
+      // rather than waiting for the rides listener to surface it.
+      if (data?.type === "ride_review" && data?.rideId && userId) {
+        const rideId = String(data.rideId);
+        void (async () => {
+          try {
+            const [rideDoc, existing] = await Promise.all([
+              getDoc(doc(db, "rides", rideId)),
+              getDoc(doc(db, "rides", rideId, "reviews", userId)),
+            ]);
+            const rideData = rideDoc.data();
+            if (!rideData?.memberIds?.includes(userId)) return;
+            if (existing.exists()) {
+              setRatedRides((prev) => new Set([...prev, rideId]));
+              return;
+            }
+            // A tap overrides an earlier dismissal / "Remind me later".
+            dismissedThisSessionRef.current.delete(rideId);
+            setRateLaterRides((prev) => {
+              const next = new Set([...prev]);
+              next.delete(rideId);
+              return next;
+            });
+            await AsyncStorage.removeItem(`rate_reminder_${rideId}`);
+            setCurrentRide(buildRidePrompt(rideId, rideData));
+            setShowFeedback(true);
+          } catch (err) {
+            console.error("Error opening review from notification:", err);
+          }
+        })();
       }
     });
     return () => sub.remove();
-  }, [router]);
+  }, [router, userId]);
 
   if (!loaded || !isAuthLoaded || isLoading) {
     return (

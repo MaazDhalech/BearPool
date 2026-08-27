@@ -323,7 +323,15 @@ export default function HomeScreen() {
   const setupRealTimeListener = () => {
     if (ridesUnsubscribeRef.current) {
       ridesUnsubscribeRef.current();
+      ridesUnsubscribeRef.current = null;
     }
+
+    // Every read below requires request.auth, so never attach without a user.
+    // This is checked here rather than at each call site because the blocked-
+    // users effect and the AppState foreground handler both re-attach too, and
+    // an onSnapshot permission error is terminal — the listener is torn down
+    // and never recovers on its own.
+    if (!userId) return;
 
     // SIMPLIFIED QUERY: Only order by createdAt to avoid index error
     const rideQuery = query(
@@ -383,6 +391,10 @@ export default function HomeScreen() {
   };
 
   const fetchRidesManually = async () => {
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
     try {
       // SIMPLIFIED QUERY: Only order by createdAt to avoid index error
       const rideQuery = query(
@@ -428,6 +440,13 @@ export default function HomeScreen() {
   };
 
   useEffect(() => {
+    // Wait for auth before attaching the Firestore listener. Firestore reads
+    // require request.auth, so attaching before the session restores fails with
+    // permission-denied — and an onSnapshot permission error is terminal, which
+    // would leave the feed empty until a manual refresh. Re-runs once userId
+    // resolves.
+    if (!userId) return;
+
     const initializeData = async () => {
       await fetchUserGender();
       await fetchBlockedUsers();
@@ -441,7 +460,7 @@ export default function HomeScreen() {
         ridesUnsubscribeRef.current();
       }
     };
-  }, [sortOrder]);
+  }, [sortOrder, userId]);
 
   // Re-filter rides whenever the blocked-users list changes - including when it
   // becomes empty (unblocking the last user must un-hide their rides). The
