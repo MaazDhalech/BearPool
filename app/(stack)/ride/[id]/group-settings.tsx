@@ -3,6 +3,7 @@ import { db } from "@/services/firebaseConfig";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { ActionButton } from "@/components/ui/ActionButton";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { CalendarLinkCard } from "@/components/ui/CalendarLinkCard";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Avatar,
@@ -211,7 +212,7 @@ export default function GroupSettings() {
         kickedUserId,
         kickedUserName,
         kickedBy: user?.uid,
-        kickedByName: user?.fullName || "Unknown",
+        kickedByName: user?.displayName || "Unknown",
         reason,
         timestamp: serverTimestamp(),
         rideFrom: ride?.from || "Unknown",
@@ -672,6 +673,14 @@ This ride has been permanently deleted from the system.
             </HStack>
           )}
 
+          {/* Add to Calendar - matches the card on the ride details page */}
+          <CalendarLinkCard
+            testID="group-settings-calendar-toggle"
+            linked={calendarLinked}
+            busy={calendarBusy}
+            onToggle={handleToggleCalendar}
+          />
+
           {/* Members */}
           <VStack space="sm">
             <HStack alignItems="center" justifyContent="space-between" px="$1">
@@ -776,13 +785,6 @@ This ride has been permanently deleted from the system.
 
           {/* Actions */}
           <VStack space="sm">
-            <ActionButton
-              variant="primary"
-              icon={calendarLinked ? "checkmark-circle-outline" : "calendar-outline"}
-              label={calendarLinked ? "Added to Calendar" : "Add to Calendar"}
-              loading={calendarBusy}
-              onPress={handleToggleCalendar}
-            />
             {isHost && (
               <ActionButton
                 variant="danger"

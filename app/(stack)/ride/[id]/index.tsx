@@ -32,6 +32,7 @@ import { toast } from "@/components/ui/Dialog";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NavHeader } from "@/components/ui/NavHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { CalendarLinkCard } from "@/components/ui/CalendarLinkCard";
 import {
   addRideToCalendar,
   isRideLinkedToCalendar,
@@ -560,6 +561,18 @@ export default function RideDetailsPage() {
           </View>
         ) : null}
 
+        {/* ── Add to Calendar ── */}
+        {alreadyJoined && (
+          <View style={{ marginHorizontal: SPACE.lg, marginTop: SPACE.md }}>
+            <CalendarLinkCard
+              testID="calendar-toggle-button"
+              linked={calendarLinked}
+              busy={calendarBusy}
+              onToggle={handleToggleCalendar}
+            />
+          </View>
+        )}
+
         {/* ── Members ── */}
         {members.length > 0 && (
           <View style={{ paddingHorizontal: SPACE.lg, marginTop: SPACE.lg }}>
@@ -609,35 +622,6 @@ export default function RideDetailsPage() {
 
       {/* Sticky CTA */}
       <View style={{ paddingHorizontal: SPACE.lg, paddingBottom: insets.bottom + SPACE.md, paddingTop: SPACE.md, backgroundColor: darkTheme.bg }}>
-        {alreadyJoined && (
-          <Pressable
-            testID="calendar-toggle-button"
-            disabled={calendarBusy}
-            onPress={handleToggleCalendar}
-            style={({ pressed }) => ({
-              opacity: pressed || calendarBusy ? 0.8 : 1,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: SPACE.sm,
-              borderRadius: 14,
-              borderWidth: 1.5,
-              borderColor: calendarLinked ? darkTheme.success + "55" : ACCENT + "55",
-              backgroundColor: calendarLinked ? darkTheme.success + "1A" : ACCENT + "14",
-              paddingVertical: SPACE.md,
-              marginBottom: SPACE.sm,
-            })}
-          >
-            <Ionicons
-              name={calendarLinked ? "checkmark-circle" : "calendar-outline"}
-              size={18}
-              color={calendarLinked ? darkTheme.success : ACCENT}
-            />
-            <Text style={{ color: calendarLinked ? darkTheme.success : ACCENT, fontWeight: TYPE.weight.bold, fontSize: TYPE.size.body }}>
-              {calendarLinked ? "Added to Calendar" : "Add to Calendar"}
-            </Text>
-          </Pressable>
-        )}
         {alreadyJoined ? (
           <CTAButton
             testID="open-chat-button"
